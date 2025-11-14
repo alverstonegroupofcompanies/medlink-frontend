@@ -1,0 +1,731 @@
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Image,
+  Alert,
+  ActivityIndicator,
+  StatusBar,
+  Platform,
+} from 'react-native';
+import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { ArrowLeft, User, Calendar, MapPin, Building2, CheckCircle, XCircle, Clock, Star } from 'lucide-react-native';
+import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors, HospitalStatusColors as StatusColors } from '@/constants/hospital-theme';
+import API from '../../api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const HOSPITAL_TOKEN_KEY = 'hospitalToken';
+const HOSPITAL_INFO_KEY = 'hospitalInfo';
+
+export default function ApplicationsScreen() {
+  const { requirementId } = useLocalSearchParams<{ requirementId: string }>();
+  const [applications, setApplications] = useState<any[]>([]);
+  const [requirement, setRequirement] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [hospital, setHospital] = useState<any>(null);
+  const [processingId, setProcessingId] = useState<number | null>(null);
+
+  useEffect(() => {
+    loadHospital();
+    loadApplications();
+  }, [requirementId]);
+
+  // Refresh applications when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      if (requirementId) {
+        loadApplications(false);
+      }
+    }, [requirementId])
+  );
+
+  const loadHospital = async () => {
+    try {
+      const info = await AsyncStorage.getItem(HOSPITAL_INFO_KEY);
+      if (info) {
+        setHospital(JSON.parse(info));
+      }
+    } catch (error) {
+      console.error('Error loading hospital:', error);
+    }
+  };
+
+  const loadApplications = async (showLoading = true) => {
+    if (showLoading) {
+      setLoading(true);
+    }
+    try {
+      console.log('📥 Loading applications for requirement:', requirementId);
+      const response = await API.get(`/hospital/requirements/${requirementId}/applications`);
+      console.log('📥 Loaded applications:', response.data.applications?.length || 0);
+      console.log('📥 Applications data:', response.data.applications?.map((a: any) => ({ 
+        id: a.id, 
+        status: a.status,
+        doctor_name: a.doctor?.name 
+      })) || []);
+      
+      setApplications(response.data.applications || []);
+      setRequirement(response.data.requirement || null);
+    } catch (error: any) {
+      console.error('❌ Error loading applications:', error);
+      if (showLoading) {
+        Alert.alert('Error', error.response?.data?.message || 'Failed to load applications');
+      }
+    } finally {
+      if (showLoading) {
+        setLoading(false);
+      }
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'selected':
+        return StatusColors.success;
+      case 'rejected':
+        return StatusColors.error;
+      case 'pending':
+        return StatusColors.warning;
+      default:
+        return NeutralColors.textTertiary;
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'selected':
+        return <CheckCircle size={16} color={StatusColors.success} />;
+      case 'rejected':
+        return <XCircle size={16} color={StatusColors.error} />;
+      case 'pending':
+        return <Clock size={16} color={StatusColors.warning} />;
+      default:
+        return null;
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'selected':
+        return 'Selected';
+      case 'rejected':
+        return 'Rejected';
+      case 'pending':
+        return 'Waiting for Approval';
+      default:
+        return status;
+    }
+  };
+
+  const handleAccept = async (applicationId: number, doctorName: string) => {
+    console.log('🔵 handleAccept called for application:', applicationId);
+    // Call performAccept directly without confirmation for now
+    performAccept(applicationId);
+  };
+
+  const performAccept = async (applicationId: number) => {
+    console.log('🔵 performAccept called for application:', applicationId);
+    
+    if (processingId !== null) {
+      console.log('⚠️ Already processing another application');
+      return;
+    }
+    
+    setProcessingId(applicationId);
+    try {
+      console.log('📤 Making PUT request to:', `/hospital/applications/${applicationId}/status`);
+      const response = await API.put(`/hospital/applications/${applicationId}/status`, {
+        status: 'selected',
+      });
+      
+      console.log('✅ Accept response status:', response.status);
+      console.log('✅ Accept response data:', JSON.stringify(response.data, null, 2));
+      
+      // Update local state immediately for instant feedback
+      setApplications(prev => {
+        const updated = prev.map(app => {
+          if (app.id === applicationId) {
+            console.log('🔄 Updating status from', app.status, 'to selected for app:', app.id);
+            return { ...app, status: 'selected' };
+          }
+          return app;
+        });
+        console.log('📋 Updated applications state:', updated.map(a => ({ id: a.id, status: a.status })));
+        return updated;
+      });
+      
+      // Reload applications to get fresh data from server
+      setTimeout(() => {
+        loadApplications(false);
+      }, 1000);
+      
+      // Show success message
+      setTimeout(() => {
+        Alert.alert('Success', 'Application accepted successfully!');
+      }, 300);
+      
+    } catch (error: any) {
+      console.error('❌ Accept error:', error);
+      console.error('❌ Error response:', error.response?.data);
+      console.error('❌ Error status:', error.response?.status);
+      Alert.alert(
+        'Error', 
+        error.response?.data?.message || error.message || 'Failed to accept application'
+      );
+    } finally {
+      setProcessingId(null);
+      console.log('🔵 Processing completed, processingId reset');
+    }
+  };
+
+  const handleReject = async (applicationId: number, doctorName: string) => {
+    console.log('🔴 handleReject called for application:', applicationId);
+    // Call performReject directly without confirmation for now
+    performReject(applicationId);
+  };
+
+  const performReject = async (applicationId: number) => {
+    console.log('🔴 performReject called for application:', applicationId);
+    
+    if (processingId !== null) {
+      console.log('⚠️ Already processing another application');
+      return;
+    }
+    
+    setProcessingId(applicationId);
+    try {
+      console.log('📤 Making PUT request to:', `/hospital/applications/${applicationId}/status`);
+      const response = await API.put(`/hospital/applications/${applicationId}/status`, {
+        status: 'rejected',
+      });
+      
+      console.log('✅ Reject response status:', response.status);
+      console.log('✅ Reject response data:', JSON.stringify(response.data, null, 2));
+      
+      // Update local state immediately for instant feedback
+      setApplications(prev => {
+        const updated = prev.map(app => {
+          if (app.id === applicationId) {
+            console.log('🔄 Updating status from', app.status, 'to rejected for app:', app.id);
+            return { ...app, status: 'rejected' };
+          }
+          return app;
+        });
+        console.log('📋 Updated applications state:', updated.map(a => ({ id: a.id, status: a.status })));
+        return updated;
+      });
+      
+      // Reload applications to get fresh data from server
+      setTimeout(() => {
+        loadApplications(false);
+      }, 1000);
+      
+      // Show success message
+      setTimeout(() => {
+        Alert.alert('Success', 'Application rejected');
+      }, 300);
+      
+    } catch (error: any) {
+      console.error('❌ Reject error:', error);
+      console.error('❌ Error response:', error.response?.data);
+      console.error('❌ Error status:', error.response?.status);
+      Alert.alert(
+        'Error', 
+        error.response?.data?.message || error.message || 'Failed to reject application'
+      );
+    } finally {
+      setProcessingId(null);
+      console.log('🔴 Processing completed, processingId reset');
+    }
+  };
+
+  const renderStars = (rating: number, totalRatings: number = 0) => {
+    const fullStars = Math.floor(rating);
+    const hasHalfStar = rating % 1 >= 0.5;
+    
+    return (
+      <View style={styles.starsContainer}>
+        {Array.from({ length: 5 }).map((_, i) => {
+          if (i < fullStars) {
+            return <Star key={i} size={14} color="#FFB800" fill="#FFB800" />;
+          } else if (i === fullStars && hasHalfStar) {
+            return <Star key={i} size={14} color="#FFB800" fill="#FFB800" style={{ opacity: 0.5 }} />;
+          } else {
+            return <Star key={i} size={14} color="#E5E7EB" fill="transparent" />;
+          }
+        })}
+        <Text style={styles.ratingText}>
+          {rating > 0 ? rating.toFixed(1) : 'No ratings'}
+        </Text>
+        {rating > 0 && totalRatings > 0 && (
+          <Text style={styles.ratingCount}>
+            ({totalRatings})
+          </Text>
+        )}
+      </View>
+    );
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={PrimaryColors.dark} />
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.replace('/hospital/dashboard')} style={styles.backButton}>
+            <ArrowLeft size={24} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Applications</Text>
+          <View style={styles.backButton} />
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={PrimaryColors.main} />
+          <Text style={styles.loadingText}>Loading applications...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={PrimaryColors.dark} />
+      
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.replace('/hospital/dashboard')} style={styles.backButton}>
+          <ArrowLeft size={24} color="#fff" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Applications</Text>
+        <View style={styles.backButton} />
+      </View>
+
+      {/* Requirement Info */}
+      {requirement && (
+        <View style={styles.requirementCard}>
+          <View style={styles.requirementHeader}>
+            <Building2 size={20} color={PrimaryColors.main} />
+            <Text style={styles.requirementTitle}>{requirement.department}</Text>
+          </View>
+          <View style={styles.requirementDetails}>
+            <View style={styles.detailRow}>
+              <Calendar size={14} color={NeutralColors.textSecondary} />
+              <Text style={styles.detailText}>{requirement.work_type}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailText}>{requirement.required_sessions} sessions</Text>
+            </View>
+            {requirement.address && (
+              <View style={styles.detailRow}>
+                <MapPin size={14} color={NeutralColors.textSecondary} />
+                <Text style={styles.detailText}>{requirement.address}</Text>
+              </View>
+            )}
+          </View>
+          <View style={styles.applicationsCount}>
+            <Text style={styles.applicationsCountText}>
+              {applications.length} {applications.length === 1 ? 'Application' : 'Applications'}
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {/* Applications List */}
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+        {applications.length === 0 ? (
+          <View style={styles.emptyState}>
+            <User size={48} color={NeutralColors.textTertiary} />
+            <Text style={styles.emptyText}>No applications yet</Text>
+            <Text style={styles.emptySubtext}>Doctors can apply to this job requirement</Text>
+          </View>
+        ) : (
+          applications.map((application) => {
+            // Debug log to see application status when rendering
+            if (__DEV__) {
+              console.log(`🎨 Rendering application ${application.id}: status = "${application.status}"`);
+            }
+            return (
+            <View key={application.id} style={styles.applicationCard}>
+              <View style={styles.applicationHeader}>
+                <View style={styles.doctorInfo}>
+                  <Image
+                    source={{
+                      uri: application.doctor?.profile_photo || 'https://i.pravatar.cc/150?img=1',
+                    }}
+                    style={styles.doctorImage}
+                  />
+                  <View style={styles.doctorDetails}>
+                    <Text style={styles.doctorName}>
+                      {application.doctor?.name || 'Doctor'}
+                    </Text>
+                    <Text style={styles.doctorSpecialization}>
+                      {application.doctor?.specialization || 'Not specified'}
+                    </Text>
+                    {application.doctor?.current_location && (
+                      <View style={styles.locationRow}>
+                        <MapPin size={12} color={NeutralColors.textSecondary} />
+                        <Text style={styles.locationText}>
+                          {application.doctor.current_location}
+                        </Text>
+                      </View>
+                    )}
+                    {renderStars(application.doctor?.average_rating || 0, application.doctor?.total_ratings || 0)}
+                  </View>
+                </View>
+                <View style={[styles.statusBadge, { backgroundColor: `${getStatusColor(application.status || 'pending')}20` }]}>
+                  {getStatusIcon(application.status || 'pending')}
+                  <Text style={[styles.statusText, { color: getStatusColor(application.status || 'pending') }]}>
+                    {getStatusText(application.status || 'pending')}
+                  </Text>
+                </View>
+              </View>
+
+              {application.cover_letter && (
+                <View style={styles.coverLetterSection}>
+                  <Text style={styles.coverLetterLabel}>Cover Letter:</Text>
+                  <Text style={styles.coverLetterText}>{application.cover_letter}</Text>
+                </View>
+              )}
+
+              <View style={styles.applicationDetails}>
+                {application.proposed_rate && (
+                  <View style={styles.detailItem}>
+                    <Text style={styles.detailLabel}>Proposed Rate:</Text>
+                    <Text style={styles.detailValue}>${application.proposed_rate}</Text>
+                  </View>
+                )}
+                {application.available_date && (
+                  <View style={styles.detailItem}>
+                    <Text style={styles.detailLabel}>Available Date:</Text>
+                    <Text style={styles.detailValue}>
+                      {new Date(application.available_date).toLocaleDateString()}
+                    </Text>
+                  </View>
+                )}
+                <View style={styles.detailItem}>
+                  <Text style={styles.detailLabel}>Applied:</Text>
+                  <Text style={styles.detailValue}>
+                    {new Date(application.created_at).toLocaleDateString()}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Accept/Reject Buttons */}
+              {(application.status === 'pending' || !application.status) && (
+                <View style={styles.actionButtons}>
+                  <TouchableOpacity
+                    style={[
+                      styles.actionButton, 
+                      styles.rejectButton,
+                      processingId === application.id && { opacity: 0.6 }
+                    ]}
+                    onPress={() => {
+                      console.log('🔴 Reject button clicked for application:', application.id);
+                      handleReject(application.id, application.doctor?.name || 'this doctor');
+                    }}
+                    disabled={processingId !== null && processingId !== application.id}
+                    activeOpacity={0.7}
+                  >
+                    {processingId === application.id ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <>
+                        <XCircle size={18} color="#fff" />
+                        <Text style={styles.rejectButtonText}>Reject</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.actionButton, 
+                      styles.acceptButton,
+                      processingId === application.id && { opacity: 0.6 }
+                    ]}
+                    onPress={() => {
+                      console.log('🔵 Accept button clicked for application:', application.id);
+                      handleAccept(application.id, application.doctor?.name || 'this doctor');
+                    }}
+                    disabled={processingId !== null && processingId !== application.id}
+                    activeOpacity={0.7}
+                  >
+                    {processingId === application.id ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <>
+                        <CheckCircle size={18} color="#fff" />
+                        <Text style={styles.acceptButtonText}>Accept</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+            );
+          })
+        )}
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: NeutralColors.background,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 50 : 20,
+    paddingBottom: 20,
+    backgroundColor: PrimaryColors.dark,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: NeutralColors.textSecondary,
+  },
+  requirementCard: {
+    backgroundColor: NeutralColors.cardBackground,
+    margin: 20,
+    padding: 16,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  requirementHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  requirementTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: PrimaryColors.main,
+  },
+  requirementDetails: {
+    gap: 8,
+    marginBottom: 12,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  detailText: {
+    fontSize: 14,
+    color: NeutralColors.textSecondary,
+  },
+  applicationsCount: {
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: NeutralColors.divider,
+  },
+  applicationsCountText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: NeutralColors.textPrimary,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  content: {
+    padding: 20,
+    paddingTop: 0,
+    paddingBottom: 100,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: NeutralColors.textPrimary,
+    marginTop: 16,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: NeutralColors.textSecondary,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  applicationCard: {
+    backgroundColor: NeutralColors.cardBackground,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  applicationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  doctorInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  doctorImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 12,
+  },
+  doctorDetails: {
+    flex: 1,
+  },
+  doctorName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: NeutralColors.textPrimary,
+    marginBottom: 4,
+  },
+  doctorSpecialization: {
+    fontSize: 14,
+    color: PrimaryColors.main,
+    fontWeight: '500',
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  coverLetterSection: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: NeutralColors.divider,
+  },
+  coverLetterLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: NeutralColors.textPrimary,
+    marginBottom: 6,
+  },
+  coverLetterText: {
+    fontSize: 14,
+    color: NeutralColors.textSecondary,
+    lineHeight: 20,
+  },
+  applicationDetails: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: NeutralColors.divider,
+    gap: 8,
+  },
+  detailItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  detailLabel: {
+    fontSize: 14,
+    color: NeutralColors.textSecondary,
+    fontWeight: '500',
+  },
+  detailValue: {
+    fontSize: 14,
+    color: NeutralColors.textPrimary,
+    fontWeight: '600',
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  locationText: {
+    fontSize: 12,
+    color: NeutralColors.textSecondary,
+  },
+  starsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    marginTop: 6,
+  },
+  ratingText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: NeutralColors.textPrimary,
+    marginLeft: 6,
+  },
+  ratingCount: {
+    fontSize: 11,
+    color: NeutralColors.textTertiary,
+    marginLeft: 4,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: NeutralColors.divider,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  acceptButton: {
+    backgroundColor: StatusColors.success,
+  },
+  acceptButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  rejectButton: {
+    backgroundColor: StatusColors.error,
+  },
+  rejectButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+});
+
