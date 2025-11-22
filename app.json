@@ -28,14 +28,14 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "react-native-reanimated",
       "expo-router",
       ["expo-build-properties",{
         "ios": {
           "useFrameworks": "static"
         }
       }],
-      // "react-native-firebase/app",
-      // "react-native-firebase/auth",
+    
       [
         "expo-splash-screen",
         {

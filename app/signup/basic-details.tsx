@@ -10,6 +10,8 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { DoctorPrimaryColors as PrimaryColors, DoctorNeutralColors as NeutralColors } from '@/constants/doctor-theme';
+import { API_BASE_URL } from '@/config/api';
+import axios from 'axios';
 
 export default function BasicDetailsScreen() {
   const [fullName, setFullName] = useState('');
@@ -18,42 +20,92 @@ export default function BasicDetailsScreen() {
   const [password, setPassword] = useState('');
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [sendingOtp, setSendingOtp] = useState(false);
   const colorScheme = useColorScheme();
 
   const handlePickImage = async () => {
     try {
+      // Request media library permissions first
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission Denied',
+          'We need camera roll permissions to upload your profile photo. Please enable it in your device settings.'
+        );
+        return;
+      }
+
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ImagePicker.MediaTypeOptions?.Images || 'images',
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
       });
 
       if (!result.canceled && result.assets[0]) {
+        const fileSizeMB = (result.assets[0].fileSize || 0) / (1024 * 1024);
+        const maxSizeMB = 5;
+
+        if (fileSizeMB > maxSizeMB) {
+          Alert.alert(
+            'File Too Large',
+            `Profile photo must be less than ${maxSizeMB}MB. Your file is ${fileSizeMB.toFixed(2)}MB. Please compress the image and try again.`,
+            [{ text: 'OK' }]
+          );
+          return;
+        }
+
         setProfilePhoto(result.assets[0].uri);
       }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to pick image');
+    } catch (error: any) {
+      console.error('Image picker error:', error);
+      Alert.alert('Error', `Failed to pick image: ${error.message || 'Unknown error'}`);
     }
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (!fullName.trim()) return Alert.alert('Error', 'Please enter your full name');
     if (!phoneNumber.trim()) return Alert.alert('Error', 'Please enter your phone number');
     if (!emailId.trim()) return Alert.alert('Error', 'Please enter your email ID');
     if (!password.trim() || password.length < 6) return Alert.alert('Error', 'Password must be at least 6 characters');
 
-    // Navigate to ProfessionalDetailsScreen with params
-    router.push({
-      pathname: '/signup/professional-details',
-      params: {
-        fullName,
-        phoneNumber,
-        emailId,
-        password,
-        profilePhoto: profilePhoto || '',
-      },
-    });
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(emailId)) {
+      return Alert.alert('Error', 'Please enter a valid email address');
+    }
+
+    // Send OTP to email
+    setSendingOtp(true);
+    try {
+      const response = await axios.post(`${API_BASE_URL}/send-otp`, {
+        email: emailId,
+        type: 'doctor',
+      });
+
+      if (response.data.status) {
+        // Navigate to OTP verification screen
+        router.push({
+          pathname: '/signup/verify-otp',
+          params: {
+            fullName,
+            phoneNumber,
+            emailId,
+            password,
+            profilePhoto: profilePhoto || '',
+          },
+        });
+      } else {
+        Alert.alert('Error', response.data.message || 'Failed to send OTP');
+      }
+    } catch (error: any) {
+      Alert.alert(
+        'Error',
+        error.response?.data?.message || 'Failed to send verification code. Please try again.'
+      );
+    } finally {
+      setSendingOtp(false);
+    }
   };
 
   return (
@@ -141,8 +193,16 @@ export default function BasicDetailsScreen() {
                 </>
               )}
             </TouchableOpacity>
+            <ThemedText style={styles.fileSizeHint}>
+              Maximum file size: 5MB (JPEG, PNG, JPG, or WEBP)
+            </ThemedText>
 
-            <ThemedButton title="Next" onPress={handleNext} loading={loading} style={styles.nextButton} />
+            <ThemedButton
+              title={sendingOtp ? 'Sending OTP...' : 'Send Verification Code'}
+              onPress={handleNext}
+              loading={sendingOtp}
+              style={styles.nextButton}
+            />
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -166,5 +226,13 @@ const styles = StyleSheet.create({
   profilePhotoButton: { borderWidth: 1, borderRadius: 12, padding: 20, minHeight: 120, justifyContent: 'center', alignItems: 'center', marginTop: 8, marginBottom: 20 },
   profileImage: { width: 100, height: 100, borderRadius: 50 },
   profilePhotoText: { marginTop: 8, fontSize: 16, color: NeutralColors.textSecondary },
+  fileSizeHint: {
+    fontSize: 12,
+    color: NeutralColors.textSecondary,
+    textAlign: 'center',
+    marginTop: -12,
+    marginBottom: 8,
+    fontStyle: 'italic',
+  },
   nextButton: { backgroundColor: PrimaryColors.main, borderRadius: 25, height: 50, justifyContent: 'center', alignItems: 'center' },
 });

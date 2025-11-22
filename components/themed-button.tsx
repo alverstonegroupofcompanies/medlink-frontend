@@ -1,12 +1,13 @@
-import { TouchableOpacity, type TouchableOpacityProps, StyleSheet, ActivityIndicator } from 'react-native';
-import { ThemedText } from './themed-text';
-import { PrimaryColors } from '@/constants/theme';
+import { ComponentProps } from 'react';
+import { StyleSheet } from 'react-native';
+import { Button, useTheme } from 'react-native-paper';
 
-export type ThemedButtonProps = TouchableOpacityProps & {
+type PaperButtonProps = ComponentProps<typeof Button>;
+
+export type ThemedButtonProps = PaperButtonProps & {
   title?: string;
   text?: string;
   variant?: 'primary' | 'secondary' | 'outline';
-  loading?: boolean;
 };
 
 export function ThemedButton({
@@ -17,75 +18,52 @@ export function ThemedButton({
   disabled,
   style,
   onPress,
-  ...props
+  uppercase = false,
+  ...rest
 }: ThemedButtonProps) {
+  const theme = useTheme();
   const isPrimary = variant === 'primary';
   const isSecondary = variant === 'secondary';
   const isOutline = variant === 'outline';
   const buttonText = title || text || '';
+  const mode = isOutline ? 'outlined' : isSecondary ? 'contained-tonal' : 'contained';
+  const buttonColor = isPrimary
+    ? theme.colors.primary
+    : isSecondary
+      ? theme.colors.secondary
+      : undefined;
+  const textColor = isOutline
+    ? theme.colors.primary
+    : isSecondary
+      ? theme.colors.onSecondary
+      : theme.colors.onPrimary;
 
   return (
-    <TouchableOpacity
-      style={[
-        styles.button,
-        isPrimary && { backgroundColor: PrimaryColors.main },
-        isSecondary && styles.secondaryButton,
-        isOutline && {
-          backgroundColor: 'transparent',
-          borderWidth: 1,
-          borderColor: PrimaryColors.main,
-        },
-        (disabled || loading) && styles.disabledButton,
-        style,
-      ]}
+    <Button
+      mode={mode}
+      style={[styles.button, style]}
+      contentStyle={styles.content}
+      buttonColor={buttonColor}
+      textColor={textColor}
+      loading={loading}
       disabled={disabled || loading}
-      activeOpacity={0.7}
       onPress={onPress}
-      {...props}
+      uppercase={uppercase}
+      rippleColor="rgba(255,255,255,0.12)"
+      {...rest}
     >
-      {loading ? (
-        <ActivityIndicator 
-          color={isOutline ? PrimaryColors.main : '#ffffff'} 
-          size="small" 
-        />
-      ) : (
-        <ThemedText
-          style={[
-            styles.buttonText,
-            isPrimary && styles.primaryButtonText,
-            isSecondary && styles.secondaryButtonText,
-            isOutline && { color: PrimaryColors.main },
-          ]}
-        >
-          {buttonText}
-        </ThemedText>
-      )}
-    </TouchableOpacity>
+      {buttonText}
+    </Button>
   );
 }
 
 const styles = StyleSheet.create({
   button: {
-    borderRadius: 8,
-    padding: 14,
-    minHeight: 48,
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderRadius: 16,
   },
-  secondaryButton: {
-    backgroundColor: '#6b7280',
-  },
-  disabledButton: {
-    opacity: 0.5,
-  },
-  buttonText: {
+  content: {
     fontSize: 16,
-    fontWeight: '600',
-  },
-  primaryButtonText: {
-    color: '#ffffff',
-  },
-  secondaryButtonText: {
-    color: '#ffffff',
+    minHeight: 52,
+    paddingVertical: 6,
   },
 });

@@ -258,3 +258,48 @@ export const clearAllStorage = async (): Promise<void> => {
   }
 };
 
+/**
+ * Get profile photo URL for doctor
+ * Returns profile_photo if available, otherwise returns a placeholder avatar
+ */
+export const getProfilePhotoUrl = (doctor: any): string => {
+  if (!doctor) {
+    return 'https://i.pravatar.cc/150?img=1';
+  }
+
+  // Check if doctor has a profile_photo property
+  if (doctor.profile_photo && doctor.profile_photo.trim()) {
+    const profilePhoto = doctor.profile_photo.trim();
+    
+    // If it's already a full URL (starts with http/https), return as is
+    if (profilePhoto.startsWith('http://') || profilePhoto.startsWith('https://')) {
+      return profilePhoto;
+    }
+    
+    // Import BASE_BACKEND_URL from config
+    const { BASE_BACKEND_URL } = require('@/config/api');
+    
+    // Backend uses Storage::url() which returns paths like: /storage/uploads/doctors/11/profile/...
+    // If it starts with /storage, prepend backend URL
+    if (profilePhoto.startsWith('/storage/')) {
+      return `${BASE_BACKEND_URL}${profilePhoto}`;
+    }
+    
+    // If it's a relative path (uploads/doctors/...), add /storage/ prefix
+    if (profilePhoto.startsWith('uploads/')) {
+      return `${BASE_BACKEND_URL}/storage/${profilePhoto}`;
+    }
+    
+    // If it starts with storage/ (without leading slash), add leading slash
+    if (profilePhoto.startsWith('storage/')) {
+      return `${BASE_BACKEND_URL}/${profilePhoto}`;
+    }
+    
+    // Otherwise, assume it's a relative path and prepend /storage/
+    return `${BASE_BACKEND_URL}/storage/${profilePhoto}`;
+  }
+
+  // Return default avatar if no profile photo
+  return 'https://i.pravatar.cc/150?img=1';
+};
+

@@ -1,75 +1,69 @@
 /**
- * Hospital App Theme - Pastel Green with Sage/Olive Accents
- * Professional, trustworthy sage green palette for hospital interface
- * High contrast colors for excellent readability
+ * Hospital App Theme - Simplified Blue Theme
+ * Based on Insightlancer design - Only 2 primary colors + white/black
  */
 
 import { Platform } from 'react-native';
 
-// Hospital Primary Colors - Pastel Sage Green Palette
+// Primary Colors - Blue Palette (2 colors only)
 export const HospitalPrimaryColors = {
-  main: '#9FAF8C',           // Sage green - main primary
-  dark: '#7A8B6A',           // Medium sage for contrast
-  darker: '#5F6F50',         // Dark sage for text/emphasis
-  darkText: '#3D4A32',       // Very dark green for high contrast text
-  light: '#B5C4A3',          // Light sage tint
-  lighter: '#D1DDC7',        // Very light sage
-  lightest: '#E8EDE4',       // Almost white sage background
-  background: '#F4F6F2',     // Lightest background
+  main: '#2563EB',           // Primary blue (from image)
+  dark: '#1E40AF',           // Darker blue for headers/contrast
+  darker: '#1E3A8A',         // Very dark blue for text emphasis
+  light: '#3B82F6',          // Light blue tint
+  lighter: '#60A5FA',        // Very light blue
+  lightest: '#DBEAFE',       // Almost white blue background
+  background: '#F8FAFC',     // Lightest background (white with slight tint)
   
   // Gradient colors
-  gradientStart: '#9FAF8C',
-  gradientEnd: '#B5C4A3',
-  gradientLight: ['#E8EDE4', '#F4F6F2'],
-  
-  // Accent colors
-  accent: '#B5B887',         // Olive green accent
-  accentDark: '#8F9568',     // Darker olive
+  gradientStart: '#2563EB',
+  gradientEnd: '#3B82F6',
+  gradientLight: ['#DBEAFE', '#F8FAFC'],
 };
 
-// Hospital Secondary Colors - Complementary Pastels
+// Secondary Colors - Same blue family (just variations)
 export const HospitalSecondaryColors = {
-  softTeal: '#A3C4BC',       // Soft pastel teal
-  softMauve: '#C4B3A3',      // Soft pastel mauve
-  softAmber: '#D4C299',      // Soft pastel amber
-  softSlate: '#B3B8C4',      // Soft pastel slate
+  blue: '#2563EB',           // Same as primary
+  blueLight: '#3B82F6',      // Light variation
 };
 
-// Hospital Status Colors - High Contrast for Readability
+// Status Colors - Using only blue variations + white/black
 export const HospitalStatusColors = {
-  success: '#10B981',        // Bright emerald (high contrast)
-  successDark: '#059669',    // Darker emerald
-  successLight: '#34D399',   // Light emerald
-  successBg: '#D1FAE5',      // Light emerald background
+  success: '#10B981',        // Green (minimal use for success states)
+  successDark: '#059669',
+  successLight: '#34D399',
+  successBg: '#D1FAE5',
   
-  error: '#F43F5E',          // Bright rose red (high contrast)
-  errorDark: '#E11D48',      // Darker rose
-  errorLight: '#FB7185',     // Light rose
-  errorBg: '#FEE2E2',        // Light rose background
+  error: '#EF4444',          // Red (minimal use for errors)
+  errorDark: '#DC2626',
+  errorLight: '#F87171',
+  errorBg: '#FEE2E2',
   
-  warning: '#F97316',        // Bright orange (high contrast)
-  warningDark: '#EA580C',    // Darker orange
-  warningLight: '#FB923C',   // Light orange
-  warningBg: '#FFEDD5',      // Light orange background
+  warning: '#F59E0B',        // Orange (minimal use for warnings)
+  warningDark: '#D97706',
+  warningLight: '#FBBF24',
+  warningBg: '#FEF3C7',
   
-  info: '#0EA5E9',           // Bright sky blue (high contrast)
-  infoDark: '#0284C7',       // Darker sky blue
-  infoLight: '#38BDF8',      // Light sky blue
-  infoBg: '#E0F2FE',         // Light sky blue background
+  info: '#2563EB',           // Blue (primary color)
+  infoDark: '#1E40AF',
+  infoLight: '#3B82F6',
+  infoBg: '#DBEAFE',
 };
 
-// Hospital Neutral Colors - Optimized for Readability
+// Neutral Colors - White and Black only
 export const HospitalNeutralColors = {
-  background: '#F4F6F2',           // Very light sage-tinted white
-  cardBackground: '#FFFFFF',       // Pure white for cards
-  textPrimary: '#1F2937',          // Very dark gray (high contrast)
-  textSecondary: '#4B5563',        // Dark gray (excellent readability)
-  textTertiary: '#6B7280',         // Medium gray (good readability)
-  textLight: '#9CA3AF',            // Light gray (subtle text)
-  border: '#D1D5DB',               // Light border
-  divider: '#E5E7EB',             // Divider color
-  shadow: 'rgba(0, 0, 0, 0.08)',  // Soft shadow
-  overlay: 'rgba(0, 0, 0, 0.5)',  // Overlay for modals
+  background: '#FFFFFF',       // Pure white
+  cardBackground: '#FFFFFF', // Pure white for cards
+  textPrimary: '#000000',    // Pure black for primary text
+  textSecondary: '#1F2937',  // Dark gray (almost black)
+  textTertiary: '#4B5563',   // Medium gray
+  textLight: '#6B7280',      // Light gray
+  border: '#E5E7EB',         // Light border (white with slight gray)
+  divider: '#E5E7EB',        // Divider color
+  shadow: 'rgba(0, 0, 0, 0.1)',  // Black shadow
+  overlay: 'rgba(0, 0, 0, 0.5)',  // Black overlay
+  white: '#FFFFFF',          // Pure white
+  black: '#000000',          // Pure black
 };
 
 // Hospital Theme Export
@@ -88,9 +82,9 @@ export const HospitalColors = {
     tint: HospitalPrimaryColors.main,
     icon: HospitalNeutralColors.textSecondary,
     tabIconDefault: HospitalNeutralColors.textTertiary,
-    tabIconSelected: HospitalPrimaryColors.darker,
+    tabIconSelected: HospitalPrimaryColors.dark,
     primary: HospitalPrimaryColors.main,
-    secondary: HospitalSecondaryColors.softTeal,
+    secondary: HospitalSecondaryColors.blue,
     success: HospitalStatusColors.success,
     error: HospitalStatusColors.error,
     warning: HospitalStatusColors.warning,

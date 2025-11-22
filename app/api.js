@@ -29,6 +29,21 @@ API.interceptors.request.use(
       let token = null;
       const url = config.url || '';
       
+      // List of public routes that don't require authentication
+      const publicRoutes = [
+        '/doctor/login',
+        '/doctor/register',
+        '/hospital/login',
+        '/hospital/register',
+        '/send-otp',
+        '/verify-otp',
+        '/test',
+        '/storage-test',
+      ];
+      
+      // Check if this is a public route
+      const isPublicRoute = publicRoutes.some(route => url.includes(route));
+      
       // Check if this is a hospital route
       if (url.includes('/hospital/')) {
         // Hospital route - use hospital token
@@ -46,7 +61,8 @@ API.interceptors.request.use(
       
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
-      } else if (__DEV__) {
+      } else if (__DEV__ && !isPublicRoute) {
+        // Only warn if it's not a public route (login/register don't need tokens)
         console.warn('⚠️ No token found for route:', url);
       }
     } catch (error) {
@@ -60,9 +76,19 @@ API.interceptors.request.use(
     
     // Log request in development
     if (__DEV__) {
-      const fullUrl = `${config.baseURL || API_BASE_URL}${config.url}`;
+      // Use the actual baseURL from config (which comes from env)
+      const actualBaseURL = config.baseURL || API_BASE_URL;
+      const fullUrl = `${actualBaseURL}${config.url?.startsWith('/') ? '' : '/'}${config.url}`;
       console.log(`📤 ${config.method?.toUpperCase()} ${fullUrl}`);
+      console.log('   Base URL:', actualBaseURL);
       console.log('   Headers:', config.headers);
+      
+      // Warn if using local IP (for development)
+      if (actualBaseURL.includes('192.168.') || actualBaseURL.includes('localhost')) {
+        console.warn('⚠️ Using local IP address for development');
+        console.warn('   Update .env file to change: EXPO_PUBLIC_BACKEND_URL');
+        console.warn('   Then restart Expo: npx expo start --clear');
+      }
     }
     
     return config;
@@ -100,10 +126,14 @@ API.interceptors.response.use(
         console.warn('📍 Relative Path:', relativePath);
         console.warn('🔗 Base URL:', error.config?.baseURL || API_BASE_URL);
         console.warn('🌐 Full URL Attempted:', fullUrl);
-        console.warn('💡 Fix: Allow port 8000 in Windows Firewall');
-        console.warn('   Run: New-NetFirewallRule -DisplayName "Laravel Backend" -Direction Inbound -LocalPort 8000 -Protocol TCP -Action Allow');
+        console.warn('💡 Troubleshooting Steps:');
+        console.warn('   1. Verify backend is running: php artisan serve --host=0.0.0.0 --port=8000');
+        console.warn('   2. Check IP address matches your network interface');
+        console.warn('   3. If using mobile hotspot, ensure correct IP is set in .env');
+        console.warn('   4. Allow port 8000 in Windows Firewall (Run as Administrator)');
+        console.warn('   5. Test connection from phone browser: http://YOUR_IP:8000/api/test');
         console.warn('═══════════════════════════════════════');
-        error.message = `Cannot connect to server at ${fullUrl}. Fix: Allow port 8000 in Windows Firewall (Run as Administrator)`;
+        error.message = `Cannot connect to server at ${fullUrl}. Please check: 1) Backend is running on 0.0.0.0:8000, 2) IP address in .env matches your network, 3) Firewall allows port 8000, 4) Phone and laptop are on same network.`;
       } else {
         console.warn('❌ Request Error:', error.message);
       }
@@ -116,7 +146,16 @@ API.interceptors.response.use(
         console.warn('⚠️ Unauthorized - clearing auth data');
         try {
           // Clear auth data directly to avoid circular dependency
-          await AsyncStorage.multiRemove(['doctorToken', 'doctorInfo']);
+          const url = error.config?.url || '';
+          if (url.includes('/hospital/')) {
+            // Hospital route - clear hospital auth
+            await AsyncStorage.multiRemove(['hospitalToken', 'hospitalInfo']);
+            console.warn('🏥 Cleared hospital auth data');
+          } else {
+            // Doctor route - clear doctor auth
+            await AsyncStorage.multiRemove(['doctorToken', 'doctorInfo']);
+            console.warn('👨‍⚕️ Cleared doctor auth data');
+          }
         } catch (clearError) {
           console.error('Error clearing auth data:', clearError);
         }

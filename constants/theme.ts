@@ -1,65 +1,69 @@
 /**
- * Color theme with primary color #33d4cc (cyan/turquoise)
- * Colors are defined for light and dark mode with good contrast
+ * Simplified Color Theme - Based on Insightlancer Design
+ * Only 2 primary colors (Blue variations) + White and Black
  */
 
 import { Platform } from 'react-native';
 
-// Premium color palette - Modern Medical App Style
+// Primary Colors - Blue Palette (2 colors only)
 export const PrimaryColors = {
-  main: '#33d4cc',        // Primary cyan (#33d4cc)
-  dark: '#1a9a92',         // Darker shade for contrast
-  darker: '#0d6b66',       // Even darker for text
-  light: '#5fe3db',       // Lighter shade
-  lighter: '#a8f0eb',     // Light tint
-  lightest: '#e6f8f7',    // Very light background tint
-  background: '#f0fcfb',  // Lightest background
-  // Premium gradients
-  gradientStart: '#33d4cc',
-  gradientEnd: '#5fe3db',
-  gradientLight: ['#e6f8f7', '#f0fcfb'],
+  main: '#2563EB',           // Primary blue (from image)
+  dark: '#1E40AF',           // Darker blue for headers/contrast
+  darker: '#1E3A8A',         // Very dark blue for text emphasis
+  light: '#3B82F6',          // Light blue tint
+  lighter: '#60A5FA',        // Very light blue
+  lightest: '#DBEAFE',       // Almost white blue background
+  background: '#F8FAFC',     // Lightest background (white with slight tint)
+  
+  // Gradient colors
+  gradientStart: '#2563EB',
+  gradientEnd: '#3B82F6',
+  gradientLight: ['#DBEAFE', '#F8FAFC'],
 };
 
-// Secondary colors - Premium variations
+// Secondary Colors - Same blue family (just variations)
 export const SecondaryColors = {
-  accent: '#6366f1',      // Premium indigo
-  accentDark: '#4f46e5',  // Darker indigo
-  accentLight: '#818cf8', // Lighter indigo
-  purple: '#8b5cf6',      // Premium purple
-  purpleDark: '#7c3aed',  // Darker purple
-  pink: '#ec4899',        // Premium pink
-  orange: '#f97316',      // Premium orange
-  teal: '#14b8a6',        // Premium teal
+  blue: '#2563EB',           // Same as primary
+  blueLight: '#3B82F6',      // Light variation
 };
 
-// Status colors - High contrast for readability
+// Status Colors - Using only blue variations + white/black
 export const StatusColors = {
-  success: '#27ae60',     // Green (high contrast)
-  successDark: '#1e8449', // Darker green
-  successLight: '#52c97f', // Light green
-  error: '#e74c3c',       // Red (high contrast)
-  errorDark: '#c0392b',   // Darker red
-  errorLight: '#ec7063',   // Light red
-  warning: '#f39c12',     // Orange (high contrast)
-  warningDark: '#d68910', // Darker orange
-  warningLight: '#f5b041', // Light orange
-  info: '#3498db',        // Blue info
-  infoDark: '#2980b9',    // Darker blue
-  infoLight: '#5dade2',   // Light blue
+  success: '#10B981',        // Green (minimal use for success states)
+  successDark: '#059669',
+  successLight: '#34D399',
+  successBg: '#D1FAE5',
+  
+  error: '#EF4444',          // Red (minimal use for errors)
+  errorDark: '#DC2626',
+  errorLight: '#F87171',
+  errorBg: '#FEE2E2',
+  
+  warning: '#F59E0B',        // Orange (minimal use for warnings)
+  warningDark: '#D97706',
+  warningLight: '#FBBF24',
+  warningBg: '#FEF3C7',
+  
+  info: '#2563EB',           // Blue (primary color)
+  infoDark: '#1E40AF',
+  infoLight: '#3B82F6',
+  infoBg: '#DBEAFE',
 };
 
-// Neutral colors - Optimized for readability
+// Neutral Colors - White and Black only
 export const NeutralColors = {
-  background: '#f8fbfb',   // Very light cyan-tinted white
-  cardBackground: '#ffffff', // Pure white for cards
-  textPrimary: '#1a1a1a',   // Dark gray/black (high contrast)
-  textSecondary: '#4a5568', // Medium gray (good readability)
-  textTertiary: '#718096',  // Light gray (subtle text)
-  textLight: '#a0aec0',    // Very light gray (disabled text)
-  border: '#e2e8f0',        // Light border (subtle)
-  divider: '#edf2f7',       // Divider color
-  shadow: 'rgba(0, 0, 0, 0.1)', // Shadow color
-  overlay: 'rgba(0, 0, 0, 0.5)', // Overlay for modals
+  background: '#FFFFFF',       // Pure white
+  cardBackground: '#FFFFFF', // Pure white for cards
+  textPrimary: '#000000',    // Pure black for primary text
+  textSecondary: '#1F2937',  // Dark gray (almost black)
+  textTertiary: '#4B5563',   // Medium gray
+  textLight: '#6B7280',      // Light gray
+  border: '#E5E7EB',         // Light border (white with slight gray)
+  divider: '#E5E7EB',        // Divider color
+  shadow: 'rgba(0, 0, 0, 0.1)',  // Black shadow
+  overlay: 'rgba(0, 0, 0, 0.5)',  // Black overlay
+  white: '#FFFFFF',          // Pure white
+  black: '#000000',          // Pure black
 };
 
 // Dark mode colors (for future dark mode support)
@@ -83,9 +87,9 @@ export const Colors = {
     tint: tintColorLight,
     icon: NeutralColors.textSecondary,
     tabIconDefault: NeutralColors.textTertiary,
-    tabIconSelected: tintColorLight,
+    tabIconSelected: PrimaryColors.dark,
     primary: PrimaryColors.main,
-    secondary: SecondaryColors.accent,
+    secondary: SecondaryColors.blue,
     success: StatusColors.success,
     error: StatusColors.error,
     warning: StatusColors.warning,
@@ -99,7 +103,7 @@ export const Colors = {
     tabIconDefault: '#9BA1A6',
     tabIconSelected: tintColorDark,
     primary: PrimaryColors.light,
-    secondary: SecondaryColors.accentLight,
+    secondary: SecondaryColors.blueLight,
     success: StatusColors.success,
     error: StatusColors.error,
     warning: StatusColors.warning,

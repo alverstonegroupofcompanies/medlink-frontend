@@ -3,18 +3,8 @@ import { View, StyleSheet, TouchableOpacity, Text, ActivityIndicator, Platform }
 import * as Location from 'expo-location';
 import { MapPin, Navigation } from 'lucide-react-native';
 import { PrimaryColors, NeutralColors, StatusColors } from '@/constants/theme';
-
-// Use react-native-maps for Expo projects
-let MapView: any;
-let Marker: any;
-try {
-  const maps = require('react-native-maps');
-  MapView = maps.default || maps.MapView;
-  Marker = maps.Marker;
-} catch (e) {
-  // Fallback if react-native-maps is not available
-  console.warn('react-native-maps not available, using fallback');
-}
+import MapView from 'react-native-maps';
+import { Marker } from 'react-native-maps';
 
 interface MapViewComponentProps {
   initialLocation?: { latitude: number; longitude: number };
@@ -33,7 +23,7 @@ export function MapViewComponent({
     latitude: initialLocation?.latitude || 28.6139,
     longitude: initialLocation?.longitude || 77.2090,
     latitudeDelta: 0.0922,
-    longitudeDelta: 0.0421,
+    longitudeDelta: 0.0921,
   });
   const [selectedLocation, setSelectedLocation] = useState<{ latitude: number; longitude: number } | null>(
     initialLocation || null
@@ -90,37 +80,6 @@ export function MapViewComponent({
       setLoading(false);
     }
   };
-
-  // Fallback UI if MapView is not available
-  if (!MapView) {
-    return (
-      <View style={[styles.container, styles.fallbackContainer, { height }]}>
-        <MapPin size={48} color={PrimaryColors.main} />
-        <Text style={styles.fallbackText}>Map View</Text>
-        <Text style={styles.fallbackSubtext}>
-          {selectedLocation
-            ? `${selectedLocation.latitude.toFixed(6)}, ${selectedLocation.longitude.toFixed(6)}`
-            : 'Tap button to get location'}
-        </Text>
-        {showCurrentLocationButton && (
-          <TouchableOpacity
-            style={styles.fallbackButton}
-            onPress={getCurrentLocation}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <>
-                <Navigation size={20} color="#fff" />
-                <Text style={styles.fallbackButtonText}>Get Current Location</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        )}
-      </View>
-    );
-  }
 
   return (
     <View style={[styles.container, { height }]}>
@@ -225,39 +184,6 @@ const styles = StyleSheet.create({
     color: NeutralColors.textSecondary,
     fontWeight: '600',
     textAlign: 'center',
-  },
-  fallbackContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: PrimaryColors.lightest,
-    padding: 24,
-  },
-  fallbackText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: PrimaryColors.dark,
-    marginTop: 12,
-  },
-  fallbackSubtext: {
-    fontSize: 14,
-    color: NeutralColors.textSecondary,
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  fallbackButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: PrimaryColors.main,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
-    marginTop: 16,
-  },
-  fallbackButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
   },
 });
 

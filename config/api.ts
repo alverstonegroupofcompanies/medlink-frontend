@@ -1,66 +1,32 @@
-/**
- * API Configuration
- * 
- * ⚠️ IMPORTANT FOR MOBILE TESTING:
- * 
- * On mobile devices, 'localhost' refers to the device itself, not your computer.
- * You MUST replace 'YOUR_IP_HERE' below with your computer's local IP address.
- * 
- * To find your IP address:
- * - Windows: Open CMD → type `ipconfig` → look for "IPv4 Address" (e.g., 192.168.1.100)
- * - Mac/Linux: Open Terminal → type `ifconfig` → look for "inet" under en0/wifi (e.g., 192.168.1.100)
- * 
- * Steps:
- * 1. Find your computer's IP address (e.g., 192.168.1.100)
- * 2. Replace 'YOUR_IP_HERE' below with your actual IP
- * 3. Make sure your Laravel backend is running: php artisan serve --host=0.0.0.0 --port=8000
- * 4. Make sure your firewall allows connections on port 8000
- * 5. Restart Expo: npx expo start --clear
- * 
- * Example:
- * const API_BASE_URL = 'http://192.168.1.100:8000/api';
- */
+const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
-import { Platform } from 'react-native';
+if (!BACKEND_URL) {
+  throw new Error(`
+    ❌ Missing EXPO_PUBLIC_BACKEND_URL in .env file!
 
-// ⚠️ IP address for both web and mobile
-// Use the same IP address for both platforms
-const LOCAL_IP = '192.168.0.174'; // Your computer's IP address
-const API_PORT = '8000';
+    Add this to .env:
 
-// Determine the API base URL - same for web and mobile
-const getApiBaseUrl = () => {
-  // Use the same IP address for both web and mobile
-  const url = `http://${LOCAL_IP}:${API_PORT}/api`;
-  
-  // Debug logging
-  if (__DEV__) {
-    console.log('🔧 Building API URL:', {
-      LOCAL_IP,
-      API_PORT,
-      finalUrl: url,
-      platform: Platform.OS,
-    });
-  }
-  
-  return url;
-};
+    EXPO_PUBLIC_BACKEND_URL=http://YOUR_IP:8000
 
-export const API_BASE_URL = getApiBaseUrl();
-
-// Log the API URL being used (helpful for debugging)
-if (__DEV__) {
-  console.log('═══════════════════════════════════════');
-  console.log('🔗 API Configuration');
-  console.log('═══════════════════════════════════════');
-  console.log('📍 Local IP:', LOCAL_IP);
-  console.log('🔌 API Port:', API_PORT);
-  console.log('🌐 API Base URL:', API_BASE_URL);
-  console.log('📱 Platform:', Platform.OS);
-  console.log('═══════════════════════════════════════');
-  
-  console.log('✅ IP configured for both web and mobile:', LOCAL_IP);
-  console.log('💡 Make sure backend is running: php artisan serve --host=0.0.0.0 --port=8000');
-  console.log('💡 Test in browser: http://' + LOCAL_IP + ':' + API_PORT + '/api/test');
+    Then restart Expo: npx expo start --clear
+  `);
 }
 
+// Export backend URL for use in image URLs (without /api)
+export const BASE_BACKEND_URL = BACKEND_URL.endsWith('/')
+  ? BACKEND_URL.slice(0, -1) // Remove trailing slash
+  : BACKEND_URL;
+
+// Ensure /api is appended
+export const API_BASE_URL = BACKEND_URL.endsWith('/api')
+  ? BACKEND_URL
+  : `${BACKEND_URL}/api`;
+
+// Debug log (visible only in development mode)
+if (__DEV__) {
+  console.log("==========================================");
+  console.log("🔧 API CONFIG LOADED");
+  console.log("Backend URL:", BACKEND_URL);
+  console.log("API Base URL:", API_BASE_URL);
+  console.log("==========================================");
+}

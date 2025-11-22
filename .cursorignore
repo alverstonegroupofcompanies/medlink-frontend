@@ -1,0 +1,37 @@
+# Cursor AI Ignore Patterns
+# Files/directories listed here will be excluded from AI indexing and context
+
+# Dependencies
+node_modules/
+.expo/
+dist/
+web-build/
+
+# Build artifacts
+*.tsbuildinfo
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+
+# Generated files
+expo-env.d.ts
+/android
+/ios
+
+# Debug files
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+.metro-health-check*
+
+# OS files
+.DS_Store
+.kotlin/
+
+# Local env files (keep .env accessible to AI)
+.env*.local
+

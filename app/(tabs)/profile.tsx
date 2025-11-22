@@ -11,35 +11,41 @@ import {
   KeyboardAvoidingView,
   Platform,
   StatusBar,
+  Dimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ThemedButton } from '@/components/themed-button';
+import { LinearGradient } from 'expo-linear-gradient';
 import { 
   Edit2, 
   Save, 
   X, 
   Camera, 
   FileText, 
-  ArrowLeft, 
   User, 
-  ShoppingCart, 
-  Heart, 
-  CreditCard, 
-  Compass, 
-  MapPin, 
-  LogOut,
-  ChevronRight,
+  Mail, 
+  Phone, 
+  MapPin,
   Briefcase,
   Award,
-  FileCheck
+  GraduationCap,
+  Building2,
+  Clock,
+  CheckCircle,
+  Upload,
+  Eye,
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import API from '../api';
 import { router } from 'expo-router';
 import { calculateProfileCompletion } from '@/utils/profileCompletion';
-import { DoctorPrimaryColors as PrimaryColors, DoctorStatusColors as StatusColors, DoctorNeutralColors as NeutralColors } from '@/constants/doctor-theme';
-import { getDoctorInfo, saveDoctorAuth } from '@/utils/auth';
+import { ModernColors, Spacing, BorderRadius, Shadows, Typography } from '@/constants/modern-theme';
+import { getDoctorInfo, saveDoctorAuth, getProfilePhotoUrl } from '@/utils/auth';
+import { ModernCard } from '@/components/modern-card';
+import { ScreenSafeArea } from '@/components/screen-safe-area';
+import { DepartmentPicker } from '@/components/department-picker';
+
+const { width } = Dimensions.get('window');
 
 export default function ProfileScreen() {
   const [doctor, setDoctor] = useState<any>(null);
@@ -47,6 +53,7 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<any>({});
   const [profilePhotoUri, setProfilePhotoUri] = useState<string | null>(null);
+  const [departments, setDepartments] = useState<any[]>([]);
   const [documents, setDocuments] = useState<{
     degree_certificate?: { uri: string; name: string; type: string };
     id_proof?: { uri: string; name: string; type: string };
@@ -55,7 +62,17 @@ export default function ProfileScreen() {
 
   useEffect(() => {
     loadDoctor();
+    loadDepartments();
   }, []);
+
+  const loadDepartments = async () => {
+    try {
+      const response = await API.get('/departments');
+      setDepartments(response.data.departments || []);
+    } catch (error) {
+      console.error('Error loading departments:', error);
+    }
+  };
 
   const loadDoctor = async () => {
     try {
@@ -71,6 +88,7 @@ export default function ProfileScreen() {
           medical_council_reg_no: info.medical_council_reg_no || '',
           qualifications: info.qualifications || '',
           specialization: info.specialization || '',
+          department_id: info.department_id || null,
           experience: info.experience || '',
           current_hospital: info.current_hospital || '',
           preferred_work_type: info.preferred_work_type || '',
@@ -87,18 +105,40 @@ export default function ProfileScreen() {
 
   const handlePickImage = async () => {
     try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission Denied',
+          'We need camera roll permissions to upload your profile photo. Please enable it in your device settings.'
+        );
+        return;
+      }
+
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ImagePicker.MediaTypeOptions?.Images || 'images',
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
       });
 
       if (!result.canceled && result.assets[0]) {
+        const fileSizeMB = (result.assets[0].fileSize || 0) / (1024 * 1024);
+        const maxSizeMB = 5;
+
+        if (fileSizeMB > maxSizeMB) {
+          Alert.alert(
+            'File Too Large',
+            `Profile photo must be less than ${maxSizeMB}MB. Your file is ${fileSizeMB.toFixed(2)}MB. Please compress the image and try again.`,
+            [{ text: 'OK' }]
+          );
+          return;
+        }
+
         setProfilePhotoUri(result.assets[0].uri);
       }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to pick image');
+    } catch (error: any) {
+      console.error('Image picker error:', error);
+      Alert.alert('Error', `Failed to pick image: ${error.message || 'Unknown error'}`);
     }
   };
 
@@ -140,15 +180,16 @@ export default function ProfileScreen() {
     try {
       const data = new FormData();
 
-      // Add all form fields
       Object.entries(formData).forEach(([key, value]) => {
+        if (key === 'profile_photo' || key === 'degree_certificate' || key === 'id_proof' || key === 'medical_registration_certificate') {
+          return;
+        }
         if (value) {
           data.append(key, String(value));
         }
       });
 
-      // Add profile photo if selected
-      if (profilePhotoUri && !profilePhotoUri.startsWith('http')) {
+      if (profilePhotoUri && !profilePhotoUri.startsWith('http') && !profilePhotoUri.startsWith('https')) {
         const filename = profilePhotoUri.split('/').pop() || 'profile.jpg';
         const match = /\.(\w+)$/.exec(filename);
         const type = match ? `image/${match[1]}` : 'image/jpeg';
@@ -159,9 +200,8 @@ export default function ProfileScreen() {
         } as any);
       }
 
-      // Add documents if selected
       Object.entries(documents).forEach(([key, file]) => {
-        if (file) {
+        if (file && file.uri && !file.uri.startsWith('http') && !file.uri.startsWith('https')) {
           data.append(key, {
             uri: file.uri,
             name: file.name,
@@ -173,34 +213,28 @@ export default function ProfileScreen() {
       const response = await API.post('/doctor/update-profile', data);
 
       if (response.data?.doctor) {
-        // Update doctor info in storage using centralized function
         const token = await AsyncStorage.getItem('doctorToken');
         if (token) {
           await saveDoctorAuth(token, response.data.doctor);
         } else {
-          // If no token, just update the info (shouldn't happen, but safety check)
           await AsyncStorage.setItem('doctorInfo', JSON.stringify(response.data.doctor));
         }
         
         setDoctor(response.data.doctor);
+        
+        if (response.data.doctor.profile_photo) {
+          setProfilePhotoUri(response.data.doctor.profile_photo);
+        }
+        
         setIsEditing(false);
         
-        // Calculate and show new completion percentage
         const completion = calculateProfileCompletion(response.data.doctor);
         const percentage = Math.round(completion * 100);
         
         Alert.alert(
           'Success',
           `Profile updated successfully!\nProfile Status: ${percentage}%`,
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                // Don't navigate back - stay on profile screen to see updated data
-                setIsEditing(false);
-              },
-            },
-          ]
+          [{ text: 'OK' }]
         );
       }
     } catch (error: any) {
@@ -220,561 +254,752 @@ export default function ProfileScreen() {
     setDocuments({});
   };
 
-  const updateField = (field: string, value: string) => {
+  const updateField = (field: string, value: string | number | null) => {
     setFormData((prev: any) => ({ ...prev, [field]: value }));
-  };
-
-  const renderField = (
-    label: string,
-    field: string,
-    multiline: boolean = false,
-    keyboardType: string = 'default'
-  ) => {
-    const value = formData[field] || '';
-    return (
-      <View style={styles.fieldContainer}>
-        <Text style={styles.fieldLabel}>{label}</Text>
-        {isEditing ? (
-          <TextInput
-            style={[styles.input, multiline && styles.textArea]}
-            value={value}
-            onChangeText={(text) => updateField(field, text)}
-            multiline={multiline}
-            numberOfLines={multiline ? 4 : 1}
-            keyboardType={keyboardType as any}
-            placeholder={`Enter ${label.toLowerCase()}`}
-            placeholderTextColor="#999"
-          />
-        ) : (
-          <Text style={styles.fieldValue}>{value || 'Not provided'}</Text>
-        )}
-      </View>
-    );
   };
 
   const profileCompletion = doctor ? Math.round(calculateProfileCompletion(doctor) * 100) : 0;
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={PrimaryColors.dark} />
-      
-      {/* Top Bar */}
-      <View style={styles.topBar}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <ArrowLeft size={24} color="#fff" />
-        </TouchableOpacity>
+    <ScreenSafeArea backgroundColor={ModernColors.background.secondary}>
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={ModernColors.primary.main} />
         
-        <View style={styles.profileImageContainer}>
-          <Image
-            source={{
-              uri: profilePhotoUri || doctor?.profile_photo || 'https://i.pravatar.cc/150?img=1',
-            }}
-            style={styles.topProfileImage}
-          />
-        </View>
-        
-        <TouchableOpacity
-          style={styles.editIconButton}
-          onPress={() => setIsEditing(!isEditing)}
+        {/* Modern Header with Gradient */}
+        <LinearGradient
+          colors={ModernColors.primary.gradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.headerGradient}
         >
-          <Edit2 size={24} color="#fff" />
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Profile Header */}
-        <View style={styles.profileHeader}>
-          <Text style={styles.profileName}>
-            {doctor?.name || 'Doctor Name'}
-          </Text>
-          <Text style={styles.profileLocation}>
-            {doctor?.current_location || 'Location not set'}
-          </Text>
-        </View>
-
-        {/* Summary Cards */}
-        <View style={styles.summaryCards}>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>Profile</Text>
-            <Text style={styles.summaryValue}>{profileCompletion}%</Text>
-          </View>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>Applications</Text>
-            <Text style={styles.summaryValue}>0</Text>
-          </View>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>Active Jobs</Text>
-            <Text style={styles.summaryValue}>0</Text>
-          </View>
-        </View>
-
-        {/* Menu List */}
-        <View style={styles.menuList}>
-          <TouchableOpacity 
-            style={styles.menuItem}
-            onPress={() => {
-              if (isEditing) {
-                // Show personal information edit
-                Alert.alert('Personal Information', 'Edit your personal details');
-              }
-            }}
-          >
-            <View style={styles.menuItemLeft}>
-              <User size={22} color={PrimaryColors.main} />
-              <Text style={styles.menuItemText}>Personal Information</Text>
-            </View>
-            <ChevronRight size={20} color={NeutralColors.textTertiary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.menuItem}
-            onPress={() => {
-              if (isEditing) {
-                Alert.alert('Professional Details', 'Edit your professional information');
-              }
-            }}
-          >
-            <View style={styles.menuItemLeft}>
-              <Briefcase size={22} color={PrimaryColors.main} />
-              <Text style={styles.menuItemText}>Professional Details</Text>
-            </View>
-            <ChevronRight size={20} color={NeutralColors.textTertiary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.menuItem}
-            onPress={() => {
-              if (isEditing) {
-                Alert.alert('Documents', 'Manage your documents');
-              }
-            }}
-          >
-            <View style={styles.menuItemLeft}>
-              <FileCheck size={22} color={PrimaryColors.main} />
-              <Text style={styles.menuItemText}>Documents</Text>
-            </View>
-            <ChevronRight size={20} color={NeutralColors.textTertiary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.menuItem}
-            onPress={() => {
-              Alert.alert('Job Applications', 'View your job applications');
-            }}
-          >
-            <View style={styles.menuItemLeft}>
-              <ShoppingCart size={22} color={PrimaryColors.main} />
-              <Text style={styles.menuItemText}>Job Applications</Text>
-            </View>
-            <ChevronRight size={20} color={NeutralColors.textTertiary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.menuItem}
-            onPress={() => {
-              Alert.alert('Settings', 'App settings');
-            }}
-          >
-            <View style={styles.menuItemLeft}>
-              <Award size={22} color={PrimaryColors.main} />
-              <Text style={styles.menuItemText}>Settings</Text>
-            </View>
-            <ChevronRight size={20} color={NeutralColors.textTertiary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.menuItem}
-            onPress={() => {
-              router.push('/(tabs)/more');
-            }}
-          >
-            <View style={styles.menuItemLeft}>
-              <LogOut size={22} color={StatusColors.error} />
-              <Text style={[styles.menuItemText, { color: StatusColors.error }]}>Logout</Text>
-            </View>
-            <ChevronRight size={20} color={NeutralColors.textTertiary} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Edit Mode - Show Form Fields */}
-        {isEditing && (
-          <View style={styles.editSection}>
-            <View style={styles.editHeader}>
-              <Text style={styles.editTitle}>Edit Profile</Text>
-              <View style={styles.editActions}>
+          <View style={styles.headerContent}>
+            <TouchableOpacity 
+              style={styles.backButton}
+              onPress={() => {
+                try {
+                  router.back();
+                } catch (error) {
+                  router.replace('/(tabs)');
+                }
+              }}
+            >
+              <X size={24} color="#fff" />
+            </TouchableOpacity>
+            
+            <View style={styles.headerActions}>
+              {!isEditing ? (
                 <TouchableOpacity
-                  style={[styles.editActionButton, styles.cancelButton]}
+                  style={styles.editButton}
+                  onPress={() => setIsEditing(true)}
+                >
+                  <Edit2 size={20} color={ModernColors.primary.main} />
+                  <Text style={styles.editButtonText}>Edit</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={styles.cancelButton}
                   onPress={handleCancel}
                 >
-                  <X size={18} color={StatusColors.error} />
+                  <X size={20} color={ModernColors.error.main} />
                   <Text style={styles.cancelButtonText}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.editActionButton, styles.saveButton]}
-                  onPress={handleSave}
-                  disabled={loading}
-                >
-                  <Save size={18} color="#fff" />
-                  <Text style={styles.saveButtonText}>Save</Text>
-                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </LinearGradient>
+
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Profile Card */}
+          <ModernCard variant="elevated" style={styles.profileCard}>
+            <View style={styles.profileImageSection}>
+              <View style={styles.profileImageContainer}>
+                <Image
+                  source={{
+                    uri: profilePhotoUri || getProfilePhotoUrl(doctor),
+                  }}
+                  style={styles.profileImage}
+                />
+                {isEditing && (
+                  <TouchableOpacity
+                    style={styles.cameraIconButton}
+                    onPress={handlePickImage}
+                  >
+                    <Camera size={18} color="#fff" />
+                  </TouchableOpacity>
+                )}
+              </View>
+              <View style={styles.profileInfo}>
+                <Text style={styles.profileName}>
+                  {doctor?.name || 'Doctor Name'}
+                </Text>
+                {(doctor?.department?.name || 
+                  (doctor?.department_id && departments.find(d => d.id === doctor.department_id)?.name) ||
+                  doctor?.specialization) && (
+                  <Text style={styles.profileSpecialization}>
+                    {doctor?.department?.name || 
+                     (doctor?.department_id && departments.find(d => d.id === doctor.department_id)?.name) ||
+                     doctor?.specialization}
+                  </Text>
+                )}
+                {doctor?.current_location && (
+                  <View style={styles.locationRow}>
+                    <MapPin size={14} color={ModernColors.text.secondary} />
+                    <Text style={styles.locationText}>
+                      {doctor.current_location}
+                    </Text>
+                  </View>
+                )}
               </View>
             </View>
 
-            {/* Profile Photo Edit */}
-            <View style={styles.profilePhotoEditSection}>
-              <Image
-                source={{
-                  uri: profilePhotoUri || doctor?.profile_photo || 'https://i.pravatar.cc/150?img=1',
-                }}
-                style={styles.editProfileImage}
-              />
-              <TouchableOpacity
-                style={styles.cameraButton}
-                onPress={handlePickImage}
-              >
-                <Camera size={20} color="#fff" />
-              </TouchableOpacity>
+            {/* Profile Completion */}
+            <View style={styles.completionSection}>
+              <View style={styles.completionHeader}>
+                <Text style={styles.completionLabel}>Profile Completion</Text>
+                <Text style={styles.completionPercentage}>{profileCompletion}%</Text>
+              </View>
+              <View style={styles.progressBar}>
+                <View 
+                  style={[
+                    styles.progressFill, 
+                    { width: `${profileCompletion}%` }
+                  ]} 
+                />
+              </View>
             </View>
+          </ModernCard>
 
-            {/* Basic Details Section */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Basic Details</Text>
-              {renderField('Full Name', 'name')}
-              {renderField('Email', 'email', false, 'email-address')}
-              {renderField('Phone Number', 'phone_number', false, 'phone-pad')}
-              {renderField('Current Location', 'current_location')}
-            </View>
+          {!isEditing ? (
+            /* View Mode */
+            <>
+              {/* Contact Information */}
+              <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
+                <View style={styles.sectionHeader}>
+                  <View style={styles.sectionIconContainer}>
+                    <User size={20} color={ModernColors.primary.main} />
+                  </View>
+                  <Text style={styles.sectionTitle}>Contact Information</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Mail size={18} color={ModernColors.text.secondary} />
+                  <Text style={styles.detailLabel}>Email</Text>
+                  <Text style={styles.detailValue}>{doctor?.email || 'Not provided'}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Phone size={18} color={ModernColors.text.secondary} />
+                  <Text style={styles.detailLabel}>Phone</Text>
+                  <Text style={styles.detailValue}>{doctor?.phone_number || 'Not provided'}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <MapPin size={18} color={ModernColors.text.secondary} />
+                  <Text style={styles.detailLabel}>Location</Text>
+                  <Text style={styles.detailValue}>{doctor?.current_location || 'Not provided'}</Text>
+                </View>
+              </ModernCard>
 
-            {/* Professional Details Section */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Professional Details</Text>
-              {renderField('Professional Achievements', 'professional_achievements', true)}
-              {renderField('Medical Council Registration Number', 'medical_council_reg_no')}
-              {renderField('Qualifications', 'qualifications')}
-              {renderField('Specialization', 'specialization')}
-              {renderField('Experience', 'experience')}
-              {renderField('Current Hospital', 'current_hospital')}
-              {renderField('Preferred Work Type', 'preferred_work_type')}
-              {renderField('Preferred Location', 'preferred_location')}
-            </View>
+              {/* Professional Details */}
+              <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
+                <View style={styles.sectionHeader}>
+                  <View style={styles.sectionIconContainer}>
+                    <Briefcase size={20} color={ModernColors.primary.main} />
+                  </View>
+                  <Text style={styles.sectionTitle}>Professional Details</Text>
+                </View>
+                {(doctor?.department || doctor?.department_id) && (
+                  <View style={styles.detailRow}>
+                    <Briefcase size={18} color={ModernColors.text.secondary} />
+                    <Text style={styles.detailLabel}>Department</Text>
+                    <Text style={styles.detailValue}>
+                      {doctor?.department?.name || 
+                       (doctor?.department_id && departments.find(d => d.id === doctor.department_id)?.name) || 
+                       'Not set'}
+                    </Text>
+                  </View>
+                )}
+                {doctor?.qualifications && (
+                  <View style={styles.detailRow}>
+                    <GraduationCap size={18} color={ModernColors.text.secondary} />
+                    <Text style={styles.detailLabel}>Qualifications</Text>
+                    <Text style={styles.detailValue}>{doctor.qualifications}</Text>
+                  </View>
+                )}
+                {doctor?.experience && (
+                  <View style={styles.detailRow}>
+                    <Clock size={18} color={ModernColors.text.secondary} />
+                    <Text style={styles.detailLabel}>Experience</Text>
+                    <Text style={styles.detailValue}>{doctor.experience}</Text>
+                  </View>
+                )}
+                {doctor?.current_hospital && (
+                  <View style={styles.detailRow}>
+                    <Building2 size={18} color={ModernColors.text.secondary} />
+                    <Text style={styles.detailLabel}>Current Hospital</Text>
+                    <Text style={styles.detailValue}>{doctor.current_hospital}</Text>
+                  </View>
+                )}
+                {doctor?.medical_council_reg_no && (
+                  <View style={styles.detailRow}>
+                    <Award size={18} color={ModernColors.text.secondary} />
+                    <Text style={styles.detailLabel}>Registration No.</Text>
+                    <Text style={styles.detailValue}>{doctor.medical_council_reg_no}</Text>
+                  </View>
+                )}
+                {doctor?.preferred_work_type && (
+                  <View style={styles.detailRow}>
+                    <Briefcase size={18} color={ModernColors.text.secondary} />
+                    <Text style={styles.detailLabel}>Preferred Work Type</Text>
+                    <Text style={styles.detailValue}>{doctor.preferred_work_type}</Text>
+                  </View>
+                )}
+                {doctor?.professional_achievements && (
+                  <View style={styles.detailSection}>
+                    <Text style={styles.detailLabel}>Achievements</Text>
+                    <Text style={styles.detailValue}>{doctor.professional_achievements}</Text>
+                  </View>
+                )}
+              </ModernCard>
 
-            {/* Documents Section */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Documents</Text>
-              <TouchableOpacity
-                style={styles.documentButton}
-                onPress={() => handlePickDocument('degree_certificate')}
-              >
-                <FileText size={20} color={PrimaryColors.main} />
-                <Text style={styles.documentButtonText}>
-                  {documents.degree_certificate
-                    ? documents.degree_certificate.name
-                    : 'Upload Degree Certificate'}
+              {/* Documents */}
+              <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
+                <View style={styles.sectionHeader}>
+                  <View style={styles.sectionIconContainer}>
+                    <FileText size={20} color={ModernColors.primary.main} />
+                  </View>
+                  <Text style={styles.sectionTitle}>Documents</Text>
+                </View>
+                <View style={styles.documentList}>
+                  {doctor?.degree_certificate ? (
+                    <View style={styles.documentItem}>
+                      <FileText size={16} color={ModernColors.success.main} />
+                      <Text style={styles.documentText}>Degree Certificate</Text>
+                      <CheckCircle size={16} color={ModernColors.success.main} />
+                    </View>
+                  ) : (
+                    <View style={styles.documentItem}>
+                      <FileText size={16} color={ModernColors.text.tertiary} />
+                      <Text style={[styles.documentText, styles.documentTextMissing]}>Degree Certificate</Text>
+                    </View>
+                  )}
+                  {doctor?.id_proof ? (
+                    <View style={styles.documentItem}>
+                      <FileText size={16} color={ModernColors.success.main} />
+                      <Text style={styles.documentText}>ID Proof</Text>
+                      <CheckCircle size={16} color={ModernColors.success.main} />
+                    </View>
+                  ) : (
+                    <View style={styles.documentItem}>
+                      <FileText size={16} color={ModernColors.text.tertiary} />
+                      <Text style={[styles.documentText, styles.documentTextMissing]}>ID Proof</Text>
+                    </View>
+                  )}
+                  {doctor?.medical_registration_certificate ? (
+                    <View style={styles.documentItem}>
+                      <FileText size={16} color={ModernColors.success.main} />
+                      <Text style={styles.documentText}>Medical Registration</Text>
+                      <CheckCircle size={16} color={ModernColors.success.main} />
+                    </View>
+                  ) : (
+                    <View style={styles.documentItem}>
+                      <FileText size={16} color={ModernColors.text.tertiary} />
+                      <Text style={[styles.documentText, styles.documentTextMissing]}>Medical Registration</Text>
+                    </View>
+                  )}
+                </View>
+              </ModernCard>
+            </>
+          ) : (
+            /* Edit Mode */
+            <>
+              {/* Basic Details */}
+              <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
+                <Text style={styles.editSectionTitle}>Basic Information</Text>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Full Name *</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={formData.name}
+                    onChangeText={(text) => updateField('name', text)}
+                    placeholder="Enter your full name"
+                    placeholderTextColor={ModernColors.text.tertiary}
+                  />
+                </View>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Email *</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={formData.email}
+                    onChangeText={(text) => updateField('email', text)}
+                    keyboardType="email-address"
+                    placeholder="Enter your email"
+                    placeholderTextColor={ModernColors.text.tertiary}
+                  />
+                </View>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Phone Number</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={formData.phone_number}
+                    onChangeText={(text) => updateField('phone_number', text)}
+                    keyboardType="phone-pad"
+                    placeholder="Enter your phone number"
+                    placeholderTextColor={ModernColors.text.tertiary}
+                  />
+                </View>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Current Location</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={formData.current_location}
+                    onChangeText={(text) => updateField('current_location', text)}
+                    placeholder="Enter your location"
+                    placeholderTextColor={ModernColors.text.tertiary}
+                  />
+                </View>
+              </ModernCard>
+
+              {/* Professional Details */}
+              <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
+                <Text style={styles.editSectionTitle}>Professional Information</Text>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Department / Specialization</Text>
+                  <DepartmentPicker
+                    value={formData.department_id}
+                    onValueChange={(id) => updateField('department_id', id)}
+                    placeholder="Select your department"
+                  />
+                </View>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Specialization (Additional)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={formData.specialization}
+                    onChangeText={(text) => updateField('specialization', text)}
+                    placeholder="Additional specialization details (optional)"
+                    placeholderTextColor={ModernColors.text.tertiary}
+                  />
+                </View>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Qualifications</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={formData.qualifications}
+                    onChangeText={(text) => updateField('qualifications', text)}
+                    placeholder="e.g., MBBS, MD, etc."
+                    placeholderTextColor={ModernColors.text.tertiary}
+                  />
+                </View>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Experience</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={formData.experience}
+                    onChangeText={(text) => updateField('experience', text)}
+                    placeholder="e.g., 5 years"
+                    placeholderTextColor={ModernColors.text.tertiary}
+                  />
+                </View>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Current Hospital</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={formData.current_hospital}
+                    onChangeText={(text) => updateField('current_hospital', text)}
+                    placeholder="Enter current hospital"
+                    placeholderTextColor={ModernColors.text.tertiary}
+                  />
+                </View>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Medical Council Registration No.</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={formData.medical_council_reg_no}
+                    onChangeText={(text) => updateField('medical_council_reg_no', text)}
+                    placeholder="Enter registration number"
+                    placeholderTextColor={ModernColors.text.tertiary}
+                  />
+                </View>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Preferred Work Type</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={formData.preferred_work_type}
+                    onChangeText={(text) => updateField('preferred_work_type', text)}
+                    placeholder="e.g., full-time, part-time"
+                    placeholderTextColor={ModernColors.text.tertiary}
+                  />
+                </View>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Professional Achievements</Text>
+                  <TextInput
+                    style={[styles.input, styles.textArea]}
+                    value={formData.professional_achievements}
+                    onChangeText={(text) => updateField('professional_achievements', text)}
+                    multiline
+                    numberOfLines={4}
+                    placeholder="Describe your achievements"
+                    placeholderTextColor={ModernColors.text.tertiary}
+                    textAlignVertical="top"
+                  />
+                </View>
+              </ModernCard>
+
+              {/* Documents */}
+              <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
+                <Text style={styles.editSectionTitle}>Documents</Text>
+                <TouchableOpacity
+                  style={styles.documentUploadButton}
+                  onPress={() => handlePickDocument('degree_certificate')}
+                >
+                  <Upload size={18} color={ModernColors.primary.main} />
+                  <Text style={styles.documentUploadText}>
+                    {documents.degree_certificate
+                      ? documents.degree_certificate.name
+                      : 'Upload Degree Certificate'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.documentUploadButton}
+                  onPress={() => handlePickDocument('id_proof')}
+                >
+                  <Upload size={18} color={ModernColors.primary.main} />
+                  <Text style={styles.documentUploadText}>
+                    {documents.id_proof ? documents.id_proof.name : 'Upload ID Proof'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.documentUploadButton}
+                  onPress={() => handlePickDocument('medical_registration_certificate')}
+                >
+                  <Upload size={18} color={ModernColors.primary.main} />
+                  <Text style={styles.documentUploadText}>
+                    {documents.medical_registration_certificate
+                      ? documents.medical_registration_certificate.name
+                      : 'Upload Medical Registration Certificate'}
+                  </Text>
+                </TouchableOpacity>
+                <Text style={styles.fileSizeHint}>
+                  Maximum file size: 5MB (PDF, JPEG, PNG)
                 </Text>
-              </TouchableOpacity>
+              </ModernCard>
+
+              {/* Save Button */}
               <TouchableOpacity
-                style={styles.documentButton}
-                onPress={() => handlePickDocument('id_proof')}
+                style={[styles.saveButton, loading && styles.saveButtonDisabled]}
+                onPress={handleSave}
+                disabled={loading}
+                activeOpacity={0.8}
               >
-                <FileText size={20} color={PrimaryColors.main} />
-                <Text style={styles.documentButtonText}>
-                  {documents.id_proof ? documents.id_proof.name : 'Upload ID Proof'}
-                </Text>
+                <LinearGradient
+                  colors={ModernColors.primary.gradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.saveButtonGradient}
+                >
+                  <Save size={20} color="#fff" />
+                  <Text style={styles.saveButtonText}>
+                    {loading ? 'Saving...' : 'Save Changes'}
+                  </Text>
+                </LinearGradient>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.documentButton}
-                onPress={() => handlePickDocument('medical_registration_certificate')}
-              >
-                <FileText size={20} color={PrimaryColors.main} />
-                <Text style={styles.documentButtonText}>
-                  {documents.medical_registration_certificate
-                    ? documents.medical_registration_certificate.name
-                    : 'Upload Medical Registration Certificate'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-      </ScrollView>
-    </View>
+            </>
+          )}
+        </ScrollView>
+      </View>
+    </ScreenSafeArea>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: PrimaryColors.dark,
+    backgroundColor: ModernColors.background.secondary,
   },
-  scrollView: {
-    flex: 1,
+  headerGradient: {
+    paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + 20 : 50,
+    paddingBottom: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
+    borderBottomLeftRadius: BorderRadius.xl,
+    borderBottomRightRadius: BorderRadius.xl,
   },
-  content: {
-    paddingBottom: 100,
-  },
-  // Top Bar
-  topBar: {
+  headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
-    paddingBottom: 20,
-    backgroundColor: PrimaryColors.dark,
   },
   backButton: {
     width: 40,
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 20,
   },
-  profileImageContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    borderWidth: 3,
-    borderColor: '#fff',
-    overflow: 'hidden',
-  },
-  topProfileImage: {
-    width: '100%',
-    height: '100%',
-  },
-  editIconButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  // Profile Header
-  profileHeader: {
-    alignItems: 'center',
-    paddingVertical: 24,
-    backgroundColor: PrimaryColors.dark,
-    paddingBottom: 32,
-  },
-  profileName: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#fff',
-    marginBottom: 8,
-  },
-  profileLocation: {
-    fontSize: 16,
-    color: '#fff',
-    opacity: 0.9,
-  },
-  // Summary Cards
-  summaryCards: {
+  headerActions: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    marginTop: -20,
-    marginBottom: 24,
-    gap: 12,
+    gap: Spacing.sm,
   },
-  summaryCard: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  summaryLabel: {
-    fontSize: 12,
-    color: NeutralColors.textSecondary,
-    marginBottom: 8,
-    fontWeight: '500',
-  },
-  summaryValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: PrimaryColors.main,
-  },
-  // Menu List
-  menuList: {
-    paddingHorizontal: 20,
-    gap: 8,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#fff',
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    marginBottom: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  menuItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    flex: 1,
-  },
-  menuItemText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: NeutralColors.textPrimary,
-  },
-  // Edit Section
-  editSection: {
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    backgroundColor: NeutralColors.background,
-    marginTop: 24,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingBottom: 40,
-  },
-  editHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  editTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: PrimaryColors.main,
-  },
-  editActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  editActionButton: {
+  editButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
+    backgroundColor: '#fff',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    ...Shadows.sm,
+  },
+  editButtonText: {
+    ...Typography.captionBold,
+    color: ModernColors.primary.main,
   },
   cancelButton: {
-    backgroundColor: '#FFE5E5',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#fff',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    ...Shadows.sm,
   },
   cancelButtonText: {
-    color: StatusColors.error,
-    fontWeight: '600',
-    fontSize: 14,
+    ...Typography.captionBold,
+    color: ModernColors.error.main,
   },
-  saveButton: {
-    backgroundColor: StatusColors.success,
+  scrollView: {
+    flex: 1,
   },
-  saveButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
+  content: {
+    padding: Spacing.lg,
+    paddingTop: Spacing.xl,
+    paddingBottom: Platform.OS === 'web' ? Spacing.lg : 100,
   },
-  profilePhotoEditSection: {
+  profileCard: {
+    marginBottom: Spacing.lg,
+    padding: Spacing.lg,
+  },
+  profileImageSection: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: Spacing.lg,
   },
-  editProfileImage: {
+  profileImageContainer: {
+    position: 'relative',
+    marginBottom: Spacing.md,
+  },
+  profileImage: {
     width: 120,
     height: 120,
     borderRadius: 60,
+    backgroundColor: ModernColors.neutral.gray200,
     borderWidth: 4,
     borderColor: '#fff',
-    backgroundColor: '#fff',
   },
-  cameraButton: {
+  cameraIconButton: {
     position: 'absolute',
     bottom: 0,
-    right: '35%',
-    backgroundColor: PrimaryColors.main,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    right: 0,
+    backgroundColor: ModernColors.primary.main,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
     borderColor: '#fff',
+    ...Shadows.md,
   },
-  section: {
-    backgroundColor: NeutralColors.cardBackground,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+  profileInfo: {
+    alignItems: 'center',
+  },
+  profileName: {
+    ...Typography.h2,
+    color: ModernColors.text.primary,
+    marginBottom: Spacing.xs,
+    textAlign: 'center',
+  },
+  profileSpecialization: {
+    ...Typography.body,
+    color: ModernColors.text.secondary,
+    marginBottom: Spacing.xs,
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: Spacing.xs,
+  },
+  locationText: {
+    ...Typography.caption,
+    color: ModernColors.text.secondary,
+  },
+  completionSection: {
+    marginTop: Spacing.md,
+    paddingTop: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: ModernColors.border.light,
+  },
+  completionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  completionLabel: {
+    ...Typography.captionBold,
+    color: ModernColors.text.secondary,
+  },
+  completionPercentage: {
+    ...Typography.bodyBold,
+    color: ModernColors.primary.main,
+  },
+  progressBar: {
+    height: 8,
+    backgroundColor: ModernColors.neutral.gray200,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: ModernColors.primary.main,
+    borderRadius: 4,
+  },
+  sectionCard: {
+    marginBottom: Spacing.lg,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  sectionIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: ModernColors.primary.light,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: PrimaryColors.main,
-    marginBottom: 16,
+    ...Typography.h3,
+    color: ModernColors.text.primary,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingVertical: Spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: NeutralColors.border,
-    paddingBottom: 8,
+    borderBottomColor: ModernColors.border.light,
   },
-  fieldContainer: {
-    marginBottom: 16,
+  detailLabel: {
+    ...Typography.captionBold,
+    color: ModernColors.text.secondary,
+    minWidth: 100,
   },
-  fieldLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666',
-    marginBottom: 6,
+  detailValue: {
+    ...Typography.body,
+    color: ModernColors.text.primary,
+    flex: 1,
+    textAlign: 'right',
   },
-  fieldValue: {
-    fontSize: 16,
-    color: '#000',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: '#F9F9F9',
-    borderRadius: 8,
-    minHeight: 40,
+  detailSection: {
+    paddingVertical: Spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: ModernColors.border.light,
+  },
+  documentList: {
+    gap: Spacing.sm,
+  },
+  documentItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingVertical: Spacing.sm,
+  },
+  documentText: {
+    ...Typography.body,
+    color: ModernColors.text.primary,
+    flex: 1,
+  },
+  documentTextMissing: {
+    color: ModernColors.text.tertiary,
+  },
+  editSectionTitle: {
+    ...Typography.h3,
+    color: ModernColors.text.primary,
+    marginBottom: Spacing.md,
+  },
+  inputGroup: {
+    marginBottom: Spacing.md,
+  },
+  inputLabel: {
+    ...Typography.captionBold,
+    color: ModernColors.text.primary,
+    marginBottom: Spacing.xs,
   },
   input: {
-    fontSize: 16,
-    color: '#000',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    backgroundColor: '#F9F9F9',
-    borderRadius: 8,
+    ...Typography.body,
+    color: ModernColors.text.primary,
+    backgroundColor: ModernColors.background.primary,
     borderWidth: 1,
-    borderColor: '#E5E5E5',
-    minHeight: 40,
+    borderColor: ModernColors.border.light,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    minHeight: 44,
   },
   textArea: {
     minHeight: 100,
-    textAlignVertical: 'top',
+    paddingTop: Spacing.sm,
   },
-  documentButton: {
+  documentUploadButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    padding: 16,
-    backgroundColor: '#F9F9F9',
-    borderRadius: 8,
+    gap: Spacing.sm,
+    backgroundColor: ModernColors.primary.light,
     borderWidth: 1,
-    borderColor: '#E5E5E5',
+    borderColor: ModernColors.primary.main,
     borderStyle: 'dashed',
-    marginBottom: 12,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
   },
-  documentButtonText: {
-    fontSize: 14,
-    color: PrimaryColors.main,
-    fontWeight: '600',
+  documentUploadText: {
+    ...Typography.body,
+    color: ModernColors.primary.main,
     flex: 1,
+  },
+  fileSizeHint: {
+    ...Typography.small,
+    color: ModernColors.text.tertiary,
+    textAlign: 'center',
+    marginTop: Spacing.sm,
+  },
+  saveButton: {
+    marginTop: Spacing.md,
+    marginBottom: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    overflow: 'hidden',
+    ...Shadows.md,
+  },
+  saveButtonDisabled: {
+    opacity: 0.6,
+  },
+  saveButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+  },
+  saveButtonText: {
+    ...Typography.bodyBold,
+    color: '#fff',
   },
 });

@@ -13,6 +13,7 @@ import { DoctorPrimaryColors as PrimaryColors, DoctorNeutralColors as NeutralCol
 import { saveDoctorAuth } from '@/utils/auth';
 import { useEffect, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { DepartmentPicker } from '@/components/department-picker';
 
 export default function ProfessionalDetailsScreen() {
   const params = useLocalSearchParams();
@@ -22,6 +23,7 @@ export default function ProfessionalDetailsScreen() {
     medicalCouncilRegNo: '',
     qualifications: '',
     specialization: '',
+    department_id: null as number | null,
     experience: '',
     currentHospital: '',
     currentLocation: '',
@@ -49,6 +51,11 @@ export default function ProfessionalDetailsScreen() {
       return;
     }
 
+    if (!params.otp) {
+      Alert.alert('Error', 'Email verification required. Please verify your email first.');
+      return;
+    }
+
     setLoading(true);
     try {
       const data = new FormData();
@@ -57,18 +64,39 @@ export default function ProfessionalDetailsScreen() {
       data.append('name', params.fullName);
       data.append('email', params.emailId);
       data.append('password', params.password);
+      data.append('otp', params.otp as string);
       data.append('phone_number', params.phoneNumber || '');
 
       // Professional Details
-      Object.entries(formData).forEach(([key, value]) => value && data.append(key, value));
+      Object.entries(formData).forEach(([key, value]) => {
+        if (value !== null && value !== '') {
+          // Convert department_id to string for FormData
+          if (key === 'department_id') {
+            data.append('department_id', value.toString());
+          } else {
+            data.append(key, value);
+          }
+        }
+      });
 
-      // Files
-      if (params.profilePhoto)
-        data.append('profile_photo', { uri: params.profilePhoto, name: 'profile.jpg', type: 'image/jpeg' } as any);
+      // Files - Fix file URI for Android/iOS compatibility
+      if (params.profilePhoto) {
+        const profilePhotoUri = Platform.OS === 'ios' ? (params.profilePhoto as string).replace('file://', '') : params.profilePhoto;
+        data.append('profile_photo', {
+          uri: profilePhotoUri,
+          name: 'profile.jpg',
+          type: 'image/jpeg',
+        } as any);
+      }
 
-      Object.entries(files).forEach(([key, file]) =>
-        data.append(key, { uri: file.uri, name: file.name, type: file.type } as any)
-      );
+      Object.entries(files).forEach(([key, file]) => {
+        const fileUri = Platform.OS === 'ios' ? file.uri.replace('file://', '') : file.uri;
+        data.append(key, {
+          uri: fileUri,
+          name: file.name,
+          type: file.type,
+        } as any);
+      });
 
       const res = await API.post('/doctor/register', data, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -96,7 +124,7 @@ export default function ProfessionalDetailsScreen() {
       
       // Handle network errors
       if (err.message?.includes('Network') || err.message?.includes('connect')) {
-        message = 'Cannot connect to server. Please check:\n\n1. Backend is running\n2. IP address is correct in config/api.ts\n3. Phone and computer are on same WiFi\n4. Firewall allows port 8000';
+        message = 'Cannot connect to server. Please check:\n\n1. Backend is running\n2. API URL is correct in .env file\n3. Phone and computer are on same WiFi (for local dev)\n4. Firewall allows port 8000 (for local dev)';
       } else if (err.response?.data?.message) {
         message = err.response.data.message;
       } else if (err.response?.data?.errors) {
@@ -115,7 +143,14 @@ export default function ProfessionalDetailsScreen() {
     <ThemedView style={styles.container}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.backButton} onPress={() => {
+            try {
+              router.back();
+            } catch (error) {
+              // If can't go back, navigate to previous screen explicitly
+              router.replace('/signup/basic-details');
+            }
+          }}>
             <MaterialIcons name="arrow-back" size={24} color={colorScheme === 'dark' ? '#ECEDEE' : '#11181C'} />
             <ThemedText style={styles.backText}>Back</ThemedText>
           </TouchableOpacity>
@@ -130,16 +165,28 @@ export default function ProfessionalDetailsScreen() {
           </View>
 
           <View style={styles.formCard}>
-            {Object.entries(formData).map(([key, value]) => (
-              <ThemedTextInput
-                key={key}
-                placeholder={key.replace(/([A-Z])/g, ' $1')}
-                value={value}
-                onChangeText={(v) => handleInputChange(key, v)}
-                multiline={key === 'professionalAchievements'}
-                keyboardType={key === 'experience' ? 'numeric' : 'default'}
+            <View style={styles.inputGroup}>
+              <ThemedText style={styles.label}>Department / Specialization *</ThemedText>
+              <DepartmentPicker
+                value={formData.department_id}
+                onValueChange={(id) => setFormData(prev => ({ ...prev, department_id: id }))}
+                placeholder="Select your department"
+                required
               />
-            ))}
+            </View>
+            
+            {Object.entries(formData)
+              .filter(([key]) => key !== 'department_id')
+              .map(([key, value]) => (
+                <ThemedTextInput
+                  key={key}
+                  placeholder={key.replace(/([A-Z])/g, ' $1')}
+                  value={value}
+                  onChangeText={(v) => handleInputChange(key, v)}
+                  multiline={key === 'professionalAchievements'}
+                  keyboardType={key === 'experience' ? 'numeric' : 'default'}
+                />
+              ))}
 
             <FileUploadButton label="Upload Degree Certificates" onFileSelected={(uri, name, type) => handleFileUpload('degree_certificate', uri, name, type)} type="document" />
             <FileUploadButton label="ID Proof" onFileSelected={(uri, name, type) => handleFileUpload('id_proof', uri, name, type)} type="both" />
@@ -162,5 +209,7 @@ const styles = StyleSheet.create({
   heading: { fontSize: 26, fontWeight: '700' },
   subheading: { fontSize: 14, color: '#666', marginTop: 4 },
   formCard: { backgroundColor: NeutralColors.cardBackground, borderRadius: 16, padding: 20, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6, elevation: 3 },
+  inputGroup: { marginBottom: 16 },
+  label: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8 },
   submitButton: { marginTop: 20, backgroundColor: PrimaryColors.main },
 });

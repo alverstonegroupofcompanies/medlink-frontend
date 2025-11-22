@@ -16,6 +16,7 @@ import { ArrowLeft, User, Calendar, MapPin, Building2, CheckCircle, XCircle, Clo
 import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors, HospitalStatusColors as StatusColors } from '@/constants/hospital-theme';
 import API from '../../api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ScreenSafeArea } from '@/components/screen-safe-area';
 
 const HOSPITAL_TOKEN_KEY = 'hospitalToken';
 const HOSPITAL_INFO_KEY = 'hospitalInfo';
@@ -27,6 +28,7 @@ export default function ApplicationsScreen() {
   const [loading, setLoading] = useState(true);
   const [hospital, setHospital] = useState<any>(null);
   const [processingId, setProcessingId] = useState<number | null>(null);
+  const [processingAction, setProcessingAction] = useState<'accept' | 'reject' | null>(null);
 
   useEffect(() => {
     loadHospital();
@@ -135,6 +137,7 @@ export default function ApplicationsScreen() {
     }
     
     setProcessingId(applicationId);
+    setProcessingAction('accept');
     try {
       console.log('📤 Making PUT request to:', `/hospital/applications/${applicationId}/status`);
       const response = await API.put(`/hospital/applications/${applicationId}/status`, {
@@ -178,6 +181,7 @@ export default function ApplicationsScreen() {
     } finally {
       setProcessingId(null);
       console.log('🔵 Processing completed, processingId reset');
+      setProcessingAction(null);
     }
   };
 
@@ -196,6 +200,7 @@ export default function ApplicationsScreen() {
     }
     
     setProcessingId(applicationId);
+    setProcessingAction('reject');
     try {
       console.log('📤 Making PUT request to:', `/hospital/applications/${applicationId}/status`);
       const response = await API.put(`/hospital/applications/${applicationId}/status`, {
@@ -239,6 +244,7 @@ export default function ApplicationsScreen() {
     } finally {
       setProcessingId(null);
       console.log('🔴 Processing completed, processingId reset');
+      setProcessingAction(null);
     }
   };
 
@@ -271,10 +277,21 @@ export default function ApplicationsScreen() {
 
   if (loading) {
     return (
+      <ScreenSafeArea backgroundColor={NeutralColors.background}>
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor={PrimaryColors.dark} />
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.replace('/hospital/dashboard')} style={styles.backButton}>
+          <TouchableOpacity 
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                // Navigate to dashboard tab
+                router.push('/hospital/dashboard');
+              }
+            }} 
+            style={styles.backButton}
+          >
             <ArrowLeft size={24} color="#fff" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Applications</Text>
@@ -285,16 +302,28 @@ export default function ApplicationsScreen() {
           <Text style={styles.loadingText}>Loading applications...</Text>
         </View>
       </View>
+      </ScreenSafeArea>
     );
   }
 
   return (
+    <ScreenSafeArea backgroundColor={NeutralColors.background}>
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={PrimaryColors.dark} />
       
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.replace('/hospital/dashboard')} style={styles.backButton}>
+        <TouchableOpacity 
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              // Navigate to dashboard tab
+              router.push('/hospital/dashboard');
+            }
+          }} 
+          style={styles.backButton}
+        >
           <ArrowLeft size={24} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Applications</Text>
@@ -348,7 +377,15 @@ export default function ApplicationsScreen() {
             return (
             <View key={application.id} style={styles.applicationCard}>
               <View style={styles.applicationHeader}>
-                <View style={styles.doctorInfo}>
+                <TouchableOpacity
+                  style={styles.doctorInfo}
+                  onPress={() => {
+                    if (application.doctor?.id) {
+                      router.push(`/hospital/doctor-profile/${application.doctor.id}`);
+                    }
+                  }}
+                  activeOpacity={0.7}
+                >
                   <Image
                     source={{
                       uri: application.doctor?.profile_photo || 'https://i.pravatar.cc/150?img=1',
@@ -372,7 +409,7 @@ export default function ApplicationsScreen() {
                     )}
                     {renderStars(application.doctor?.average_rating || 0, application.doctor?.total_ratings || 0)}
                   </View>
-                </View>
+                </TouchableOpacity>
                 <View style={[styles.statusBadge, { backgroundColor: `${getStatusColor(application.status || 'pending')}20` }]}>
                   {getStatusIcon(application.status || 'pending')}
                   <Text style={[styles.statusText, { color: getStatusColor(application.status || 'pending') }]}>
@@ -418,7 +455,7 @@ export default function ApplicationsScreen() {
                     style={[
                       styles.actionButton, 
                       styles.rejectButton,
-                      processingId === application.id && { opacity: 0.6 }
+                      processingId === application.id && processingAction === 'reject' && { opacity: 0.6 }
                     ]}
                     onPress={() => {
                       console.log('🔴 Reject button clicked for application:', application.id);
@@ -427,7 +464,7 @@ export default function ApplicationsScreen() {
                     disabled={processingId !== null && processingId !== application.id}
                     activeOpacity={0.7}
                   >
-                    {processingId === application.id ? (
+                    {processingId === application.id && processingAction === 'reject' ? (
                       <ActivityIndicator size="small" color="#fff" />
                     ) : (
                       <>
@@ -440,7 +477,7 @@ export default function ApplicationsScreen() {
                     style={[
                       styles.actionButton, 
                       styles.acceptButton,
-                      processingId === application.id && { opacity: 0.6 }
+                      processingId === application.id && processingAction === 'accept' && { opacity: 0.6 }
                     ]}
                     onPress={() => {
                       console.log('🔵 Accept button clicked for application:', application.id);
@@ -449,7 +486,7 @@ export default function ApplicationsScreen() {
                     disabled={processingId !== null && processingId !== application.id}
                     activeOpacity={0.7}
                   >
-                    {processingId === application.id ? (
+                    {processingId === application.id && processingAction === 'accept' ? (
                       <ActivityIndicator size="small" color="#fff" />
                     ) : (
                       <>
@@ -466,6 +503,7 @@ export default function ApplicationsScreen() {
         )}
       </ScrollView>
     </View>
+    </ScreenSafeArea>
   );
 }
 
@@ -597,10 +635,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   doctorImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     marginRight: 12,
+    backgroundColor: PrimaryColors.dark, // Dark blue background like in image
+    borderWidth: 2,
+    borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
   },
   doctorDetails: {
     flex: 1,

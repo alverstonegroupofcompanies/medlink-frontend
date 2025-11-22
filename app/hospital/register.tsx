@@ -12,6 +12,7 @@ import API from '../api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import * as ImagePicker from 'expo-image-picker';
+import { ScreenSafeArea } from '@/components/screen-safe-area';
 
 const HOSPITAL_TOKEN_KEY = 'hospitalToken';
 const HOSPITAL_INFO_KEY = 'hospitalInfo';
@@ -34,18 +35,41 @@ export default function HospitalRegisterScreen() {
 
   const handlePickLogo = async () => {
     try {
+      // Request media library permissions first
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission Denied',
+          'We need camera roll permissions to upload your hospital logo. Please enable it in your device settings.'
+        );
+        return;
+      }
+
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ImagePicker.MediaTypeOptions?.Images || 'images',
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
       });
 
       if (!result.canceled && result.assets[0]) {
+        const fileSizeMB = (result.assets[0].fileSize || 0) / (1024 * 1024);
+        const maxSizeMB = 5;
+
+        if (fileSizeMB > maxSizeMB) {
+          Alert.alert(
+            'File Too Large',
+            `Logo must be less than ${maxSizeMB}MB. Your file is ${fileSizeMB.toFixed(2)}MB. Please compress the image and try again.`,
+            [{ text: 'OK' }]
+          );
+          return;
+        }
+
         setLogoUri(result.assets[0].uri);
       }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to pick image');
+    } catch (error: any) {
+      console.error('Image picker error:', error);
+      Alert.alert('Error', `Failed to pick image: ${error.message || 'Unknown error'}`);
     }
   };
 
@@ -68,7 +92,13 @@ export default function HospitalRegisterScreen() {
         const filename = logoUri.split('/').pop() || 'logo.jpg';
         const match = /\.(\w+)$/.exec(filename);
         const type = match ? `image/${match[1]}` : 'image/jpeg';
-        data.append('logo_path', { uri: logoUri, name: filename, type } as any);
+        // Fix file URI for Android/iOS compatibility
+        const fileUri = Platform.OS === 'ios' ? logoUri.replace('file://', '') : logoUri;
+        data.append('logo_path', {
+          uri: fileUri,
+          name: filename,
+          type: type,
+        } as any);
       }
 
       const response = await API.post('/hospital/register', data, {
@@ -98,7 +128,7 @@ export default function HospitalRegisterScreen() {
       let message = 'Registration failed. Please try again.';
       
       if (error.message?.includes('Network') || error.message?.includes('connect')) {
-        message = 'Cannot connect to server. Please check:\n\n1. Backend is running\n2. IP address is correct in config/api.ts\n3. Phone and computer are on same WiFi\n4. Firewall allows port 8000';
+        message = 'Cannot connect to server. Please check:\n\n1. Backend is running\n2. API URL is correct in .env file\n3. Phone and computer are on same WiFi (for local dev)\n4. Firewall allows port 8000 (for local dev)';
       } else if (error.response?.data?.message) {
         message = error.response.data.message;
       } else if (error.response?.data?.errors) {
@@ -113,11 +143,19 @@ export default function HospitalRegisterScreen() {
   };
 
   return (
+    <ScreenSafeArea backgroundColor={NeutralColors.background}>
     <ThemedView style={styles.container}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={styles.header}>
-            <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.7}>
+            <TouchableOpacity style={styles.backButton} onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                // If can't go back, navigate to login screen explicitly
+                router.replace('/hospital/login');
+              }
+            }} activeOpacity={0.7}>
               <MaterialIcons name="arrow-back" size={24} color={colorScheme === 'dark' ? '#fff' : '#11181C'} />
               <ThemedText style={[styles.backText, { color: colorScheme === 'dark' ? '#fff' : '#11181C' }]}>Back</ThemedText>
             </TouchableOpacity>
@@ -177,6 +215,9 @@ export default function HospitalRegisterScreen() {
                 {logoUri ? 'Logo Selected ✓' : 'Upload Hospital Logo'}
               </ThemedText>
             </TouchableOpacity>
+            <ThemedText style={styles.fileSizeHint}>
+              Maximum file size: 5MB (JPEG, PNG, JPG, or WEBP)
+            </ThemedText>
 
             <ThemedButton
               title="Register"
@@ -188,6 +229,7 @@ export default function HospitalRegisterScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
     </ThemedView>
+    </ScreenSafeArea>
   );
 }
 
@@ -220,6 +262,14 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
   },
   logoButtonText: { color: PrimaryColors.main, fontWeight: '600' },
+  fileSizeHint: {
+    fontSize: 11,
+    color: NeutralColors.textSecondary,
+    textAlign: 'center',
+    marginTop: -12,
+    marginBottom: 8,
+    fontStyle: 'italic',
+  },
   submitButton: { marginTop: 10, backgroundColor: PrimaryColors.main },
 });
 

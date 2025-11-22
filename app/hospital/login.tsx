@@ -5,7 +5,8 @@ import { ThemedView } from '@/components/themed-view';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Link, router } from 'expo-router';
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TouchableOpacity, View, SafeAreaView, StatusBar } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TouchableOpacity, View, StatusBar, useWindowDimensions } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors } from '@/constants/hospital-theme';
 import API from '../api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -17,6 +18,28 @@ export default function HospitalLoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const isTablet = width >= 900;
+
+  const safeAreaStyle = [
+    styles.safeArea,
+    {
+      paddingTop: Math.max(insets.top, Platform.OS === 'android' ? 16 : 12),
+      paddingBottom: Math.max(insets.bottom, 16),
+      paddingHorizontal: isTablet ? 32 : 0,
+    },
+  ];
+
+  const scrollContentStyle = [
+    styles.scrollContent,
+    isTablet && styles.scrollContentTablet,
+  ];
+
+  const formStyle = [
+    styles.form,
+    isTablet && styles.formTablet,
+  ];
 
   // No auto-login - user must always login manually
   // Removed auto-login check to ensure users always see login screen
@@ -36,11 +59,20 @@ export default function HospitalLoginScreen() {
       });
   
       const { token, hospital } = response.data;
-  
+
       // Save authentication data
       await AsyncStorage.setItem(HOSPITAL_TOKEN_KEY, token);
       await AsyncStorage.setItem(HOSPITAL_INFO_KEY, JSON.stringify(hospital));
-  
+
+      // Register for push notifications after successful login
+      try {
+        const { registerForPushNotifications } = require('@/utils/notifications');
+        await registerForPushNotifications('hospital');
+      } catch (error) {
+        console.warn('⚠️ Failed to register for push notifications:', error);
+        // Don't block login if push notification registration fails
+      }
+
       setLoading(false);
       
       // Show success alert
@@ -56,7 +88,7 @@ export default function HospitalLoginScreen() {
       let message = 'Login failed. Please try again.';
       
       if (error.message?.includes('Network') || error.message?.includes('connect')) {
-        message = 'Cannot connect to server. Please check:\n\n1. Backend is running\n2. IP address is correct in config/api.ts\n3. Phone and computer are on same WiFi\n4. Firewall allows port 8000';
+        message = 'Cannot connect to server.\n\nTroubleshooting:\n\n1. Backend must be running:\n   php artisan serve --host=0.0.0.0 --port=8000\n\n2. Check IP address in .env file\n   Current: http://172.30.143.201:8000\n\n3. If using mobile hotspot:\n   - Laptop hotspot: Use laptop\'s Wi-Fi IP\n   - Phone hotspot: Use laptop\'s IP from phone\'s network\n\n4. Test in phone browser:\n   http://172.30.143.201:8000/api/test\n\n5. Firewall: Allow port 8000';
       } else if (error.response?.data?.message) {
         message = error.response.data.message;
       } else if (error.response?.data?.errors) {
@@ -70,7 +102,7 @@ export default function HospitalLoginScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={safeAreaStyle} edges={['top', 'right', 'left']}>
       <ThemedView style={styles.container}>
         <StatusBar barStyle="dark-content" backgroundColor={PrimaryColors.lighter} />
         <KeyboardAvoidingView
@@ -79,7 +111,7 @@ export default function HospitalLoginScreen() {
           keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
         >
           <ScrollView
-            contentContainerStyle={styles.scrollContent}
+            contentContainerStyle={scrollContentStyle}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
@@ -89,7 +121,7 @@ export default function HospitalLoginScreen() {
               <ThemedText style={styles.welcomeText}>Alverstone MedLink</ThemedText>
             </LinearGradient>
 
-          <View style={styles.form}>
+          <View style={formStyle}>
             <ThemedText type="title" style={styles.loginHeading}>
               Hospital Login
             </ThemedText>
@@ -165,11 +197,11 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: NeutralColors.background,
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
   container: { flex: 1, backgroundColor: NeutralColors.background },
   keyboardView: { flex: 1 },
   scrollContent: { flexGrow: 1, paddingBottom: 20 },
+  scrollContentTablet: { paddingHorizontal: 48, paddingBottom: 32 },
   header: {
     backgroundColor: PrimaryColors.lighter,
     borderBottomLeftRadius: 80,
@@ -206,6 +238,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 10,
     elevation: 4,
+  },
+  formTablet: {
+    alignSelf: 'center',
+    width: '80%',
+    maxWidth: 640,
+    paddingVertical: 40,
+    paddingHorizontal: 36,
   },
   loginHeading: { fontSize: 22, fontWeight: '700', marginBottom: 20 },
   inputGroup: { marginBottom: 16 },

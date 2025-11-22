@@ -1,12 +1,9 @@
-import { TextInput, type TextInputProps, StyleSheet, View } from 'react-native';
-import { useThemeColor } from '@/hooks/use-theme-color';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { ComponentProps } from 'react';
+import { StyleSheet } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { TextInput as PaperTextInput, useTheme } from 'react-native-paper';
 
-export type ThemedTextInputProps = TextInputProps & {
-  lightColor?: string;
-  darkColor?: string;
+export type ThemedTextInputProps = ComponentProps<typeof PaperTextInput> & {
   error?: boolean;
   leftIcon?: keyof typeof MaterialIcons.glyphMap;
   rightIcon?: keyof typeof MaterialIcons.glyphMap;
@@ -15,80 +12,44 @@ export type ThemedTextInputProps = TextInputProps & {
 
 export function ThemedTextInput({
   style,
-  lightColor,
-  darkColor,
   error,
   leftIcon,
   rightIcon,
   onRightIconPress,
   ...props
 }: ThemedTextInputProps) {
-  const colorScheme = useColorScheme();
-  const textColor = useThemeColor({ light: lightColor, dark: darkColor }, 'text');
-  const backgroundColor = useThemeColor({}, 'background');
-  const borderColor = error 
-    ? '#ef4444' 
-    : colorScheme === 'dark' 
-      ? '#374151' 
-      : '#e5e7eb';
-  const iconColor = colorScheme === 'dark' ? '#9BA1A6' : '#6b7280';
+  const theme = useTheme();
+
+  const renderIcon = (iconName?: keyof typeof MaterialIcons.glyphMap, position: 'left' | 'right' = 'left') => {
+    if (!iconName) return undefined;
+    return (
+      <PaperTextInput.Icon
+        icon={({ size, color }) => (
+          <MaterialIcons name={iconName} size={size} color={color} />
+        )}
+        onPress={position === 'right' ? onRightIconPress : undefined}
+      />
+    );
+  };
 
   return (
-    <View style={[styles.container, { borderColor }]}>
-      {leftIcon && (
-        <MaterialIcons 
-          name={leftIcon} 
-          size={20} 
-          color={iconColor} 
-          style={styles.leftIcon} 
-        />
-      )}
-      <TextInput
-        style={[
-          styles.input,
-          {
-            color: textColor,
-            backgroundColor: 'transparent',
-            paddingLeft: leftIcon ? 40 : 12,
-            paddingRight: rightIcon ? 40 : 12,
-          },
-          style,
-        ]}
-        placeholderTextColor={colorScheme === 'dark' ? '#9BA1A6' : '#9ca3af'}
-        {...props}
-      />
-      {rightIcon && (
-        <MaterialIcons 
-          name={rightIcon} 
-          size={20} 
-          color={iconColor} 
-          style={styles.rightIcon}
-          onPress={onRightIconPress}
-        />
-      )}
-    </View>
+    <PaperTextInput
+      mode="outlined"
+      outlineColor={error ? theme.colors.error : theme.colors.outline}
+      activeOutlineColor={error ? theme.colors.error : theme.colors.primary}
+      error={error}
+      style={[styles.input, style]}
+      left={renderIcon(leftIcon, 'left')}
+      right={renderIcon(rightIcon, 'right')}
+      {...props}
+    />
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 12,
-    minHeight: 48,
-    backgroundColor: 'transparent',
-  },
   input: {
-    flex: 1,
-    fontSize: 16,
-    paddingVertical: 12,
-  },
-  leftIcon: {
-    marginLeft: 12,
-  },
-  rightIcon: {
-    marginRight: 12,
+    marginVertical: 6,
+    backgroundColor: 'transparent',
   },
 });
 
