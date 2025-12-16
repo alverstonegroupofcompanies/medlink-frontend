@@ -25,6 +25,7 @@ import {
   ArrowRight,
 } from 'lucide-react-native';
 import { DoctorPrimaryColors as PrimaryColors, DoctorNeutralColors as NeutralColors, DoctorStatusColors as StatusColors } from '@/constants/doctor-theme';
+import { useSafeBottomPadding } from '@/components/screen-safe-area';
 import API from '../api';
 import * as Location from 'expo-location';
 
@@ -32,6 +33,7 @@ export default function HistoryScreen() {
   const [sessions, setSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const safeBottomPadding = useSafeBottomPadding();
 
   useEffect(() => {
     loadSessions();
@@ -178,7 +180,7 @@ export default function HistoryScreen() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={PrimaryColors.dark} />
+        <StatusBar barStyle="dark-content" backgroundColor="#f8f9fa" />
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Job Sessions</Text>
         </View>
@@ -191,16 +193,16 @@ export default function HistoryScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={PrimaryColors.dark} />
+      <StatusBar barStyle="dark-content" backgroundColor="#f8f9fa" />
       
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Job Sessions</Text>
+        <Text style={styles.headerTitle}>Job Sessions</Text>
         <TouchableOpacity
           style={styles.walletButton}
           onPress={() => router.push('/doctor/wallet')}
         >
-          <Wallet size={20} color="#fff" />
+          <Wallet size={18} color={PrimaryColors.main} />
           <Text style={styles.walletButtonText}>Wallet</Text>
         </TouchableOpacity>
       </View>
@@ -208,7 +210,7 @@ export default function HistoryScreen() {
       {/* Sessions List */}
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: safeBottomPadding }]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={loadSessions} />
         }
@@ -232,91 +234,110 @@ export default function HistoryScreen() {
                 {/* Header */}
                 <View style={styles.sessionHeader}>
                   <View style={styles.hospitalInfo}>
-                    <Building2 size={20} color={PrimaryColors.main} />
-                    <Text style={styles.hospitalName}>{hospital?.name || 'Hospital'}</Text>
-                  </View>
-                  <View style={[styles.statusBadge, { backgroundColor: getStatusColor(session.status) + '20' }]}>
-                    <Text style={[styles.statusText, { color: getStatusColor(session.status) }]}>
-                      {getStatusText(session.status)}
-                    </Text>
+                    <View style={styles.hospitalIconContainer}>
+                      <Building2 size={18} color={PrimaryColors.main} />
+                    </View>
+                    <View style={styles.hospitalTextContainer}>
+                      <Text style={styles.hospitalName}>{hospital?.name || 'Hospital'}</Text>
+                      <View style={styles.statusBadgeContainer}>
+                        <View style={[styles.statusDot, { backgroundColor: getStatusColor(session.status) }]} />
+                        <Text style={[styles.statusText, { color: getStatusColor(session.status) }]}>
+                          {getStatusText(session.status)}
+                        </Text>
+                      </View>
+                    </View>
                   </View>
                 </View>
 
-                {/* Date & Time */}
-                <View style={styles.detailRow}>
-                  <Calendar size={16} color={NeutralColors.textSecondary} />
-                  <Text style={styles.detailText}>
-                    {new Date(session.session_date).toLocaleDateString('en-US', {
-                      weekday: 'short',
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric',
-                    })}
-                  </Text>
-                  {session.start_time && (
-                    <>
-                      <Clock size={16} color={NeutralColors.textSecondary} style={styles.clockIcon} />
+                {/* Details Grid */}
+                <View style={styles.detailsGrid}>
+                  <View style={styles.detailItem}>
+                    <Calendar size={16} color={NeutralColors.textSecondary} />
+                    <View style={styles.detailItemContent}>
+                      <Text style={styles.detailLabel}>Date</Text>
                       <Text style={styles.detailText}>
-                        {new Date(`2000-01-01 ${session.start_time}`).toLocaleTimeString('en-US', {
-                          hour: 'numeric',
-                          minute: '2-digit',
+                        {new Date(session.session_date).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
                         })}
-                        {session.end_time && ` - ${new Date(`2000-01-01 ${session.end_time}`).toLocaleTimeString('en-US', {
-                          hour: 'numeric',
-                          minute: '2-digit',
-                        })}`}
                       </Text>
-                    </>
+                    </View>
+                  </View>
+                  
+                  {session.start_time && (
+                    <View style={styles.detailItem}>
+                      <Clock size={16} color={NeutralColors.textSecondary} />
+                      <View style={styles.detailItemContent}>
+                        <Text style={styles.detailLabel}>Time</Text>
+                        <Text style={styles.detailText}>
+                          {new Date(`2000-01-01 ${session.start_time}`).toLocaleTimeString('en-US', {
+                            hour: 'numeric',
+                            minute: '2-digit',
+                          })}
+                          {session.end_time && ` - ${new Date(`2000-01-01 ${session.end_time}`).toLocaleTimeString('en-US', {
+                            hour: 'numeric',
+                            minute: '2-digit',
+                          })}`}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+                  
+                  {hospital?.address && (
+                    <View style={[styles.detailItem, styles.detailItemFull]}>
+                      <MapPin size={16} color={NeutralColors.textSecondary} />
+                      <View style={styles.detailItemContent}>
+                        <Text style={styles.detailLabel}>Location</Text>
+                        <Text style={styles.detailText} numberOfLines={2}>{hospital.address}</Text>
+                      </View>
+                    </View>
                   )}
                 </View>
 
-                {/* Location */}
-                {hospital?.address && (
-                  <View style={styles.detailRow}>
-                    <MapPin size={16} color={NeutralColors.textSecondary} />
-                    <Text style={styles.detailText} numberOfLines={2}>{hospital.address}</Text>
-                  </View>
-                )}
-
-                {/* Payment Info */}
-                <View style={styles.paymentRow}>
+                {/* Payment & Status Row */}
+                <View style={styles.infoRow}>
                   <View style={styles.paymentInfo}>
-                    <DollarSign size={16} color={PrimaryColors.main} />
-                    <Text style={styles.paymentAmount}>₹{parseFloat(session.payment_amount || 0).toFixed(2)}</Text>
+                    <View style={styles.paymentAmountContainer}>
+                      <Text style={styles.paymentLabel}>Payment</Text>
+                      <Text style={styles.paymentAmount}>₹{parseFloat(session.payment_amount || 0).toFixed(2)}</Text>
+                    </View>
                   </View>
                   {session.payments && session.payments.length > 0 && (
-                    <View style={[styles.paymentBadge, { backgroundColor: getPaymentStatusColor(session.payments[0].status) + '20' }]}>
+                    <View style={styles.paymentStatusContainer}>
+                      <View style={[styles.paymentStatusDot, { backgroundColor: getPaymentStatusColor(session.payments[0].status) }]} />
                       <Text style={[styles.paymentStatusText, { color: getPaymentStatusColor(session.payments[0].status) }]}>
-                        {session.payments[0].status.replace('_', ' ').toUpperCase()}
+                        {session.payments[0].status.replace('_', ' ')}
                       </Text>
                     </View>
                   )}
                 </View>
 
                 {/* Attendance Status */}
-                {hasCheckedIn && (
-                  <View style={styles.attendanceRow}>
-                    <CheckCircle size={16} color={StatusColors.success} />
-                    <Text style={styles.attendanceText}>
-                      Checked in: {new Date(session.check_in_time || session.attendance?.check_in_time).toLocaleTimeString()}
-                    </Text>
-                  </View>
-                )}
-                {hasCheckedOut && (
-                  <View style={styles.attendanceRow}>
-                    <CheckCircle size={16} color={StatusColors.success} />
-                    <Text style={styles.attendanceText}>
-                      Checked out: {new Date(session.attendance.check_out_time).toLocaleTimeString()}
-                    </Text>
-                  </View>
-                )}
-                {/* Show session status if checked in */}
-                {session.check_in_time && session.status === 'in_progress' && (
-                  <View style={styles.attendanceRow}>
-                    <Clock size={16} color={StatusColors.warning} />
-                    <Text style={[styles.attendanceText, { color: StatusColors.warning }]}>
-                      Work in progress
-                    </Text>
+                {(hasCheckedIn || hasCheckedOut) && (
+                  <View style={styles.attendanceContainer}>
+                    {hasCheckedIn && (
+                      <View style={styles.attendanceItem}>
+                        <CheckCircle size={14} color={StatusColors.success} />
+                        <Text style={styles.attendanceText}>
+                          In: {new Date(session.check_in_time || session.attendance?.check_in_time).toLocaleTimeString('en-US', {
+                            hour: 'numeric',
+                            minute: '2-digit',
+                          })}
+                        </Text>
+                      </View>
+                    )}
+                    {hasCheckedOut && (
+                      <View style={styles.attendanceItem}>
+                        <CheckCircle size={14} color={StatusColors.success} />
+                        <Text style={styles.attendanceText}>
+                          Out: {new Date(session.attendance.check_out_time).toLocaleTimeString('en-US', {
+                            hour: 'numeric',
+                            minute: '2-digit',
+                          })}
+                        </Text>
+                      </View>
+                    )}
                   </View>
                 )}
 
@@ -327,7 +348,7 @@ export default function HistoryScreen() {
                       style={[styles.actionButton, styles.checkInButton]}
                       onPress={() => handleCheckIn(session.id, hospital?.latitude, hospital?.longitude)}
                     >
-                      <LogIn size={18} color="#fff" />
+                      <LogIn size={16} color="#fff" />
                       <Text style={styles.actionButtonText}>Check In</Text>
                     </TouchableOpacity>
                   )}
@@ -336,7 +357,7 @@ export default function HistoryScreen() {
                       style={[styles.actionButton, styles.checkOutButton]}
                       onPress={() => handleCheckOut(session.id, hospital?.latitude, hospital?.longitude)}
                     >
-                      <LogOut size={18} color="#fff" />
+                      <LogOut size={16} color="#fff" />
                       <Text style={styles.actionButtonText}>Check Out</Text>
                     </TouchableOpacity>
                   )}
@@ -344,7 +365,7 @@ export default function HistoryScreen() {
                     style={[styles.actionButton, styles.detailsButton]}
                     onPress={() => router.push(`/(tabs)/job-session/${session.id}`)}
                   >
-                    <Text style={[styles.actionButtonText, { color: PrimaryColors.main }]}>View Session</Text>
+                    <Text style={styles.detailsButtonText}>View Details</Text>
                     <ArrowRight size={16} color={PrimaryColors.main} />
                   </TouchableOpacity>
                 </View>
@@ -360,7 +381,7 @@ export default function HistoryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: PrimaryColors.dark,
+    backgroundColor: '#f8f9fa',
   },
   header: {
     flexDirection: 'row',
@@ -368,34 +389,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingTop: Platform.OS === 'ios' ? 50 : 20,
-    paddingBottom: 20,
-    backgroundColor: PrimaryColors.dark,
+    paddingBottom: 16,
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
-    color: '#fff',
+    color: '#111827',
+    letterSpacing: -0.3,
   },
   walletButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: PrimaryColors.main,
+    backgroundColor: '#f0f4ff',
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: 8,
   },
   walletButtonText: {
-    color: '#fff',
+    color: PrimaryColors.main,
     fontWeight: '600',
-    fontSize: 14,
+    fontSize: 13,
   },
   scrollView: {
     flex: 1,
   },
   content: {
     padding: 20,
-    paddingBottom: 100,
+    // paddingBottom is now set dynamically using safeBottomPadding
   },
   loadingContainer: {
     flex: 1,
@@ -409,112 +433,159 @@ const styles = StyleSheet.create({
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 60,
+    paddingVertical: 80,
   },
   emptyText: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
-    color: NeutralColors.textPrimary,
+    color: '#374151',
     marginTop: 16,
   },
   emptySubtext: {
     fontSize: 14,
-    color: NeutralColors.textSecondary,
-    marginTop: 8,
+    color: '#6b7280',
+    marginTop: 6,
     textAlign: 'center',
+    paddingHorizontal: 40,
+    lineHeight: 20,
   },
   sessionCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
     padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
   },
   sessionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   hospitalInfo: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  hospitalIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#f0f4ff',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'center',
+  },
+  hospitalTextContainer: {
     flex: 1,
   },
   hospitalName: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
-    color: NeutralColors.textPrimary,
+    color: '#111827',
+    marginBottom: 6,
+    letterSpacing: -0.2,
   },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  clockIcon: {
-    marginLeft: 12,
-  },
-  detailText: {
-    fontSize: 14,
-    color: NeutralColors.textSecondary,
-    flex: 1,
-  },
-  paymentRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 12,
-    marginBottom: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: NeutralColors.divider,
-  },
-  paymentInfo: {
+  statusBadgeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  paymentAmount: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: PrimaryColors.main,
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
-  paymentBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'capitalize',
   },
-  paymentStatusText: {
+  detailsGrid: {
+    gap: 12,
+    marginBottom: 16,
+  },
+  detailItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  detailItemFull: {
+    width: '100%',
+  },
+  detailItemContent: {
+    flex: 1,
+  },
+  detailLabel: {
     fontSize: 11,
     fontWeight: '600',
+    color: '#9ca3af',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
   },
-  attendanceRow: {
+  detailText: {
+    fontSize: 14,
+    color: '#374151',
+    fontWeight: '500',
+    lineHeight: 20,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 16,
+    paddingBottom: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6',
+  },
+  paymentInfo: {
+    flex: 1,
+  },
+  paymentAmountContainer: {
+    gap: 4,
+  },
+  paymentLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#9ca3af',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  paymentAmount: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: PrimaryColors.main,
+    letterSpacing: -0.5,
+  },
+  paymentStatusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-    backgroundColor: StatusColors.success + '10',
-    padding: 8,
-    borderRadius: 8,
+    gap: 6,
+  },
+  paymentStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  paymentStatusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  attendanceContainer: {
+    flexDirection: 'row',
+    gap: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6',
+  },
+  attendanceItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   attendanceText: {
-    fontSize: 13,
-    color: StatusColors.success,
+    fontSize: 12,
+    color: '#059669',
     fontWeight: '500',
   },
   actionButtons: {
@@ -523,7 +594,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: NeutralColors.divider,
+    borderTopColor: '#f3f4f6',
   },
   actionButton: {
     flex: 1,
@@ -531,23 +602,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 12,
-    borderRadius: 12,
+    paddingVertical: 11,
+    borderRadius: 8,
   },
   checkInButton: {
     backgroundColor: StatusColors.success,
   },
   checkOutButton: {
-    backgroundColor: StatusColors.warning,
+    backgroundColor: '#f59e0b',
   },
   detailsButton: {
-    backgroundColor: 'transparent',
+    backgroundColor: '#ffffff',
     borderWidth: 1,
-    borderColor: PrimaryColors.main,
+    borderColor: '#e5e7eb',
   },
   actionButtonText: {
-    color: '#fff',
+    color: '#ffffff',
     fontWeight: '600',
-    fontSize: 14,
+    fontSize: 13,
+  },
+  detailsButtonText: {
+    color: PrimaryColors.main,
+    fontWeight: '600',
+    fontSize: 13,
   },
 });

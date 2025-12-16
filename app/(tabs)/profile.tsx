@@ -37,13 +37,13 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import API from '../api';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { calculateProfileCompletion } from '@/utils/profileCompletion';
 import { ModernColors, Spacing, BorderRadius, Shadows, Typography } from '@/constants/modern-theme';
 import { getDoctorInfo, saveDoctorAuth, getProfilePhotoUrl } from '@/utils/auth';
 import { ModernCard } from '@/components/modern-card';
-import { ScreenSafeArea } from '@/components/screen-safe-area';
-import { DepartmentPicker } from '@/components/department-picker';
+import { ScreenSafeArea, useSafeBottomPadding } from '@/components/screen-safe-area';
+import { MultiDepartmentPicker } from '@/components/multi-department-picker';
 
 const { width } = Dimensions.get('window');
 
@@ -53,7 +53,9 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<any>({});
   const [profilePhotoUri, setProfilePhotoUri] = useState<string | null>(null);
+  const [originalProfilePhotoUri, setOriginalProfilePhotoUri] = useState<string | null>(null);
   const [departments, setDepartments] = useState<any[]>([]);
+  const safeBottomPadding = useSafeBottomPadding();
   const [documents, setDocuments] = useState<{
     degree_certificate?: { uri: string; name: string; type: string };
     id_proof?: { uri: string; name: string; type: string };
@@ -64,6 +66,14 @@ export default function ProfileScreen() {
     loadDoctor();
     loadDepartments();
   }, []);
+
+  // Reload profile when screen comes into focus to get fresh departments data
+  useFocusEffect(
+    React.useCallback(() => {
+      console.log('🔄 Profile screen focused - reloading doctor data');
+      loadDoctor();
+    }, [])
+  );
 
   const loadDepartments = async () => {
     try {
@@ -76,9 +86,84 @@ export default function ProfileScreen() {
 
   const loadDoctor = async () => {
     try {
+      // Always load fresh data from API to get latest departments
+      try {
+        const response = await API.get('/doctor/profile');
+        console.log('📋 Full API response:', JSON.stringify(response.data, null, 2));
+        if (response.data?.doctor) {
+          const doctorData = response.data.doctor;
+          
+          // Log departments for debugging
+          console.log('📋 Raw API departments data:', JSON.stringify(doctorData.departments, null, 2));
+          console.log('📋 Departments count:', doctorData.departments?.length || 0);
+          console.log('📋 doctorData keys:', Object.keys(doctorData));
+          
+          setDoctor(doctorData);
+          
+          // Save fresh data to storage
+          const token = await AsyncStorage.getItem('doctorToken');
+          if (token) {
+            await saveDoctorAuth(token, doctorData);
+          }
+          
+          // Format departments from API response - handle both formatted (id, name, experience) and pivot formats
+          const formattedDepartments = (doctorData.departments || []).map((dept: any) => {
+            // Backend returns: { id, name, experience } or pivot format
+            const departmentId = dept.id || dept.department_id || dept.pivot?.department_id;
+            const experience = dept.experience || dept.pivot?.experience || '';
+            return {
+              department_id: departmentId,
+              experience: experience,
+            };
+          }).filter((dept: any) => dept.department_id);
+          
+          console.log('✅ Formatted departments for form:', formattedDepartments);
+          console.log('✅ Doctor departments set:', doctorData.departments?.length || 0, 'departments');
+          
+          setFormData({
+            name: doctorData.name || '',
+            email: doctorData.email || '',
+            phone_number: doctorData.phone_number || '',
+            current_location: doctorData.current_location || '',
+            professional_achievements: doctorData.professional_achievements || '',
+            medical_council_reg_no: doctorData.medical_council_reg_no || '',
+            qualifications: doctorData.qualifications || '',
+            departments: formattedDepartments,
+            experience: doctorData.experience || '',
+            current_hospital: doctorData.current_hospital || '',
+            preferred_work_type: doctorData.preferred_work_type || '',
+            preferred_location: doctorData.preferred_location || '',
+          });
+          
+          if (doctorData.profile_photo) {
+            const photoUrl = getProfilePhotoUrl(doctorData);
+            setProfilePhotoUri(photoUrl);
+            setOriginalProfilePhotoUri(photoUrl);
+          }
+          return;
+        }
+      } catch (apiError) {
+        console.log('⚠️ API fetch failed, using cached data:', apiError);
+        console.error('API Error details:', apiError);
+      }
+      
+      // Fallback to cached data (but this should not have departments if API is working)
       const info = await getDoctorInfo();
       if (info) {
+        console.log('📋 Using cached doctor data, departments:', info.departments?.length || 0);
         setDoctor(info);
+        // Format departments from cached data
+        // Handle both direct department objects and pivot data
+        const formattedDepartments = (info.departments || []).map((dept: any) => {
+          // Backend returns: { id, name, experience } or might have pivot format
+          const departmentId = dept.id || dept.department_id || dept.pivot?.department_id;
+          const experience = dept.experience || dept.pivot?.experience || '';
+          return {
+            department_id: departmentId,
+            experience: experience,
+          };
+        }).filter((dept: any) => dept.department_id); // Filter out any invalid entries
+        
         setFormData({
           name: info.name || '',
           email: info.email || '',
@@ -87,15 +172,16 @@ export default function ProfileScreen() {
           professional_achievements: info.professional_achievements || '',
           medical_council_reg_no: info.medical_council_reg_no || '',
           qualifications: info.qualifications || '',
-          specialization: info.specialization || '',
-          department_id: info.department_id || null,
+          departments: formattedDepartments,
           experience: info.experience || '',
           current_hospital: info.current_hospital || '',
           preferred_work_type: info.preferred_work_type || '',
           preferred_location: info.preferred_location || '',
         });
         if (info.profile_photo) {
-          setProfilePhotoUri(info.profile_photo);
+          const photoUrl = getProfilePhotoUrl(info);
+          setProfilePhotoUri(photoUrl);
+          setOriginalProfilePhotoUri(photoUrl);
         }
       }
     } catch (error) {
@@ -184,20 +270,49 @@ export default function ProfileScreen() {
         if (key === 'profile_photo' || key === 'degree_certificate' || key === 'id_proof' || key === 'medical_registration_certificate') {
           return;
         }
+        if (key === 'departments') {
+          // Handle departments array
+          if (Array.isArray(value) && value.length > 0) {
+            value.forEach((dept: any, index: number) => {
+              if (dept.department_id) {
+                data.append(`departments[${index}][department_id]`, String(dept.department_id));
+                if (dept.experience) {
+                  data.append(`departments[${index}][experience]`, String(dept.experience));
+                }
+              }
+            });
+          }
+          return;
+        }
         if (value) {
           data.append(key, String(value));
         }
       });
 
-      if (profilePhotoUri && !profilePhotoUri.startsWith('http') && !profilePhotoUri.startsWith('https')) {
+      // Only send profile photo if it's a new local file (different from original)
+      // Check if it's a local file: file://, content://, or not http/https
+      const isLocalFile = profilePhotoUri && (
+        profilePhotoUri.startsWith('file://') || 
+        profilePhotoUri.startsWith('content://') ||
+        (!profilePhotoUri.startsWith('http://') && !profilePhotoUri.startsWith('https://'))
+      );
+      
+      const photoChanged = profilePhotoUri && profilePhotoUri !== originalProfilePhotoUri;
+      
+      if (photoChanged && isLocalFile) {
         const filename = profilePhotoUri.split('/').pop() || 'profile.jpg';
         const match = /\.(\w+)$/.exec(filename);
         const type = match ? `image/${match[1]}` : 'image/jpeg';
+        console.log('📤 Sending new profile photo:', filename, 'URI:', profilePhotoUri.substring(0, 50) + '...');
         data.append('profile_photo', {
           uri: profilePhotoUri,
           name: filename,
           type,
         } as any);
+      } else if (photoChanged) {
+        console.log('⚠️ Profile photo URI changed but is not a local file:', profilePhotoUri?.substring(0, 50));
+      } else {
+        console.log('ℹ️ Profile photo unchanged, skipping upload');
       }
 
       Object.entries(documents).forEach(([key, file]) => {
@@ -214,19 +329,28 @@ export default function ProfileScreen() {
 
       if (response.data?.doctor) {
         const token = await AsyncStorage.getItem('doctorToken');
+        const updatedDoctor = response.data.doctor;
+        
         if (token) {
-          await saveDoctorAuth(token, response.data.doctor);
+          await saveDoctorAuth(token, updatedDoctor);
         } else {
-          await AsyncStorage.setItem('doctorInfo', JSON.stringify(response.data.doctor));
+          await AsyncStorage.setItem('doctorInfo', JSON.stringify(updatedDoctor));
         }
         
-        setDoctor(response.data.doctor);
+        setDoctor(updatedDoctor);
         
-        if (response.data.doctor.profile_photo) {
-          setProfilePhotoUri(response.data.doctor.profile_photo);
+        // Update profile photo URI with the full URL from response
+        if (updatedDoctor.profile_photo) {
+          const newPhotoUrl = getProfilePhotoUrl(updatedDoctor);
+          console.log('✅ Profile photo updated:', newPhotoUrl);
+          setProfilePhotoUri(newPhotoUrl);
+          setOriginalProfilePhotoUri(newPhotoUrl);
         }
         
         setIsEditing(false);
+        
+        // Reload doctor data to get fresh departments data with proper relationships
+        await loadDoctor();
         
         const completion = calculateProfileCompletion(response.data.doctor);
         const percentage = Math.round(completion * 100);
@@ -239,9 +363,28 @@ export default function ProfileScreen() {
       }
     } catch (error: any) {
       console.error('Update error:', error.response?.data || error.message);
+      console.error('Error details:', {
+        message: error.message,
+        response: error.response?.status,
+        data: error.response?.data,
+        url: error.config?.url,
+      });
+      
+      let errorMessage = 'Failed to update profile';
+      
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.data?.errors) {
+        // Handle validation errors
+        const errors = error.response.data.errors;
+        errorMessage = Object.values(errors).flat().join('\n');
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       Alert.alert(
         'Error',
-        error.response?.data?.message || 'Failed to update profile'
+        errorMessage
       );
     } finally {
       setLoading(false);
@@ -250,6 +393,10 @@ export default function ProfileScreen() {
 
   const handleCancel = () => {
     setIsEditing(false);
+    // Reset profile photo to original
+    if (originalProfilePhotoUri) {
+      setProfilePhotoUri(originalProfilePhotoUri);
+    }
     loadDoctor();
     setDocuments({});
   };
@@ -261,7 +408,7 @@ export default function ProfileScreen() {
   const profileCompletion = doctor ? Math.round(calculateProfileCompletion(doctor) * 100) : 0;
 
   return (
-    <ScreenSafeArea backgroundColor={ModernColors.background.secondary}>
+    <ScreenSafeArea backgroundColor={ModernColors.background.secondary} excludeBottom={true}>
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor={ModernColors.primary.main} />
         
@@ -273,19 +420,6 @@ export default function ProfileScreen() {
           style={styles.headerGradient}
         >
           <View style={styles.headerContent}>
-            <TouchableOpacity 
-              style={styles.backButton}
-              onPress={() => {
-                try {
-                  router.back();
-                } catch (error) {
-                  router.replace('/(tabs)');
-                }
-              }}
-            >
-              <X size={24} color="#fff" />
-            </TouchableOpacity>
-            
             <View style={styles.headerActions}>
               {!isEditing ? (
                 <TouchableOpacity
@@ -310,7 +444,7 @@ export default function ProfileScreen() {
 
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, { paddingBottom: safeBottomPadding }]}
           showsVerticalScrollIndicator={false}
         >
           {/* Profile Card */}
@@ -318,6 +452,7 @@ export default function ProfileScreen() {
             <View style={styles.profileImageSection}>
               <View style={styles.profileImageContainer}>
                 <Image
+                  key={profilePhotoUri || getProfilePhotoUrl(doctor)}
                   source={{
                     uri: profilePhotoUri || getProfilePhotoUrl(doctor),
                   }}
@@ -336,13 +471,11 @@ export default function ProfileScreen() {
                 <Text style={styles.profileName}>
                   {doctor?.name || 'Doctor Name'}
                 </Text>
-                {(doctor?.department?.name || 
-                  (doctor?.department_id && departments.find(d => d.id === doctor.department_id)?.name) ||
-                  doctor?.specialization) && (
+                {((doctor?.departments && doctor.departments.length > 0) || doctor?.specialization) && (
                   <Text style={styles.profileSpecialization}>
-                    {doctor?.department?.name || 
-                     (doctor?.department_id && departments.find(d => d.id === doctor.department_id)?.name) ||
-                     doctor?.specialization}
+                    {doctor?.departments && doctor.departments.length > 0
+                      ? doctor.departments.map((d: any) => d.name || d.department?.name).filter(Boolean).join(', ')
+                      : doctor?.specialization}
                   </Text>
                 )}
                 {doctor?.current_location && (
@@ -409,17 +542,34 @@ export default function ProfileScreen() {
                   </View>
                   <Text style={styles.sectionTitle}>Professional Details</Text>
                 </View>
-                {(doctor?.department || doctor?.department_id) && (
+                <View style={styles.detailSection}>
                   <View style={styles.detailRow}>
                     <Briefcase size={18} color={ModernColors.text.secondary} />
-                    <Text style={styles.detailLabel}>Department</Text>
-                    <Text style={styles.detailValue}>
-                      {doctor?.department?.name || 
-                       (doctor?.department_id && departments.find(d => d.id === doctor.department_id)?.name) || 
-                       'Not set'}
-                    </Text>
+                    <Text style={styles.detailLabel}>Departments</Text>
                   </View>
-                )}
+                  {doctor?.departments && Array.isArray(doctor.departments) && doctor.departments.length > 0 ? (
+                    <View style={styles.departmentsList}>
+                      {doctor.departments.map((dept: any, index: number) => {
+                        // Backend API returns: { id, name, experience }
+                        // Handle both formatted API response and pivot data formats
+                        const deptName = dept.name || dept.department?.name || 'Unknown Department';
+                        const experience = dept.experience || dept.pivot?.experience || null;
+                        const deptId = dept.id || dept.department_id || dept.pivot?.department_id || `dept-${index}`;
+                        
+                        return (
+                          <View key={deptId} style={styles.departmentItem}>
+                            <Text style={styles.detailValue}>
+                              {deptName}
+                              {experience && experience.trim() ? ` (${experience})` : ''}
+                            </Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ) : (
+                    <Text style={[styles.detailValue, { marginLeft: 28, color: ModernColors.text.tertiary }]}>Not provided</Text>
+                  )}
+                </View>
                 {doctor?.qualifications && (
                   <View style={styles.detailRow}>
                     <GraduationCap size={18} color={ModernColors.text.secondary} />
@@ -565,21 +715,11 @@ export default function ProfileScreen() {
               <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
                 <Text style={styles.editSectionTitle}>Professional Information</Text>
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Department / Specialization</Text>
-                  <DepartmentPicker
-                    value={formData.department_id}
-                    onValueChange={(id) => updateField('department_id', id)}
-                    placeholder="Select your department"
-                  />
-                </View>
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Specialization (Additional)</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={formData.specialization}
-                    onChangeText={(text) => updateField('specialization', text)}
-                    placeholder="Additional specialization details (optional)"
-                    placeholderTextColor={ModernColors.text.tertiary}
+                  <Text style={styles.inputLabel}>Departments</Text>
+                  <MultiDepartmentPicker
+                    value={formData.departments || []}
+                    onValueChange={(departments) => updateField('departments', departments)}
+                    placeholder="Select your departments"
                   />
                 </View>
                 <View style={styles.inputGroup}>
@@ -650,37 +790,164 @@ export default function ProfileScreen() {
               {/* Documents */}
               <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
                 <Text style={styles.editSectionTitle}>Documents</Text>
-                <TouchableOpacity
-                  style={styles.documentUploadButton}
-                  onPress={() => handlePickDocument('degree_certificate')}
-                >
-                  <Upload size={18} color={ModernColors.primary.main} />
-                  <Text style={styles.documentUploadText}>
-                    {documents.degree_certificate
-                      ? documents.degree_certificate.name
-                      : 'Upload Degree Certificate'}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.documentUploadButton}
-                  onPress={() => handlePickDocument('id_proof')}
-                >
-                  <Upload size={18} color={ModernColors.primary.main} />
-                  <Text style={styles.documentUploadText}>
-                    {documents.id_proof ? documents.id_proof.name : 'Upload ID Proof'}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.documentUploadButton}
-                  onPress={() => handlePickDocument('medical_registration_certificate')}
-                >
-                  <Upload size={18} color={ModernColors.primary.main} />
-                  <Text style={styles.documentUploadText}>
-                    {documents.medical_registration_certificate
-                      ? documents.medical_registration_certificate.name
-                      : 'Upload Medical Registration Certificate'}
-                  </Text>
-                </TouchableOpacity>
+                
+                {/* Degree Certificate */}
+                <View style={styles.documentSection}>
+                  <Text style={styles.documentLabel}>Degree Certificate</Text>
+                  {(documents.degree_certificate || doctor?.degree_certificate) ? (
+                    <View style={styles.documentPreview}>
+                      <View style={styles.documentPreviewInfo}>
+                        <FileText size={20} color={ModernColors.success.main} />
+                        <View style={styles.documentPreviewText}>
+                          <Text style={styles.documentPreviewName}>
+                            {documents.degree_certificate?.name || 'Degree Certificate.pdf'}
+                          </Text>
+                          <Text style={styles.documentPreviewStatus}>Uploaded</Text>
+                        </View>
+                      </View>
+                      <View style={styles.documentActions}>
+                        {doctor?.degree_certificate && (
+                          <TouchableOpacity
+                            style={styles.documentViewButton}
+                            onPress={() => {
+                              if (doctor.degree_certificate) {
+                                // Open document URL
+                                Alert.alert('View Document', 'Document will open in browser');
+                              }
+                            }}
+                          >
+                            <Eye size={16} color={ModernColors.primary.main} />
+                          </TouchableOpacity>
+                        )}
+                        <TouchableOpacity
+                          style={styles.documentRemoveButton}
+                          onPress={() => {
+                            setDocuments(prev => {
+                              const newDocs = { ...prev };
+                              delete newDocs.degree_certificate;
+                              return newDocs;
+                            });
+                          }}
+                        >
+                          <X size={16} color={ModernColors.error.main} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.documentUploadButton}
+                      onPress={() => handlePickDocument('degree_certificate')}
+                    >
+                      <Upload size={18} color={ModernColors.primary.main} />
+                      <Text style={styles.documentUploadText}>Upload Degree Certificate</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* ID Proof */}
+                <View style={styles.documentSection}>
+                  <Text style={styles.documentLabel}>ID Proof</Text>
+                  {(documents.id_proof || doctor?.id_proof) ? (
+                    <View style={styles.documentPreview}>
+                      <View style={styles.documentPreviewInfo}>
+                        <FileText size={20} color={ModernColors.success.main} />
+                        <View style={styles.documentPreviewText}>
+                          <Text style={styles.documentPreviewName}>
+                            {documents.id_proof?.name || 'ID Proof.pdf'}
+                          </Text>
+                          <Text style={styles.documentPreviewStatus}>Uploaded</Text>
+                        </View>
+                      </View>
+                      <View style={styles.documentActions}>
+                        {doctor?.id_proof && (
+                          <TouchableOpacity
+                            style={styles.documentViewButton}
+                            onPress={() => {
+                              if (doctor.id_proof) {
+                                Alert.alert('View Document', 'Document will open in browser');
+                              }
+                            }}
+                          >
+                            <Eye size={16} color={ModernColors.primary.main} />
+                          </TouchableOpacity>
+                        )}
+                        <TouchableOpacity
+                          style={styles.documentRemoveButton}
+                          onPress={() => {
+                            setDocuments(prev => {
+                              const newDocs = { ...prev };
+                              delete newDocs.id_proof;
+                              return newDocs;
+                            });
+                          }}
+                        >
+                          <X size={16} color={ModernColors.error.main} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.documentUploadButton}
+                      onPress={() => handlePickDocument('id_proof')}
+                    >
+                      <Upload size={18} color={ModernColors.primary.main} />
+                      <Text style={styles.documentUploadText}>Upload ID Proof</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Medical Registration Certificate */}
+                <View style={styles.documentSection}>
+                  <Text style={styles.documentLabel}>Medical Registration Certificate</Text>
+                  {(documents.medical_registration_certificate || doctor?.medical_registration_certificate) ? (
+                    <View style={styles.documentPreview}>
+                      <View style={styles.documentPreviewInfo}>
+                        <FileText size={20} color={ModernColors.success.main} />
+                        <View style={styles.documentPreviewText}>
+                          <Text style={styles.documentPreviewName}>
+                            {documents.medical_registration_certificate?.name || 'Medical Registration.pdf'}
+                          </Text>
+                          <Text style={styles.documentPreviewStatus}>Uploaded</Text>
+                        </View>
+                      </View>
+                      <View style={styles.documentActions}>
+                        {doctor?.medical_registration_certificate && (
+                          <TouchableOpacity
+                            style={styles.documentViewButton}
+                            onPress={() => {
+                              if (doctor.medical_registration_certificate) {
+                                Alert.alert('View Document', 'Document will open in browser');
+                              }
+                            }}
+                          >
+                            <Eye size={16} color={ModernColors.primary.main} />
+                          </TouchableOpacity>
+                        )}
+                        <TouchableOpacity
+                          style={styles.documentRemoveButton}
+                          onPress={() => {
+                            setDocuments(prev => {
+                              const newDocs = { ...prev };
+                              delete newDocs.medical_registration_certificate;
+                              return newDocs;
+                            });
+                          }}
+                        >
+                          <X size={16} color={ModernColors.error.main} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.documentUploadButton}
+                      onPress={() => handlePickDocument('medical_registration_certificate')}
+                    >
+                      <Upload size={18} color={ModernColors.primary.main} />
+                      <Text style={styles.documentUploadText}>Upload Medical Registration Certificate</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
                 <Text style={styles.fileSizeHint}>
                   Maximum file size: 5MB (PDF, JPEG, PNG)
                 </Text>
@@ -727,16 +994,8 @@ const styles = StyleSheet.create({
   },
   headerContent: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     alignItems: 'center',
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 20,
   },
   headerActions: {
     flexDirection: 'row',
@@ -776,7 +1035,7 @@ const styles = StyleSheet.create({
   content: {
     padding: Spacing.lg,
     paddingTop: Spacing.xl,
-    paddingBottom: Platform.OS === 'web' ? Spacing.lg : 100,
+    // paddingBottom is now set dynamically using safeBottomPadding
   },
   profileCard: {
     marginBottom: Spacing.lg,
@@ -957,6 +1216,14 @@ const styles = StyleSheet.create({
     minHeight: 100,
     paddingTop: Spacing.sm,
   },
+  documentSection: {
+    marginBottom: Spacing.md,
+  },
+  documentLabel: {
+    ...Typography.captionBold,
+    color: ModernColors.text.primary,
+    marginBottom: Spacing.xs,
+  },
   documentUploadButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -967,18 +1234,72 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     borderRadius: BorderRadius.md,
     padding: Spacing.md,
-    marginBottom: Spacing.sm,
+    minHeight: 56,
   },
   documentUploadText: {
     ...Typography.body,
     color: ModernColors.primary.main,
     flex: 1,
+    fontWeight: '600',
+  },
+  documentPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: ModernColors.success.light || '#F0FDF4',
+    borderWidth: 1,
+    borderColor: ModernColors.success.main,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    minHeight: 56,
+  },
+  documentPreviewInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    flex: 1,
+  },
+  documentPreviewText: {
+    flex: 1,
+  },
+  documentPreviewName: {
+    ...Typography.body,
+    color: ModernColors.text.primary,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  documentPreviewStatus: {
+    ...Typography.caption,
+    color: ModernColors.success.main,
+    fontWeight: '500',
+  },
+  documentActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  documentViewButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: ModernColors.primary.light,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  documentRemoveButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: ModernColors.error.light || '#FEF2F2',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   fileSizeHint: {
     ...Typography.small,
     color: ModernColors.text.tertiary,
     textAlign: 'center',
-    marginTop: Spacing.sm,
+    marginTop: Spacing.md,
+    fontStyle: 'italic',
   },
   saveButton: {
     marginTop: Spacing.md,
@@ -989,6 +1310,14 @@ const styles = StyleSheet.create({
   },
   saveButtonDisabled: {
     opacity: 0.6,
+  },
+  departmentsList: {
+    marginTop: Spacing.sm,
+    marginLeft: 28,
+  },
+  departmentItem: {
+    marginBottom: Spacing.xs,
+    paddingVertical: Spacing.xs,
   },
   saveButtonGradient: {
     flexDirection: 'row',

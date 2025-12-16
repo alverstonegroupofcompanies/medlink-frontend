@@ -120,22 +120,31 @@ export default function BasicDetailsScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* Curved Header */}
-          <LinearGradient colors={[PrimaryColors.lighter, NeutralColors.background]} style={styles.header}>
-          <TouchableOpacity
-    style={styles.backButton}
-    onPress={() => router.push('/login')} // go to Login screen
-    activeOpacity={0.7}
-  >
-              <MaterialIcons name="arrow-back" size={24} color="#11181C" />
+          <LinearGradient 
+            colors={[PrimaryColors.main, PrimaryColors.lighter, NeutralColors.background]} 
+            locations={[0, 0.5, 1]}
+            style={styles.header}
+          >
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => router.push('/login')}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons name="arrow-back" size={24} color="#FFFFFF" />
               <ThemedText style={styles.backText}>Back to Login</ThemedText>
             </TouchableOpacity>
-            <ThemedText style={styles.signUpText}>Sign Up</ThemedText>
+            <View style={styles.headerContent}>
+              <ThemedText style={styles.signUpText}>Create Account</ThemedText>
+              <ThemedText style={styles.subtitleText}>Step 1 of 2: Basic Information</ThemedText>
+            </View>
           </LinearGradient>
 
           {/* White Form Card */}
           <View style={styles.formCard}>
-            <ThemedText style={styles.registerText}>Register here</ThemedText>
-            <ThemedText style={styles.heading}>Basic Details</ThemedText>
+            <View style={styles.formHeader}>
+              <ThemedText style={styles.heading}>Basic Details</ThemedText>
+              <ThemedText style={styles.formSubheading}>Fill in your personal information to get started</ThemedText>
+            </View>
 
             <View style={styles.inputGroup}>
               <ThemedTextInput
@@ -214,25 +223,123 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: NeutralColors.background },
   keyboardView: { flex: 1 },
   scrollContent: { flexGrow: 1, paddingBottom: 40 },
-  header: { borderBottomLeftRadius: 80, borderBottomRightRadius: 80, paddingTop: 70, paddingBottom: 60, paddingHorizontal: 30 },
-  backButton: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
-  backText: { fontSize: 16, marginLeft: 8, color: '#11181C' },
-  signUpText: { fontSize: 32, fontWeight: '700', color: '#000' },
-  formCard: { backgroundColor: NeutralColors.cardBackground, marginHorizontal: 20, marginTop: -40, borderRadius: 25, paddingVertical: 30, paddingHorizontal: 24, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, elevation: 4 },
-  registerText: { fontSize: 14, color: NeutralColors.textSecondary, marginBottom: 8 },
-  heading: { fontSize: 22, fontWeight: '700', marginBottom: 20 },
-  inputGroup: { marginBottom: 16 },
-  input: { borderWidth: 1, borderColor: NeutralColors.border, borderRadius: 25, backgroundColor: '#FAFAFA', paddingHorizontal: 15, height: 48 },
-  profilePhotoButton: { borderWidth: 1, borderRadius: 12, padding: 20, minHeight: 120, justifyContent: 'center', alignItems: 'center', marginTop: 8, marginBottom: 20 },
-  profileImage: { width: 100, height: 100, borderRadius: 50 },
-  profilePhotoText: { marginTop: 8, fontSize: 16, color: NeutralColors.textSecondary },
+  header: { 
+    borderBottomLeftRadius: 80, 
+    borderBottomRightRadius: 80, 
+    paddingTop: Platform.OS === 'ios' ? 70 : 60, 
+    paddingBottom: 70, 
+    paddingHorizontal: 30,
+    minHeight: 220,
+  },
+  backButton: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginBottom: 24,
+  },
+  backText: { 
+    fontSize: 16, 
+    marginLeft: 8, 
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  headerContent: {
+    alignItems: 'flex-start',
+  },
+  signUpText: { 
+    fontSize: 36, 
+    fontWeight: '800', 
+    color: '#FFFFFF',
+    marginBottom: 8,
+    textShadowColor: 'rgba(0, 0, 0, 0.1)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  subtitleText: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontWeight: '500',
+  },
+  formCard: { 
+    backgroundColor: '#FFFFFF', 
+    marginHorizontal: 20, 
+    marginTop: -50, 
+    borderRadius: 28, 
+    paddingVertical: 32, 
+    paddingHorizontal: 28, 
+    shadowColor: '#000', 
+    shadowOpacity: 0.12, 
+    shadowRadius: 24, 
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 12,
+  },
+  formHeader: {
+    marginBottom: 28,
+    alignItems: 'center',
+  },
+  heading: { 
+    fontSize: 26, 
+    fontWeight: '700', 
+    marginBottom: 8,
+    color: PrimaryColors.darkText,
+  },
+  formSubheading: {
+    fontSize: 14,
+    color: NeutralColors.textSecondary,
+    textAlign: 'center',
+  },
+  inputGroup: { marginBottom: 20 },
+  input: { 
+    borderWidth: 1, 
+    borderColor: '#E5E7EB', 
+    borderRadius: 16, 
+    backgroundColor: '#FAFAFA', 
+    paddingHorizontal: 18, 
+    height: 56,
+  },
+  profilePhotoButton: { 
+    borderWidth: 2, 
+    borderColor: '#E5E7EB',
+    borderStyle: 'dashed',
+    borderRadius: 16, 
+    padding: 24, 
+    minHeight: 140, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginTop: 8, 
+    marginBottom: 12,
+    backgroundColor: '#F9FAFB',
+  },
+  profileImage: { 
+    width: 120, 
+    height: 120, 
+    borderRadius: 60,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+  },
+  profilePhotoText: { 
+    marginTop: 12, 
+    fontSize: 15, 
+    color: NeutralColors.textSecondary,
+    fontWeight: '600',
+  },
   fileSizeHint: {
     fontSize: 12,
     color: NeutralColors.textSecondary,
     textAlign: 'center',
-    marginTop: -12,
     marginBottom: 8,
     fontStyle: 'italic',
   },
-  nextButton: { backgroundColor: PrimaryColors.main, borderRadius: 25, height: 50, justifyContent: 'center', alignItems: 'center' },
+  nextButton: { 
+    backgroundColor: PrimaryColors.main, 
+    borderRadius: 16, 
+    height: 56, 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    marginTop: 8,
+    shadowColor: PrimaryColors.main,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
 });

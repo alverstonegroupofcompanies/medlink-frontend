@@ -1,108 +1,118 @@
 import { MD3LightTheme, configureFonts, type MD3Theme } from 'react-native-paper';
+import { Platform } from 'react-native';
+
+// Helper to get font family with fallback
+const getFontFamily = (fontName: string) => {
+  if (Platform.OS === 'web') {
+    // On web, use system fonts as fallback
+    return `${fontName}, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`;
+  }
+  return fontName;
+};
 
 const fontConfig = {
   displayLarge: {
-    fontFamily: 'Jost_700Bold',
+    fontFamily: getFontFamily('Jost_700Bold'),
     fontSize: 48,
-    fontWeight: '700',
+    fontWeight: '700' as const,
     letterSpacing: 0,
     lineHeight: 56,
   },
   displayMedium: {
-    fontFamily: 'Jost_600SemiBold',
+    fontFamily: getFontFamily('Jost_600SemiBold'),
     fontSize: 42,
-    fontWeight: '600',
+    fontWeight: '600' as const,
     letterSpacing: 0,
     lineHeight: 48,
   },
   displaySmall: {
-    fontFamily: 'Jost_600SemiBold',
+    fontFamily: getFontFamily('Jost_600SemiBold'),
     fontSize: 36,
-    fontWeight: '600',
+    fontWeight: '600' as const,
     letterSpacing: 0,
     lineHeight: 42,
   },
   headlineLarge: {
-    fontFamily: 'Jost_600SemiBold',
+    fontFamily: getFontFamily('Jost_600SemiBold'),
     fontSize: 32,
-    fontWeight: '600',
+    fontWeight: '600' as const,
     letterSpacing: 0,
     lineHeight: 38,
   },
   headlineMedium: {
-    fontFamily: 'Jost_600SemiBold',
+    fontFamily: getFontFamily('Jost_600SemiBold'),
     fontSize: 28,
-    fontWeight: '600',
+    fontWeight: '600' as const,
     letterSpacing: 0,
     lineHeight: 34,
   },
   headlineSmall: {
-    fontFamily: 'Jost_600SemiBold',
+    fontFamily: getFontFamily('Jost_600SemiBold'),
     fontSize: 24,
-    fontWeight: '600',
+    fontWeight: '600' as const,
     letterSpacing: 0,
     lineHeight: 30,
   },
   titleLarge: {
-    fontFamily: 'Jost_600SemiBold',
+    fontFamily: getFontFamily('Jost_600SemiBold'),
     fontSize: 22,
-    fontWeight: '600',
+    fontWeight: '600' as const,
     letterSpacing: 0,
     lineHeight: 28,
   },
   titleMedium: {
-    fontFamily: 'Jost_500Medium',
+    fontFamily: getFontFamily('Jost_500Medium'),
     fontSize: 18,
-    fontWeight: '500',
+    fontWeight: '500' as const,
     letterSpacing: 0,
     lineHeight: 24,
   },
   titleSmall: {
-    fontFamily: 'Jost_500Medium',
+    fontFamily: getFontFamily('Jost_500Medium'),
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '500' as const,
     letterSpacing: 0.1,
     lineHeight: 22,
   },
   labelLarge: {
-    fontFamily: 'Jost_500Medium',
+    fontFamily: getFontFamily('Jost_500Medium'),
     fontSize: 15,
-    fontWeight: '500',
+    fontWeight: '500' as const,
     letterSpacing: 0.1,
     lineHeight: 20,
   },
   labelMedium: {
-    fontFamily: 'Roboto_500Medium',
+    fontFamily: getFontFamily('Roboto_500Medium'),
     fontSize: 13,
-    fontWeight: '500',
+    fontWeight: '500' as const,
     letterSpacing: 0.5,
     lineHeight: 18,
   },
   labelSmall: {
-    fontFamily: 'Roboto_500Medium',
+    fontFamily: getFontFamily('Roboto_500Medium'),
     fontSize: 11,
-    fontWeight: '500',
+    fontWeight: '500' as const,
     letterSpacing: 0.5,
     lineHeight: 16,
   },
   bodyLarge: {
-    fontFamily: 'Roboto_400Regular',
+    fontFamily: getFontFamily('Roboto_400Regular'),
     fontSize: 16,
-    fontWeight: '400',
+    fontWeight: '400' as const,
     letterSpacing: 0.2,
     lineHeight: 24,
   },
   bodyMedium: {
-    fontFamily: 'Roboto_400Regular',
+    fontFamily: getFontFamily('Roboto_400Regular'),
     fontSize: 14,
-    fontWeight: '400',
+    fontWeight: '400' as const,
     letterSpacing: 0.2,
     lineHeight: 20,
   },
   bodySmall: {
-    fontFamily: 'Roboto_400Regular',
+    fontFamily: getFontFamily('Roboto_400Regular'),
     fontSize: 12,
-    fontWeight: '400',
+    fontWeight: '400' as const,
     letterSpacing: 0.4,
     lineHeight: 18,
   },

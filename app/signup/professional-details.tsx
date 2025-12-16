@@ -5,15 +5,17 @@ import { ThemedTextInput } from '@/components/themed-text-input';
 import { ThemedView } from '@/components/themed-view';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import API from '../api';
+import { API_BASE_URL } from '../../config/api';
 import { calculateProfileCompletion } from '@/utils/profileCompletion';
 import { DoctorPrimaryColors as PrimaryColors, DoctorNeutralColors as NeutralColors } from '@/constants/doctor-theme';
 import { saveDoctorAuth } from '@/utils/auth';
 import { useEffect, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { DepartmentPicker } from '@/components/department-picker';
+import { MultiDepartmentPicker } from '@/components/multi-department-picker';
 
 export default function ProfessionalDetailsScreen() {
   const params = useLocalSearchParams();
@@ -23,7 +25,7 @@ export default function ProfessionalDetailsScreen() {
     medicalCouncilRegNo: '',
     qualifications: '',
     specialization: '',
-    department_id: null as number | null,
+    departments: [] as Array<{ department_id: number; experience?: string }>,
     experience: '',
     currentHospital: '',
     currentLocation: '',
@@ -69,13 +71,20 @@ export default function ProfessionalDetailsScreen() {
 
       // Professional Details
       Object.entries(formData).forEach(([key, value]) => {
-        if (value !== null && value !== '') {
-          // Convert department_id to string for FormData
-          if (key === 'department_id') {
-            data.append('department_id', value.toString());
-          } else {
-            data.append(key, value);
+        if (key === 'departments') {
+          // Handle departments array
+          if (Array.isArray(value) && value.length > 0) {
+            value.forEach((dept: any, index: number) => {
+              if (dept.department_id) {
+                data.append(`departments[${index}][department_id]`, String(dept.department_id));
+                if (dept.experience) {
+                  data.append(`departments[${index}][experience]`, String(dept.experience));
+                }
+              }
+            });
           }
+        } else if (value !== null && value !== '') {
+          data.append(key, value);
         }
       });
 
@@ -120,20 +129,54 @@ export default function ProfessionalDetailsScreen() {
       );
     } catch (err: any) {
       console.log('Registration error:', err.response?.data || err.message);
+      console.log('Error details:', {
+        message: err.message,
+        code: err.code,
+        response: err.response?.status,
+        url: err.config?.url,
+        baseURL: err.config?.baseURL,
+      });
+      
       let message = 'Registration failed. Please try again.';
+      let title = 'Registration Error';
       
       // Handle network errors
-      if (err.message?.includes('Network') || err.message?.includes('connect')) {
-        message = 'Cannot connect to server. Please check:\n\n1. Backend is running\n2. API URL is correct in .env file\n3. Phone and computer are on same WiFi (for local dev)\n4. Firewall allows port 8000 (for local dev)';
+      if (!err.response) {
+        // Network error - backend not reachable
+        const attemptedUrl = err.config?.baseURL 
+          ? `${err.config.baseURL}${err.config.url || ''}`
+          : `${API_BASE_URL}${err.config?.url || '/doctor/register'}`;
+        
+        title = 'Connection Error';
+        message = `Cannot connect to server.\n\nAttempted URL:\n${attemptedUrl}\n\nTroubleshooting Steps:\n\n`;
+        message += '1. Backend server is running\n';
+        message += '   Command: php artisan serve --host=0.0.0.0 --port=8080\n\n';
+        message += '2. API URL is correct in frontend/.env file\n';
+        message += '   Variable: EXPO_PUBLIC_BACKEND_URL=http://YOUR_IP:8080\n\n';
+        message += '3. Phone and computer are on same WiFi network\n\n';
+        message += '4. Firewall allows port 8000\n';
+        message += '   (Check Windows Firewall settings)\n\n';
+        message += '5. Test connection from phone browser:\n';
+        const testUrl = attemptedUrl.replace('/doctor/register', '/test');
+        message += `   ${testUrl}\n\n`;
+        message += '6. Restart Expo with cache clear:\n';
+        message += '   npx expo start --clear';
       } else if (err.response?.data?.message) {
+        // Server responded with error message
         message = err.response.data.message;
       } else if (err.response?.data?.errors) {
         // Handle validation errors
         const errors = err.response.data.errors;
         message = Object.values(errors).flat().join('\n');
+      } else if (err.response?.status === 500) {
+        title = 'Server Error';
+        message = 'Server encountered an error. Please try again later or contact support.';
+      } else if (err.response?.status === 422) {
+        title = 'Validation Error';
+        message = 'Please check all fields and try again.';
       }
       
-      Alert.alert('Registration Error', message);
+      Alert.alert(title, message);
     } finally {
       setLoading(false);
     }
@@ -143,40 +186,51 @@ export default function ProfessionalDetailsScreen() {
     <ThemedView style={styles.container}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-          <TouchableOpacity style={styles.backButton} onPress={() => {
-            try {
-              router.back();
-            } catch (error) {
-              // If can't go back, navigate to previous screen explicitly
-              router.replace('/signup/basic-details');
-            }
-          }}>
-            <MaterialIcons name="arrow-back" size={24} color={colorScheme === 'dark' ? '#ECEDEE' : '#11181C'} />
-            <ThemedText style={styles.backText}>Back</ThemedText>
-          </TouchableOpacity>
+          <LinearGradient 
+            colors={[PrimaryColors.main, PrimaryColors.lighter, NeutralColors.background]} 
+            locations={[0, 0.5, 1]}
+            style={styles.headerGradient}
+          >
+            <TouchableOpacity style={styles.backButton} onPress={() => {
+              try {
+                router.back();
+              } catch (error) {
+                router.replace('/signup/basic-details');
+              }
+            }}>
+              <MaterialIcons name="arrow-back" size={24} color="#FFFFFF" />
+              <ThemedText style={styles.backText}>Back</ThemedText>
+            </TouchableOpacity>
 
-          <View style={styles.header}>
-            <ThemedText type="title" style={styles.heading}>
-              Professional Details
-            </ThemedText>
-            <ThemedText style={styles.subheading}>
-              Fill in your professional info (optional fields are allowed)
-            </ThemedText>
-          </View>
+            <View style={styles.headerContent}>
+              <ThemedText type="title" style={styles.heading}>
+                Professional Details
+              </ThemedText>
+              <ThemedText style={styles.subheading}>
+                Step 2 of 2: Complete your profile
+              </ThemedText>
+            </View>
+          </LinearGradient>
 
           <View style={styles.formCard}>
+            <View style={styles.formHeader}>
+              <ThemedText style={styles.formTitle}>Professional Information</ThemedText>
+              <ThemedText style={styles.formSubheading}>
+                Add your qualifications and experience (optional fields are allowed)
+              </ThemedText>
+            </View>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.label}>Department / Specialization *</ThemedText>
-              <DepartmentPicker
-                value={formData.department_id}
-                onValueChange={(id) => setFormData(prev => ({ ...prev, department_id: id }))}
-                placeholder="Select your department"
+              <ThemedText style={styles.label}>Departments *</ThemedText>
+              <MultiDepartmentPicker
+                value={formData.departments}
+                onValueChange={(departments) => setFormData(prev => ({ ...prev, departments }))}
+                placeholder="Select your departments"
                 required
               />
             </View>
             
             {Object.entries(formData)
-              .filter(([key]) => key !== 'department_id')
+              .filter(([key]) => key !== 'departments')
               .map(([key, value]) => (
                 <ThemedTextInput
                   key={key}
@@ -202,14 +256,86 @@ export default function ProfessionalDetailsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F7F8FA' },
-  scrollContent: { flexGrow: 1, padding: 24, paddingTop: 40 },
-  backButton: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
-  backText: { fontSize: 16, marginLeft: 8 },
-  header: { marginBottom: 24 },
-  heading: { fontSize: 26, fontWeight: '700' },
-  subheading: { fontSize: 14, color: '#666', marginTop: 4 },
-  formCard: { backgroundColor: NeutralColors.cardBackground, borderRadius: 16, padding: 20, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6, elevation: 3 },
-  inputGroup: { marginBottom: 16 },
-  label: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8 },
-  submitButton: { marginTop: 20, backgroundColor: PrimaryColors.main },
+  scrollContent: { flexGrow: 1, paddingBottom: 40 },
+  headerGradient: {
+    borderBottomLeftRadius: 80,
+    borderBottomRightRadius: 80,
+    paddingTop: Platform.OS === 'ios' ? 70 : 60,
+    paddingBottom: 70,
+    paddingHorizontal: 30,
+    minHeight: 220,
+  },
+  backButton: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginBottom: 24,
+  },
+  backText: { 
+    fontSize: 16, 
+    marginLeft: 8,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  headerContent: {
+    alignItems: 'flex-start',
+  },
+  heading: { 
+    fontSize: 36, 
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 8,
+    textShadowColor: 'rgba(0, 0, 0, 0.1)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  subheading: { 
+    fontSize: 16, 
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontWeight: '500',
+  },
+  formCard: { 
+    backgroundColor: '#FFFFFF', 
+    marginHorizontal: 20, 
+    marginTop: -50,
+    borderRadius: 28, 
+    padding: 28, 
+    shadowColor: '#000', 
+    shadowOpacity: 0.12, 
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 12,
+  },
+  formHeader: {
+    marginBottom: 24,
+    alignItems: 'center',
+  },
+  formTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: PrimaryColors.darkText,
+    marginBottom: 8,
+  },
+  formSubheading: {
+    fontSize: 14,
+    color: NeutralColors.textSecondary,
+    textAlign: 'center',
+  },
+  inputGroup: { marginBottom: 20 },
+  label: { 
+    fontSize: 15, 
+    fontWeight: '600', 
+    color: '#333', 
+    marginBottom: 10,
+  },
+  submitButton: { 
+    marginTop: 24, 
+    backgroundColor: PrimaryColors.main,
+    borderRadius: 16,
+    height: 56,
+    shadowColor: PrimaryColors.main,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
 });

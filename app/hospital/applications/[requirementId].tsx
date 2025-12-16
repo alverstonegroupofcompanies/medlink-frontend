@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   StatusBar,
   Platform,
+  Modal,
 } from 'react-native';
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { ArrowLeft, User, Calendar, MapPin, Building2, CheckCircle, XCircle, Clock, Star } from 'lucide-react-native';
@@ -29,6 +30,8 @@ export default function ApplicationsScreen() {
   const [hospital, setHospital] = useState<any>(null);
   const [processingId, setProcessingId] = useState<number | null>(null);
   const [processingAction, setProcessingAction] = useState<'accept' | 'reject' | null>(null);
+  const [selectedApplication, setSelectedApplication] = useState<any>(null);
+  const [modalVisible, setModalVisible] = useState(false);
 
   useEffect(() => {
     loadHospital();
@@ -375,11 +378,20 @@ export default function ApplicationsScreen() {
               console.log(`🎨 Rendering application ${application.id}: status = "${application.status}"`);
             }
             return (
-            <View key={application.id} style={styles.applicationCard}>
+            <TouchableOpacity 
+              key={application.id} 
+              style={styles.applicationCard}
+              onPress={() => {
+                setSelectedApplication(application);
+                setModalVisible(true);
+              }}
+              activeOpacity={0.7}
+            >
               <View style={styles.applicationHeader}>
                 <TouchableOpacity
                   style={styles.doctorInfo}
-                  onPress={() => {
+                  onPress={(e) => {
+                    e.stopPropagation();
                     if (application.doctor?.id) {
                       router.push(`/hospital/doctor-profile/${application.doctor.id}`);
                     }
@@ -497,11 +509,227 @@ export default function ApplicationsScreen() {
                   </TouchableOpacity>
                 </View>
               )}
-            </View>
+            </TouchableOpacity>
             );
           })
         )}
       </ScrollView>
+
+      {/* Application Details Modal */}
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Application Details</Text>
+              <TouchableOpacity
+                onPress={() => setModalVisible(false)}
+                style={styles.modalCloseButton}
+              >
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {selectedApplication && (
+              <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={true}>
+                {/* Doctor Info */}
+                <View style={styles.modalSection}>
+                  <View style={styles.modalSectionHeader}>
+                    <User size={20} color={PrimaryColors.main} />
+                    <Text style={styles.modalSectionTitle}>Doctor Information</Text>
+                  </View>
+                  <View style={styles.modalDoctorCard}>
+                    <Image
+                      source={{
+                        uri: selectedApplication.doctor?.profile_photo || 'https://i.pravatar.cc/150?img=1',
+                      }}
+                      style={styles.modalDoctorImage}
+                    />
+                    <View style={styles.modalDoctorDetails}>
+                      <Text style={styles.modalDoctorName}>
+                        {selectedApplication.doctor?.name || 'Doctor'}
+                      </Text>
+                      <Text style={styles.modalDoctorEmail}>
+                        {selectedApplication.doctor?.email || 'N/A'}
+                      </Text>
+                      <Text style={styles.modalDoctorPhone}>
+                        {selectedApplication.doctor?.phone_number || 'N/A'}
+                      </Text>
+                      {selectedApplication.doctor?.current_location && (
+                        <View style={styles.modalLocationRow}>
+                          <MapPin size={14} color={NeutralColors.textSecondary} />
+                          <Text style={styles.modalLocationText}>
+                            {selectedApplication.doctor.current_location}
+                          </Text>
+                        </View>
+                      )}
+                      {selectedApplication.doctor?.qualifications && (
+                        <Text style={styles.modalQualification}>
+                          {selectedApplication.doctor.qualifications}
+                        </Text>
+                      )}
+                      {selectedApplication.doctor?.departments && selectedApplication.doctor.departments.length > 0 && (
+                        <View style={styles.modalDepartments}>
+                          {selectedApplication.doctor.departments.map((dept: any, idx: number) => (
+                            <View key={idx} style={styles.modalDepartmentBadge}>
+                              <Text style={styles.modalDepartmentText}>{dept.name || dept}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+                      {renderStars(selectedApplication.doctor?.average_rating || 0, selectedApplication.doctor?.total_ratings || 0)}
+                    </View>
+                  </View>
+                </View>
+
+                {/* Application Details */}
+                <View style={styles.modalSection}>
+                  <View style={styles.modalSectionHeader}>
+                    <Calendar size={20} color={PrimaryColors.main} />
+                    <Text style={styles.modalSectionTitle}>Application Details</Text>
+                  </View>
+                  <View style={styles.modalDetailsList}>
+                    <View style={styles.modalDetailRow}>
+                      <Text style={styles.modalDetailLabel}>Status:</Text>
+                      <View style={[styles.modalStatusBadge, { backgroundColor: `${getStatusColor(selectedApplication.status || 'pending')}20` }]}>
+                        {getStatusIcon(selectedApplication.status || 'pending')}
+                        <Text style={[styles.modalStatusText, { color: getStatusColor(selectedApplication.status || 'pending') }]}>
+                          {getStatusText(selectedApplication.status || 'pending')}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.modalDetailRow}>
+                      <Text style={styles.modalDetailLabel}>Applied Date:</Text>
+                      <Text style={styles.modalDetailValue}>
+                        {new Date(selectedApplication.created_at).toLocaleDateString('en-US', {
+                          weekday: 'long',
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </Text>
+                    </View>
+                    {selectedApplication.proposed_rate && (
+                      <View style={styles.modalDetailRow}>
+                        <Text style={styles.modalDetailLabel}>Proposed Rate:</Text>
+                        <Text style={styles.modalDetailValue}>
+                          ₹{selectedApplication.proposed_rate.toLocaleString()}
+                        </Text>
+                      </View>
+                    )}
+                    {selectedApplication.available_date && (
+                      <View style={styles.modalDetailRow}>
+                        <Text style={styles.modalDetailLabel}>Available Date:</Text>
+                        <Text style={styles.modalDetailValue}>
+                          {new Date(selectedApplication.available_date).toLocaleDateString('en-US', {
+                            weekday: 'long',
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                          })}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+
+                {/* Cover Letter */}
+                {selectedApplication.cover_letter && (
+                  <View style={styles.modalSection}>
+                    <View style={styles.modalSectionHeader}>
+                      <Text style={styles.modalSectionTitle}>Cover Letter</Text>
+                    </View>
+                    <Text style={styles.modalCoverLetter}>
+                      {selectedApplication.cover_letter}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Job Requirement Details */}
+                {requirement && (
+                  <View style={styles.modalSection}>
+                    <View style={styles.modalSectionHeader}>
+                      <Building2 size={20} color={PrimaryColors.main} />
+                      <Text style={styles.modalSectionTitle}>Job Requirement</Text>
+                    </View>
+                    <View style={styles.modalDetailsList}>
+                      <View style={styles.modalDetailRow}>
+                        <Text style={styles.modalDetailLabel}>Department:</Text>
+                        <Text style={styles.modalDetailValue}>{requirement.department}</Text>
+                      </View>
+                      <View style={styles.modalDetailRow}>
+                        <Text style={styles.modalDetailLabel}>Work Type:</Text>
+                        <Text style={styles.modalDetailValue}>{requirement.work_type}</Text>
+                      </View>
+                      <View style={styles.modalDetailRow}>
+                        <Text style={styles.modalDetailLabel}>Sessions:</Text>
+                        <Text style={styles.modalDetailValue}>{requirement.required_sessions}</Text>
+                      </View>
+                      {requirement.work_required_date && (
+                        <View style={styles.modalDetailRow}>
+                          <Text style={styles.modalDetailLabel}>Work Date:</Text>
+                          <Text style={styles.modalDetailValue}>
+                            {new Date(requirement.work_required_date).toLocaleDateString('en-US', {
+                              weekday: 'long',
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric'
+                            })}
+                          </Text>
+                        </View>
+                      )}
+                      {requirement.address && (
+                        <View style={styles.modalDetailRow}>
+                          <Text style={styles.modalDetailLabel}>Location:</Text>
+                          <Text style={styles.modalDetailValue}>{requirement.address}</Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                )}
+
+                {/* Action Buttons */}
+                {(selectedApplication.status === 'pending' || !selectedApplication.status) && (
+                  <View style={styles.modalActions}>
+                    <TouchableOpacity
+                      style={[styles.modalActionButton, styles.modalRejectButton]}
+                      onPress={() => {
+                        setModalVisible(false);
+                        setTimeout(() => {
+                          handleReject(selectedApplication.id, selectedApplication.doctor?.name || 'this doctor');
+                        }, 300);
+                      }}
+                      disabled={processingId !== null}
+                    >
+                      <XCircle size={18} color="#fff" />
+                      <Text style={styles.modalRejectButtonText}>Reject</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.modalActionButton, styles.modalAcceptButton]}
+                      onPress={() => {
+                        setModalVisible(false);
+                        setTimeout(() => {
+                          handleAccept(selectedApplication.id, selectedApplication.doctor?.name || 'this doctor');
+                        }, 300);
+                      }}
+                      disabled={processingId !== null}
+                    >
+                      <CheckCircle size={18} color="#fff" />
+                      <Text style={styles.modalAcceptButtonText}>Accept</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
     </ScreenSafeArea>
   );
@@ -771,6 +999,194 @@ const styles = StyleSheet.create({
   rejectButtonText: {
     color: '#fff',
     fontSize: 14,
+    fontWeight: '700',
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: NeutralColors.cardBackground,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '90%',
+    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: NeutralColors.border,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: PrimaryColors.dark,
+  },
+  modalCloseButton: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 16,
+    backgroundColor: NeutralColors.border,
+  },
+  modalCloseText: {
+    fontSize: 20,
+    color: NeutralColors.textSecondary,
+    fontWeight: '600',
+  },
+  modalScrollView: {
+    maxHeight: '100%',
+  },
+  modalSection: {
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: NeutralColors.border,
+  },
+  modalSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16,
+  },
+  modalSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: PrimaryColors.dark,
+  },
+  modalDoctorCard: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  modalDoctorImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: NeutralColors.border,
+  },
+  modalDoctorDetails: {
+    flex: 1,
+    gap: 4,
+  },
+  modalDoctorName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: PrimaryColors.dark,
+  },
+  modalDoctorEmail: {
+    fontSize: 14,
+    color: NeutralColors.textSecondary,
+  },
+  modalDoctorPhone: {
+    fontSize: 14,
+    color: NeutralColors.textSecondary,
+  },
+  modalLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  modalLocationText: {
+    fontSize: 13,
+    color: NeutralColors.textSecondary,
+  },
+  modalQualification: {
+    fontSize: 14,
+    color: NeutralColors.textPrimary,
+    marginTop: 4,
+    fontWeight: '500',
+  },
+  modalDepartments: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8,
+  },
+  modalDepartmentBadge: {
+    backgroundColor: `${PrimaryColors.main}15`,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  modalDepartmentText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: PrimaryColors.main,
+  },
+  modalDetailsList: {
+    gap: 12,
+  },
+  modalDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  modalDetailLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: NeutralColors.textSecondary,
+    flex: 1,
+  },
+  modalDetailValue: {
+    fontSize: 14,
+    color: NeutralColors.textPrimary,
+    flex: 2,
+    textAlign: 'right',
+  },
+  modalStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    alignSelf: 'flex-end',
+  },
+  modalStatusText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  modalCoverLetter: {
+    fontSize: 14,
+    color: NeutralColors.textPrimary,
+    lineHeight: 20,
+    marginTop: 8,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    padding: 20,
+    paddingTop: 12,
+  },
+  modalActionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 8,
+  },
+  modalRejectButton: {
+    backgroundColor: StatusColors.error,
+  },
+  modalAcceptButton: {
+    backgroundColor: StatusColors.success,
+  },
+  modalRejectButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  modalAcceptButtonText: {
+    color: '#fff',
+    fontSize: 15,
     fontWeight: '700',
   },
 });

@@ -6,6 +6,7 @@ import { logoutDoctor, getDoctorInfo } from '@/utils/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import API from '../api';
 import { router } from 'expo-router';
+import { useSafeBottomPadding } from '@/components/screen-safe-area';
 
 const STORAGE_KEYS = {
   DOCTOR_TOKEN: 'doctorToken',
@@ -16,6 +17,7 @@ export default function MoreScreen() {
   const [loading, setLoading] = useState(false);
   const [doctor, setDoctor] = useState<any>(null);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const safeBottomPadding = useSafeBottomPadding();
 
   useEffect(() => {
     loadDoctorInfo();
@@ -195,7 +197,7 @@ export default function MoreScreen() {
 
       <ScrollView 
         style={[styles.container, { backgroundColor: NeutralColors.background }]}
-        contentContainerStyle={styles.contentContainer}
+        contentContainerStyle={[styles.contentContainer, { paddingBottom: safeBottomPadding }]}
       >
         {/* Header */}
       <View style={styles.header}>
@@ -291,7 +293,7 @@ const styles = StyleSheet.create({
   contentContainer: {
     padding: 20,
     paddingTop: 60,
-    paddingBottom: 100,
+    // paddingBottom is now set dynamically using safeBottomPadding
   },
   header: {
     marginBottom: 32,

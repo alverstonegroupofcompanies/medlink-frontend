@@ -11,17 +11,14 @@ import {
   Platform,
   Keyboard,
   Modal,
+  Image,
 } from 'react-native';
-import { ThemedButton } from '@/components/themed-button';
-import { ThemedText } from '@/components/themed-text';
+import { Card, Surface, Button, useTheme, Chip, Avatar, FAB } from 'react-native-paper';
 import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors, HospitalStatusColors as StatusColors } from '@/constants/hospital-theme';
-import { ModernColors, Spacing, BorderRadius, Shadows, Typography } from '@/constants/modern-theme';
-import { ModernCard } from '@/components/modern-card';
 import API from '../api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect } from 'expo-router';
-import { Plus, MapPin, Building2, Clock, X, Navigation, Bell, Menu, Calendar } from 'lucide-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Plus, MapPin, Building2, Clock, X, Navigation, Bell, Menu } from 'lucide-react-native';
 import HospitalSidebar from '@/components/HospitalSidebar';
 import { ScreenSafeArea } from '@/components/screen-safe-area';
 import * as Location from 'expo-location';
@@ -36,6 +33,7 @@ const HOSPITAL_TOKEN_KEY = 'hospitalToken';
 const HOSPITAL_INFO_KEY = 'hospitalInfo';
 
 export default function HospitalDashboard() {
+  const theme = useTheme();
   const [hospital, setHospital] = useState<any>(null);
   const [requirements, setRequirements] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -97,13 +95,6 @@ export default function HospitalDashboard() {
     };
     
     checkAuth();
-    
-    // Set up polling for live notifications (every 30 seconds)
-    const notificationInterval = setInterval(() => {
-      loadNotifications();
-    }, 30000); // Poll every 30 seconds
-    
-    return () => clearInterval(notificationInterval);
   }, []);
 
   // Reload requirements when screen comes into focus
@@ -112,6 +103,16 @@ export default function HospitalDashboard() {
       console.log('🔄 Hospital dashboard focused - reloading requirements');
       loadRequirements();
       loadNotifications();
+      
+      // Set up polling for live notifications (every 60 seconds, only when focused)
+      const notificationInterval = setInterval(() => {
+        loadNotifications();
+      }, 60000); // Poll every 60 seconds (reduced from 30)
+      
+      // Cleanup interval when screen loses focus
+      return () => {
+        clearInterval(notificationInterval);
+      };
     }, [])
   );
 
@@ -475,207 +476,263 @@ export default function HospitalDashboard() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.container}
       >
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
-        {/* Modern Header with Gradient */}
-        <LinearGradient
-          colors={ModernColors.secondary.gradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.modernHeader}
+        <ScrollView 
+          style={styles.scrollView} 
+          contentContainerStyle={styles.content}
+          removeClippedSubviews={false}
+          showsVerticalScrollIndicator={true}
         >
-          <View style={styles.headerTop}>
-            <View style={styles.headerLeft}>
-              <TouchableOpacity 
-                onPress={() => setShowSidebar(true)}
-                style={styles.menuButton}
-              >
-                <Menu size={24} color="#fff" />
-              </TouchableOpacity>
-              <View style={styles.headerTextContainer}>
-                <Text style={styles.welcomeText}>Welcome back!</Text>
-                <Text style={styles.hospitalNameText}>
-                  {hospital?.name || 'Hospital'}
-                </Text>
-              </View>
+        {/* Minimal Header */}
+        <Surface style={styles.headerSurface} elevation={0}>
+          <View style={styles.headerContent}>
+            <TouchableOpacity 
+              onPress={() => setShowSidebar(true)}
+              style={styles.menuIcon}
+            >
+              <Menu size={20} color="#2563EB" />
+            </TouchableOpacity>
+            <View style={styles.headerText}>
+              <Text style={styles.welcomeText}>Welcome back</Text>
+              <Text style={styles.hospitalName} numberOfLines={1}>
+                {hospital?.name || 'Hospital'}
+              </Text>
             </View>
-            <View style={styles.headerActions}>
-              <TouchableOpacity 
-                style={styles.notificationButton}
-                onPress={() => router.push('/hospital/notifications')}
-              >
-                <Bell size={22} color="#fff" />
-                {notificationCount > 0 && (
-                  <View style={styles.notificationBadge}>
-                    <Text style={styles.notificationBadgeText}>
-                      {notificationCount > 99 ? '99+' : notificationCount.toString()}
-                    </Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity 
+              onPress={() => router.push('/hospital/notifications')}
+              style={styles.bellIcon}
+            >
+              <Bell size={20} color="#2563EB" />
+              {notificationCount > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>
+                    {notificationCount > 99 ? '99+' : notificationCount}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
           </View>
-        </LinearGradient>
+        </Surface>
 
         {/* Statistics Cards */}
-        <View style={styles.statsContainer}>
-          <View style={[styles.statCard, { backgroundColor: PrimaryColors.main }]}>
-            <View style={styles.statIconContainer}>
-              <Building2 size={24} color="#fff" />
-            </View>
-            <View style={styles.statContent}>
-              <Text style={styles.statValue}>{requirements.length}</Text>
-              <Text style={styles.statLabel}>Active Jobs</Text>
-            </View>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: '#10B981' }]}>
-            <View style={styles.statIconContainer}>
-              <Calendar size={24} color="#fff" />
-            </View>
-            <View style={styles.statContent}>
-              <Text style={styles.statValue}>{notificationCount}</Text>
-              <Text style={styles.statLabel}>Notifications</Text>
-            </View>
-          </View>
+        <View style={styles.statsRow}>
+          <Card style={styles.statCard} mode="outlined">
+            <Card.Content style={styles.statContent}>
+              <View style={[styles.statIcon, { backgroundColor: '#EFF6FF' }]}>
+                <Building2 size={20} color="#2563EB" />
+              </View>
+              <View style={styles.statText}>
+                <Text style={styles.statValue}>{requirements.length}</Text>
+                <Text style={styles.statLabel}>Active Jobs</Text>
+              </View>
+            </Card.Content>
+          </Card>
+          <Card style={styles.statCard} mode="outlined">
+            <Card.Content style={styles.statContent}>
+              <View style={[styles.statIcon, { backgroundColor: '#ECFDF5' }]}>
+                <Bell size={20} color="#10B981" />
+              </View>
+              <View style={styles.statText}>
+                <Text style={styles.statValue}>{notificationCount}</Text>
+                <Text style={styles.statLabel}>Notifications</Text>
+              </View>
+            </Card.Content>
+          </Card>
         </View>
 
         {!showForm ? (
           <>
             {/* Quick Actions */}
-            <View style={styles.quickActionsContainer}>
-              <TouchableOpacity
-                style={[styles.quickActionButton, { backgroundColor: PrimaryColors.main }]}
+            <View style={styles.actionsRow}>
+              <Button
+                mode="contained"
                 onPress={() => setShowForm(true)}
+                style={styles.actionButton}
+                contentStyle={styles.actionButtonContent}
+                labelStyle={styles.actionButtonLabel}
+                buttonColor="#2563EB"
+                textColor="#fff"
+                icon={() => <Plus size={18} color="#fff" />}
               >
-                <View style={styles.quickActionIcon}>
-                  <Plus size={24} color="#fff" />
-                </View>
-                <View style={styles.quickActionText}>
-                  <Text style={styles.quickActionTitle}>Post Job</Text>
-                  <Text style={styles.quickActionSubtitle}>Create new requirement</Text>
-                </View>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.quickActionButton, { backgroundColor: '#8B5CF6' }]}
+                Post Job
+              </Button>
+              <Button
+                mode="outlined"
                 onPress={() => router.push('/hospital/live-tracking')}
+                style={styles.actionButton}
+                contentStyle={styles.actionButtonContent}
+                labelStyle={styles.actionButtonLabel}
+                textColor="#2563EB"
+                icon={() => <Navigation size={18} color="#2563EB" />}
               >
-                <View style={styles.quickActionIcon}>
-                  <Navigation size={24} color="#fff" />
-                </View>
-                <View style={styles.quickActionText}>
-                  <Text style={styles.quickActionTitle}>Live Tracking</Text>
-                  <Text style={styles.quickActionSubtitle}>View doctor locations</Text>
-                </View>
-              </TouchableOpacity>
+                Live Tracking
+              </Button>
             </View>
 
             {/* Requirements Section */}
-            <View style={styles.requirementsSection}>
+            <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <View style={styles.sectionHeaderLeft}>
-                  <View style={[styles.sectionIconContainer, { backgroundColor: `${PrimaryColors.main}15` }]}>
-                    <Building2 size={20} color={PrimaryColors.main} />
-                  </View>
-                  <View>
-                    <Text style={styles.sectionTitle}>Posted Requirements</Text>
-                    <Text style={styles.sectionSubtitle}>{requirements.length} active job{requirements.length !== 1 ? 's' : ''}</Text>
-                  </View>
-                </View>
+                <Text style={styles.sectionTitle}>Posted Requirements</Text>
+                <Chip style={styles.countChip} textStyle={styles.countChipText}>
+                  {requirements.length}
+                </Chip>
               </View>
 
               {requirements.length === 0 ? (
-                <View style={styles.emptyStateCard}>
-                  <Building2 size={48} color={NeutralColors.textTertiary} />
-                  <Text style={styles.emptyTitle}>No Requirements Yet</Text>
-                  <Text style={styles.emptySubtitle}>Post your first job requirement to get started</Text>
-                  <TouchableOpacity
-                    style={[styles.emptyActionButton, { backgroundColor: PrimaryColors.main }]}
-                    onPress={() => setShowForm(true)}
-                  >
-                    <Plus size={18} color="#fff" />
-                    <Text style={styles.emptyActionText}>Post First Requirement</Text>
-                  </TouchableOpacity>
-                </View>
+                <Card style={styles.emptyCard} mode="outlined">
+                  <Card.Content style={styles.emptyContent}>
+                    <Building2 size={40} color="#9CA3AF" />
+                    <Text style={styles.emptyTitle}>No Requirements Yet</Text>
+                    <Text style={styles.emptySubtitle}>Post your first job requirement to get started</Text>
+                    <Button
+                      mode="contained"
+                      onPress={() => setShowForm(true)}
+                      style={styles.emptyButton}
+                      buttonColor="#2563EB"
+                      textColor="#fff"
+                      icon={() => <Plus size={16} color="#fff" />}
+                    >
+                      Post First Requirement
+                    </Button>
+                  </Card.Content>
+                </Card>
               ) : (
                 requirements.map((req) => (
-                  <View key={req.id} style={styles.modernRequirementCard}>
-                    <View style={styles.modernCardHeader}>
-                      <View style={styles.modernCardHeaderLeft}>
-                        <View style={[styles.departmentBadge, { backgroundColor: `${PrimaryColors.main}15` }]}>
-                          <Text style={[styles.departmentText, { color: PrimaryColors.main }]}>
-                            {req.department}
+                  <Card key={req.id} style={styles.requirementCard} mode="outlined">
+                    <Card.Content>
+                      <View style={styles.cardHeader}>
+                        <Chip 
+                          style={[styles.deptChip, { backgroundColor: '#EFF6FF' }]}
+                          textStyle={{ color: '#2563EB', fontSize: 13, fontWeight: '500' }}
+                        >
+                          {req.department}
+                        </Chip>
+                        <TouchableOpacity 
+                          onPress={() => handleDelete(req.id)}
+                          style={styles.deleteIcon}
+                        >
+                          <X size={16} color="#9CA3AF" />
+                        </TouchableOpacity>
+                      </View>
+                      
+                      <View style={styles.cardMeta}>
+                        <Chip 
+                          style={styles.metaChip}
+                          textStyle={styles.metaChipText}
+                          mode="outlined"
+                        >
+                          {req.work_type.replace('-', ' ')}
+                        </Chip>
+                        <Chip 
+                          style={styles.metaChip}
+                          textStyle={styles.metaChipText}
+                          mode="outlined"
+                        >
+                          {req.required_sessions} session{req.required_sessions !== 1 ? 's' : ''}
+                        </Chip>
+                      </View>
+                      
+                      {req.description && (
+                        <Text style={styles.cardDescription} numberOfLines={2}>
+                          {req.description}
+                        </Text>
+                      )}
+                      
+                      {req.address && (
+                        <View style={styles.cardInfoRow}>
+                          <MapPin size={14} color="#6B7280" />
+                          <Text style={styles.cardInfoText} numberOfLines={1}>
+                            {req.address}
                           </Text>
                         </View>
-                        <View style={styles.cardMeta}>
-                          <Text style={styles.cardWorkType}>{req.work_type.replace('-', ' ').toUpperCase()}</Text>
-                          <Text style={styles.cardSessions}>{req.required_sessions} session{req.required_sessions !== 1 ? 's' : ''}</Text>
+                      )}
+
+                      {req.work_required_date && (
+                        <View style={styles.cardInfoRow}>
+                          <Clock size={14} color="#6B7280" />
+                          <Text style={styles.cardInfoText}>
+                            {new Date(req.work_required_date).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric'
+                            })}
+                          </Text>
                         </View>
+                      )}
+
+                      {/* Applicants Preview */}
+                      <View style={styles.applicantsRow}>
+                        {req.applications && req.applications.length > 0 ? (
+                          <>
+                            <View style={styles.avatarsContainer}>
+                              {req.applications.slice(0, 5).map((application: any, index: number) => {
+                                const doctor = application.doctor;
+                                const profilePhoto = doctor?.profile_photo_url || doctor?.profile_photo;
+                                return profilePhoto ? (
+                                  <Avatar.Image
+                                    key={`avatar-${application.id}-${index}`}
+                                    size={32}
+                                    source={{ uri: profilePhoto }}
+                                    style={[styles.avatar, { marginLeft: index > 0 ? -8 : 0 }]}
+                                  />
+                                ) : (
+                                  <Avatar.Text
+                                    key={`avatar-text-${application.id}-${index}`}
+                                    size={32}
+                                    label={doctor?.name?.charAt(0)?.toUpperCase() || '?'}
+                                    style={[styles.avatar, { marginLeft: index > 0 ? -8 : 0 }]}
+                                  />
+                                );
+                              })}
+                              {req.applications.length > 5 && (
+                                <Avatar.Text
+                                  key={`avatar-more-${req.id}`}
+                                  size={32}
+                                  label={`+${req.applications.length - 5}`}
+                                  style={[styles.avatar, { marginLeft: -8, backgroundColor: '#E5E7EB' }]}
+                                  labelStyle={{ color: '#6B7280', fontSize: 11, fontWeight: '500' }}
+                                />
+                              )}
+                            </View>
+                            <Text style={styles.applicantsCount}>
+                              {req.applications.length} {req.applications.length === 1 ? 'applicant' : 'applicants'}
+                            </Text>
+                          </>
+                        ) : (
+                          <Text style={[styles.applicantsCount, { color: '#9CA3AF' }]}>No applicants yet</Text>
+                        )}
                       </View>
-                      <TouchableOpacity 
-                        onPress={() => handleDelete(req.id)}
-                        style={styles.deleteButton}
+
+                      <Button
+                        mode="text"
+                        onPress={() => router.push({
+                          pathname: '/hospital/applications/[requirementId]',
+                          params: { requirementId: req.id.toString() }
+                        })}
+                        style={styles.viewButton}
+                        labelStyle={styles.viewButtonLabel}
+                        textColor="#2563EB"
+                        icon={() => <Text style={styles.viewButtonIcon}>→</Text>}
                       >
-                        <X size={18} color={StatusColors.error} />
-                      </TouchableOpacity>
-                    </View>
-                    
-                    {req.description && (
-                      <Text style={styles.modernCardDescription} numberOfLines={2}>
-                        {req.description}
-                      </Text>
-                    )}
-                    
-                    {req.address && (
-                      <View style={styles.modernLocationRow}>
-                        <MapPin size={14} color={NeutralColors.textTertiary} />
-                        <Text style={styles.modernLocationText} numberOfLines={1}>
-                          {req.address}
-                        </Text>
-                      </View>
-                    )}
-
-                    {req.work_required_date && (
-                      <View style={styles.modernDateRow}>
-                        <Clock size={14} color={NeutralColors.textTertiary} />
-                        <Text style={styles.modernDateText}>
-                          {new Date(req.work_required_date).toLocaleDateString('en-US', {
-                            weekday: 'short',
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric'
-                          })}
-                        </Text>
-                      </View>
-                    )}
-
-                    <TouchableOpacity
-                      style={styles.modernViewButton}
-                      onPress={() => router.push({
-                        pathname: '/hospital/applications/[requirementId]',
-                        params: { requirementId: req.id.toString() }
-                      })}
-                    >
-                      <Text style={styles.modernViewButtonText}>View Applications</Text>
-                      <Text style={styles.modernViewButtonArrow}>→</Text>
-                    </TouchableOpacity>
-                  </View>
+                        View Applications
+                      </Button>
+                    </Card.Content>
+                  </Card>
                 ))
               )}
             </View>
           </>
         ) : (
-          <View style={[styles.formCard, { backgroundColor: NeutralColors.cardBackground }]}>
-            <View style={styles.formHeader}>
-              <ThemedText style={[styles.formTitle, { color: PrimaryColors.main }]}>
-                Post Job Requirement
-              </ThemedText>
-              <TouchableOpacity onPress={() => setShowForm(false)}>
-                <X size={24} color={NeutralColors.textSecondary} />
-              </TouchableOpacity>
-            </View>
+          <Card style={styles.formCard} mode="outlined">
+            <Card.Content>
+              <View style={styles.formHeader}>
+                <Text style={styles.formTitle}>Post Job Requirement</Text>
+                <TouchableOpacity onPress={() => setShowForm(false)}>
+                  <X size={20} color="#6B7280" />
+                </TouchableOpacity>
+              </View>
 
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.label}>Department *</ThemedText>
+              <Text style={styles.label}>Department *</Text>
               <DepartmentPicker
                 value={formData.department_id}
                 onValueChange={(id) => setFormData({ ...formData, department_id: id })}
@@ -685,7 +742,7 @@ export default function HospitalDashboard() {
             </View>
 
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.label}>Work Type *</ThemedText>
+              <Text style={styles.label}>Work Type *</Text>
               <View style={styles.workTypeRow}>
                 {['full-time', 'part-time', 'locum', 'contract'].map((type) => (
                   <TouchableOpacity
@@ -696,21 +753,21 @@ export default function HospitalDashboard() {
                     ]}
                     onPress={() => setFormData({ ...formData, work_type: type })}
                   >
-                    <ThemedText
+                    <Text
                       style={[
                         styles.workTypeText,
                         formData.work_type === type && { color: '#fff' },
                       ]}
                     >
                       {type}
-                    </ThemedText>
+                    </Text>
                   </TouchableOpacity>
                 ))}
               </View>
             </View>
 
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.label}>Required Sessions *</ThemedText>
+              <Text style={styles.label}>Required Sessions *</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Number of sessions"
@@ -721,7 +778,7 @@ export default function HospitalDashboard() {
             </View>
 
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.label}>Work Required Date *</ThemedText>
+              <Text style={styles.label}>Work Required Date *</Text>
               <DatePicker
                 value={formData.work_required_date}
                 onValueChange={(date) => setFormData({ ...formData, work_required_date: date })}
@@ -732,7 +789,7 @@ export default function HospitalDashboard() {
             </View>
 
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.label}>Start Time *</ThemedText>
+              <Text style={styles.label}>Start Time *</Text>
               <TimePicker
                 value={formData.start_time}
                 onValueChange={(time) => setFormData({ ...formData, start_time: time })}
@@ -742,7 +799,7 @@ export default function HospitalDashboard() {
             </View>
 
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.label}>End Time *</ThemedText>
+              <Text style={styles.label}>End Time *</Text>
               <TimePicker
                 value={formData.end_time}
                 onValueChange={(time) => setFormData({ ...formData, end_time: time })}
@@ -752,7 +809,7 @@ export default function HospitalDashboard() {
             </View>
 
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.label}>Duration (Hours) *</ThemedText>
+              <Text style={styles.label}>Duration (Hours) *</Text>
               <TextInput
                 style={[styles.input, { backgroundColor: NeutralColors.cardBackground, opacity: 0.7 }]}
                 placeholder="Auto-calculated"
@@ -761,13 +818,13 @@ export default function HospitalDashboard() {
                 keyboardType="numeric"
                 editable={true}
               />
-              <ThemedText style={[styles.helpText, { color: NeutralColors.textSecondary }]}>
+              <Text style={[styles.helpText, { color: NeutralColors.textSecondary }]}>
                 Auto-calculated from start and end time (editable if needed)
-              </ThemedText>
+              </Text>
             </View>
 
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.label}>Description</ThemedText>
+              <Text style={styles.label}>Description</Text>
               <TextInput
                 style={[styles.input, styles.textArea]}
                 placeholder="Job description and requirements"
@@ -779,7 +836,7 @@ export default function HospitalDashboard() {
             </View>
 
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.label}>Location Name</ThemedText>
+              <Text style={styles.label}>Location Name</Text>
               <TextInput
                 style={styles.input}
                 placeholder="e.g., Main Hospital, Branch Clinic"
@@ -789,7 +846,7 @@ export default function HospitalDashboard() {
             </View>
 
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.label}>Address</ThemedText>
+              <Text style={styles.label}>Address</Text>
               <TextInput
                 style={[styles.input, styles.textArea]}
                 placeholder="Full address"
@@ -800,7 +857,7 @@ export default function HospitalDashboard() {
             </View>
 
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.label}>Location on Map *</ThemedText>
+              <Text style={styles.label}>Location on Map *</Text>
               <Text style={styles.mapHint}>
                 Tap on the map to select location or use current location button
               </Text>
@@ -823,7 +880,7 @@ export default function HospitalDashboard() {
             </View>
 
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.label}>Salary Range (Optional)</ThemedText>
+              <Text style={styles.label}>Salary Range (Optional)</Text>
               <View style={styles.salaryRow}>
                 <TextInput
                   style={[styles.input, styles.salaryInput]}
@@ -842,13 +899,18 @@ export default function HospitalDashboard() {
               </View>
             </View>
 
-            <ThemedButton
-              title="Post Requirement"
+            <Button
+              mode="contained"
               onPress={handleSubmit}
               loading={loading}
-              style={[styles.submitButton, { backgroundColor: PrimaryColors.main }]}
-            />
-          </View>
+              style={[styles.submitButton, { backgroundColor: '#2563EB' }]}
+              buttonColor="#2563EB"
+              textColor="#fff"
+            >
+              Post Requirement
+            </Button>
+            </Card.Content>
+          </Card>
         )}
       </ScrollView>
     </KeyboardAvoidingView>
@@ -860,69 +922,48 @@ export default function HospitalDashboard() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: NeutralColors.background },
+  container: { flex: 1, backgroundColor: '#F9FAFB' },
   scrollView: { flex: 1 },
-  content: { paddingBottom: 100 },
-  modernHeader: {
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
-    paddingBottom: Spacing.xl,
-    paddingHorizontal: Spacing.lg,
-    borderBottomLeftRadius: BorderRadius.xl,
-    borderBottomRightRadius: BorderRadius.xl,
+  content: { 
+    paddingBottom: 24,
   },
-  headerTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+  headerSurface: {
+    backgroundColor: '#fff',
+    paddingTop: Platform.OS === 'ios' ? 60 : 50,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
   },
-  headerLeft: {
+  headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
     gap: 12,
   },
-  menuButton: {
-    padding: 10,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: 44,
-    height: 44,
+  menuIcon: {
+    padding: 8,
+  },
+  headerText: {
+    flex: 1,
   },
   welcomeText: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontWeight: '500',
-    marginBottom: 4,
+    fontSize: 13,
+    color: '#6B7280',
+    fontWeight: '400',
+    marginBottom: 2,
   },
-  hospitalNameText: {
-    fontSize: 22,
-    color: '#fff',
-    fontWeight: '700',
+  hospitalName: {
+    fontSize: 20,
+    color: '#111827',
+    fontWeight: '600',
   },
-  headerTextContainer: {
-    flex: 1,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  notificationButton: {
+  bellIcon: {
+    padding: 8,
     position: 'relative',
-    padding: 10,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    minWidth: 44,
-    minHeight: 44,
   },
-  notificationBadge: {
+  badge: {
     position: 'absolute',
-    top: 6,
-    right: 6,
-    backgroundColor: StatusColors.error,
+    top: 4,
+    right: 4,
+    backgroundColor: '#10B981',
     borderRadius: 10,
     minWidth: 18,
     height: 18,
@@ -930,312 +971,211 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 5,
     borderWidth: 2,
-    borderColor: PrimaryColors.lighter,
+    borderColor: '#fff',
   },
-  notificationBadgeText: {
+  badgeText: {
     color: '#fff',
     fontSize: 10,
-    fontWeight: '700',
-    lineHeight: 12,
+    fontWeight: '600',
   },
-  headerTextContainer: {
-    flex: 1,
-  },
-  statsContainer: {
+  statsRow: {
     flexDirection: 'row',
     gap: 12,
     paddingHorizontal: 20,
-    marginTop: -20,
+    marginTop: 20,
     marginBottom: 24,
   },
   statCard: {
     flex: 1,
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 12,
+  },
+  statContent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 6,
+    paddingVertical: 4,
   },
-  statIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  statIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  statContent: {
+  statText: {
     flex: 1,
   },
   statValue: {
     fontSize: 24,
-    fontWeight: '700',
-    color: '#fff',
+    fontWeight: '600',
+    color: '#111827',
     marginBottom: 2,
   },
   statLabel: {
     fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontWeight: '500',
+    color: '#6B7280',
+    fontWeight: '400',
   },
-  quickActionsContainer: {
+  actionsRow: {
     flexDirection: 'row',
     gap: 12,
     paddingHorizontal: 20,
     marginBottom: 24,
   },
-  quickActionButton: {
+  actionButton: {
     flex: 1,
-    borderRadius: 16,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 6,
+    borderRadius: 10,
   },
-  quickActionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  quickActionText: {
-    flex: 1,
-  },
-  quickActionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#fff',
-    marginBottom: 2,
-  },
-  quickActionSubtitle: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontWeight: '500',
-  },
-  requirementsSection: {
-    paddingHorizontal: 20,
-  },
-  logoutButton: {
-    paddingHorizontal: 12,
+  actionButtonContent: {
     paddingVertical: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 8,
   },
-  logoutText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 13,
+  actionButtonLabel: {
+    fontSize: 14,
+    fontWeight: '500',
   },
-  addButton: {
-    borderRadius: 20,
+  section: {
+    paddingHorizontal: 20,
     marginBottom: 24,
-    shadowColor: PrimaryColors.main,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
   },
-  addButtonContent: {
+  sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 18,
-    gap: 12,
-  },
-  addButtonIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  addButtonText: { color: '#fff', fontWeight: '700', fontSize: 16 },
-  sectionHeader: {
+    justifyContent: 'space-between',
     marginBottom: 16,
   },
-  sectionHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  sectionIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: NeutralColors.textPrimary,
-    marginBottom: 2,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
   },
-  sectionSubtitle: {
-    fontSize: 13,
-    color: NeutralColors.textTertiary,
+  countChip: {
+    backgroundColor: '#EFF6FF',
+    height: 24,
+  },
+  countChipText: {
+    fontSize: 12,
     fontWeight: '500',
+    color: '#2563EB',
   },
-  emptyStateCard: {
-    backgroundColor: NeutralColors.cardBackground,
-    borderRadius: 16,
-    padding: 40,
-    alignItems: 'center',
+  emptyCard: {
+    borderRadius: 12,
     marginTop: 8,
-    borderWidth: 2,
-    borderColor: NeutralColors.border,
-    borderStyle: 'dashed',
+  },
+  emptyContent: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 20,
   },
   emptyTitle: {
     fontSize: 18,
-    fontWeight: '700',
-    color: NeutralColors.textPrimary,
+    fontWeight: '600',
+    color: '#111827',
     marginTop: 16,
-    marginBottom: 4,
+    marginBottom: 8,
   },
   emptySubtitle: {
     fontSize: 14,
-    color: NeutralColors.textTertiary,
+    color: '#6B7280',
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
+    fontWeight: '400',
+    lineHeight: 20,
   },
-  emptyActionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
+  emptyButton: {
+    borderRadius: 10,
+  },
+  requirementCard: {
     borderRadius: 12,
-  },
-  emptyActionText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  modernRequirementCard: {
-    backgroundColor: NeutralColors.cardBackground,
-    borderRadius: 16,
-    padding: 16,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: NeutralColors.border,
+    minHeight: 180,
   },
-  modernCardHeader: {
+  cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 12,
   },
-  modernCardHeaderLeft: {
-    flex: 1,
+  deptChip: {
+    height: 28,
   },
-  departmentBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-    marginBottom: 8,
-  },
-  departmentText: {
-    fontSize: 14,
-    fontWeight: '700',
+  deleteIcon: {
+    padding: 4,
   },
   cardMeta: {
     flexDirection: 'row',
-    alignItems: 'center',
     gap: 8,
+    marginBottom: 12,
+    flexWrap: 'wrap',
   },
-  cardWorkType: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: NeutralColors.textTertiary,
-    letterSpacing: 0.5,
+  metaChip: {
+    height: 26,
   },
-  cardSessions: {
-    fontSize: 11,
-    color: NeutralColors.textTertiary,
-    fontWeight: '500',
+  metaChipText: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#6B7280',
   },
-  deleteButton: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: `${StatusColors.error}15`,
-  },
-  modernCardDescription: {
+  cardDescription: {
     fontSize: 14,
-    color: NeutralColors.textSecondary,
+    color: '#374151',
     lineHeight: 20,
     marginBottom: 12,
+    fontWeight: '400',
   },
-  modernLocationRow: {
+  cardInfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     marginBottom: 8,
   },
-  modernLocationText: {
+  cardInfoText: {
     fontSize: 13,
-    color: NeutralColors.textTertiary,
+    color: '#6B7280',
     flex: 1,
+    fontWeight: '400',
   },
-  modernDateRow: {
+  applicantsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 12,
+    marginTop: 8,
     marginBottom: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    minHeight: 48,
   },
-  modernDateText: {
+  avatarsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 32,
+    width: 'auto',
+  },
+  avatar: {
+    borderWidth: 2,
+    borderColor: '#fff',
+    width: 32,
+    height: 32,
+  },
+  applicantsCount: {
     fontSize: 13,
-    color: NeutralColors.textTertiary,
+    color: '#6B7280',
+    fontWeight: '400',
+  },
+  viewButton: {
+    marginTop: 4,
+  },
+  viewButtonLabel: {
+    fontSize: 14,
     fontWeight: '500',
   },
-  modernViewButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    backgroundColor: `${PrimaryColors.main}10`,
-    borderWidth: 1,
-    borderColor: `${PrimaryColors.main}20`,
-  },
-  modernViewButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: PrimaryColors.main,
-  },
-  modernViewButtonArrow: {
-    fontSize: 18,
-    color: PrimaryColors.main,
-    fontWeight: '700',
+  viewButtonIcon: {
+    fontSize: 16,
+    color: '#2563EB',
+    marginLeft: 4,
   },
   formCard: {
-    padding: 20,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    margin: 20,
+    borderRadius: 12,
   },
   formHeader: {
     flexDirection: 'row',
@@ -1243,9 +1183,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
-  formTitle: { fontSize: 20, fontWeight: '700' },
+  formTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+  },
   inputGroup: { marginBottom: 16 },
-  label: { fontSize: 15, fontWeight: '700', marginBottom: 10, color: PrimaryColors.dark },
+  label: { fontSize: 15, fontWeight: '500', marginBottom: 10, color: '#111827' },
+  helpText: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 6,
+    fontWeight: '400',
+  },
   input: {
     borderWidth: 1.5,
     borderColor: NeutralColors.border,
@@ -1377,7 +1327,7 @@ const styles = StyleSheet.create({
       liveTrackingButton: {
         borderRadius: 20,
         marginBottom: 24,
-        shadowColor: PrimaryColors.accent,
+        shadowColor: '#2563EB',
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.3,
         shadowRadius: 12,

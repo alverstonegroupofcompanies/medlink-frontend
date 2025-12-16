@@ -18,7 +18,7 @@ import { router, useFocusEffect } from "expo-router";
 import { ModernColors, Spacing, BorderRadius, Shadows, Typography } from "@/constants/modern-theme";
 import { logoutDoctor, getDoctorInfo, isDoctorLoggedIn, getDoctorToken, saveDoctorAuth, getProfilePhotoUrl } from "@/utils/auth";
 import API from "../api";
-import { ScreenSafeArea } from "@/components/screen-safe-area";
+import { ScreenSafeArea, useSafeBottomPadding } from "@/components/screen-safe-area";
 import { ModernCard } from "@/components/modern-card";
 
 const { width } = Dimensions.get('window');
@@ -33,6 +33,7 @@ export default function DoctorHome() {
   const [activeJobsCount, setActiveJobsCount] = useState(0);
   const [completedJobsCount, setCompletedJobsCount] = useState(0);
   const [notificationCount, setNotificationCount] = useState(0);
+  const safeBottomPadding = useSafeBottomPadding();
 
   const loadDoctor = async () => {
     try {
@@ -50,7 +51,7 @@ export default function DoctorHome() {
             await saveDoctorAuth(token, response.data.doctor);
           }
           setDoctor(response.data.doctor);
-          if (response.data.doctor.average_rating) {
+          if (response.data.doctor.average_rating) {``
             setRating(response.data.doctor.average_rating);
           }
           if (response.data.doctor.completed_jobs_count !== undefined) {
@@ -209,32 +210,36 @@ export default function DoctorHome() {
       label: "Active Jobs", 
       value: activeJobsCount.toString(), 
       icon: Building2, 
-      color: ModernColors.primary.main,
-      bgColor: ModernColors.primary.light,
+      iconColor: ModernColors.primary.main,
+      iconBg: ModernColors.primary.light,
+      accentColor: ModernColors.primary.main,
       navigate: '/active-jobs'
     },
     { 
       label: "Upcoming", 
       value: upcomingApplications.length.toString(), 
       icon: Clock, 
-      color: ModernColors.secondary.main,
-      bgColor: ModernColors.secondary.light,
+      iconColor: ModernColors.secondary.main,
+      iconBg: ModernColors.secondary.light,
+      accentColor: ModernColors.secondary.main,
       navigate: '/upcoming-jobs'
     },
     { 
       label: "Rating", 
       value: rating > 0 ? rating.toFixed(1) : "0.0", 
       icon: Star, 
-      color: "#FFB800",
-      bgColor: ModernColors.warning.light,
+      iconColor: ModernColors.primary.dark,
+      iconBg: ModernColors.primary.light,
+      accentColor: ModernColors.primary.dark,
       navigate: null
     },
     { 
       label: "Completed", 
       value: completedJobsCount.toString(), 
       icon: CheckCircle, 
-      color: ModernColors.success.main,
-      bgColor: ModernColors.success.light,
+      iconColor: ModernColors.secondary.dark,
+      iconBg: ModernColors.secondary.light,
+      accentColor: ModernColors.secondary.dark,
       navigate: null
     },
   ];
@@ -247,13 +252,13 @@ export default function DoctorHome() {
   };
 
   return (
-    <ScreenSafeArea backgroundColor={ModernColors.background.secondary}>
+    <ScreenSafeArea backgroundColor={ModernColors.background.secondary} excludeBottom={true}>
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor={ModernColors.primary.main} />
         
         {/* Modern Header with Gradient */}
         <LinearGradient
-          colors={ModernColors.primary.gradient}
+          colors={ModernColors.primary.gradient as [string, string]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.headerGradient}
@@ -293,22 +298,29 @@ export default function DoctorHome() {
         </LinearGradient>
 
         <ScrollView
-          contentContainerStyle={styles.scrollContainer}
+          contentContainerStyle={[styles.scrollContainer, { paddingBottom: safeBottomPadding }]}
           showsVerticalScrollIndicator={false}
         >
-          {/* Modern Stats Grid */}
+          {/* Modern Stats Grid - 2x2 Layout */}
           <View style={styles.statsContainer}>
             {stats.map((stat, index) => {
               const IconComponent = stat.icon;
               const isClickable = stat.navigate !== null;
               
               const StatContent = (
-                <ModernCard variant="elevated" padding="md" style={styles.statCard}>
-                  <View style={[styles.statIconContainer, { backgroundColor: stat.bgColor }]}>
-                    <IconComponent size={24} color={stat.color} />
+                <ModernCard variant="elevated" padding="none" style={styles.statCard}>
+                  <View style={styles.statCardContent}>
+                    <View style={[styles.statIconContainer, { backgroundColor: stat.iconBg }]}>
+                      <IconComponent size={22} color={stat.iconColor} />
+                    </View>
+                    <View style={styles.statTextContainer}>
+                      <Text style={[styles.statValue, { color: stat.accentColor }]}>{stat.value}</Text>
+                      <Text style={styles.statLabel}>{stat.label}</Text>
+                    </View>
+                    {stat.navigate && (
+                      <View style={[styles.statAccent, { backgroundColor: stat.accentColor }]} />
+                    )}
                   </View>
-                  <Text style={styles.statValue}>{stat.value}</Text>
-                  <Text style={styles.statLabel}>{stat.label}</Text>
                 </ModernCard>
               );
 
@@ -316,15 +328,20 @@ export default function DoctorHome() {
                 return (
                   <TouchableOpacity
                     key={index}
-                    onPress={() => router.push(stat.navigate!)}
-                    activeOpacity={0.7}
+                    onPress={() => router.push(stat.navigate as any)}
+                    activeOpacity={0.8}
+                    style={styles.statCardWrapper}
                   >
                     {StatContent}
                   </TouchableOpacity>
                 );
               }
               
-              return <View key={index}>{StatContent}</View>;
+              return (
+                <View key={index} style={styles.statCardWrapper}>
+                  {StatContent}
+                </View>
+              );
             })}
           </View>
 
@@ -596,36 +613,74 @@ const styles = StyleSheet.create({
   scrollContainer: {
     padding: Spacing.lg,
     paddingTop: Spacing.lg,
-    paddingBottom: Platform.OS === 'web' ? Spacing.lg : 100,
+    // paddingBottom is now set dynamically using safeBottomPadding
   },
   statsContainer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: Spacing.md,
     marginBottom: Spacing.xl,
-    flexWrap: 'wrap',
+  },
+  statCardWrapper: {
+    width: (width - Spacing.lg * 2 - Spacing.md) / 2,
+    aspectRatio: 1,
   },
   statCard: {
     flex: 1,
-    minWidth: (width - Spacing.lg * 2 - Spacing.md * 3) / 4,
-    alignItems: 'center',
+    borderRadius: BorderRadius.lg,
+    backgroundColor: ModernColors.background.primary,
+    borderWidth: 1,
+    borderColor: ModernColors.border.light,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  statCardContent: {
+    width: '100%',
+    height: '100%',
+    paddingTop: 20,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    justifyContent: 'space-between',
+    position: 'relative',
   },
   statIconContainer: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: Spacing.sm,
+    marginBottom: 20,
+  },
+  statTextContainer: {
+    alignItems: 'flex-start',
+    justifyContent: 'flex-start',
+    width: '100%',
+    paddingTop: 4,
   },
   statValue: {
-    ...Typography.h2,
+    fontSize: 32,
+    fontWeight: '700',
+    lineHeight: 40,
+    marginBottom: 6,
+    letterSpacing: -0.5,
     color: ModernColors.text.primary,
-    marginBottom: 4,
   },
   statLabel: {
-    ...Typography.caption,
+    fontSize: 13,
+    fontWeight: '500',
+    lineHeight: 18,
     color: ModernColors.text.secondary,
-    textAlign: 'center',
+    textTransform: 'none',
+    letterSpacing: 0.2,
+  },
+  statAccent: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    borderTopLeftRadius: BorderRadius.lg,
+    borderTopRightRadius: BorderRadius.lg,
   },
   section: {
     marginBottom: Spacing.xl,

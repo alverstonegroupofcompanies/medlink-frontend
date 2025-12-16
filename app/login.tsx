@@ -123,17 +123,29 @@ export default function LoginScreen() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            <LinearGradient colors={[PrimaryColors.lighter, NeutralColors.background]} style={styles.header}>
-              <ThemedText style={styles.helloText}>Hello !</ThemedText>
-              <ThemedText style={styles.welcomeText}>Welcome to</ThemedText>
-              <ThemedText style={styles.welcomeText}>Alverstone MedLink</ThemedText>
+            <LinearGradient 
+              colors={[PrimaryColors.main, PrimaryColors.lighter, NeutralColors.background]} 
+              locations={[0, 0.5, 1]}
+              style={styles.header}
+            >
+              <View style={styles.headerContent}>
+                <ThemedText style={styles.helloText}>Hello!</ThemedText>
+                <ThemedText style={styles.welcomeText}>Welcome back to</ThemedText>
+                <ThemedText style={styles.appNameText}>Alverstone MedLink</ThemedText>
+                <ThemedText style={styles.taglineText}>Your trusted medical platform</ThemedText>
+              </View>
             </LinearGradient>
 
-          <Card style={formStyle} mode="elevated" elevation={4}>
-            <Card.Content>
-              <ThemedText variant="headlineLarge" style={styles.loginHeading}>
-                Login
-              </ThemedText>
+          <Card style={formStyle} mode="elevated" elevation={8}>
+            <Card.Content style={styles.cardContent}>
+              <View style={styles.loginHeader}>
+                <ThemedText variant="headlineLarge" style={styles.loginHeading}>
+                  Login
+                </ThemedText>
+                <ThemedText style={styles.loginSubheading}>
+                  Sign in to continue to your dashboard
+                </ThemedText>
+              </View>
 
               <View style={styles.inputGroup}>
                 <ThemedTextInput
@@ -254,59 +266,151 @@ const styles = StyleSheet.create({
   scrollContent: { flexGrow: 1, paddingBottom: 20 },
   scrollContentTablet: { paddingHorizontal: 48, paddingBottom: 32 },
   header: {
-    backgroundColor: PrimaryColors.lighter,
     borderBottomLeftRadius: 80,
     borderBottomRightRadius: 80,
-    paddingTop: Platform.OS === 'ios' ? 60 : 50,
-    paddingBottom: 60,
+    paddingTop: Platform.OS === 'ios' ? 70 : 60,
+    paddingBottom: 70,
     paddingHorizontal: 30,
+    minHeight: 240,
+    justifyContent: 'center',
+  },
+  headerContent: {
     alignItems: 'flex-start',
-    minHeight: 200,
   },
   helloText: { 
-    fontSize: 38, 
-    fontWeight: '700', 
-    color: PrimaryColors.darkText, 
-    marginBottom: 12,
-    lineHeight: 48,
+    fontSize: 42, 
+    fontWeight: '800', 
+    color: '#FFFFFF', 
+    marginBottom: 8,
+    lineHeight: 52,
     includeFontPadding: false,
+    textShadowColor: 'rgba(0, 0, 0, 0.1)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
   welcomeText: { 
-    fontSize: 16, 
-    color: NeutralColors.textSecondary, 
-    marginTop: 2,
-    lineHeight: 22,
+    fontSize: 18, 
+    color: 'rgba(255, 255, 255, 0.9)', 
+    marginTop: 4,
+    lineHeight: 24,
     includeFontPadding: false,
+    fontWeight: '500',
+  },
+  appNameText: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginTop: 6,
+    lineHeight: 32,
+    includeFontPadding: false,
+  },
+  taglineText: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginTop: 8,
+    lineHeight: 20,
+    includeFontPadding: false,
+    fontStyle: 'italic',
   },
   form: {
     marginHorizontal: 20,
-    marginTop: -40,
-    borderRadius: 25,
+    marginTop: -50,
+    borderRadius: 28,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 12,
   },
   formTablet: {
     alignSelf: 'center',
     width: '80%',
     maxWidth: 640,
-    paddingVertical: 40,
-    paddingHorizontal: 36,
+    paddingVertical: 48,
+    paddingHorizontal: 40,
   },
-  loginHeading: { fontSize: 22, fontWeight: '700', marginBottom: 20 },
-  inputGroup: { marginBottom: 16 },
-  input: { width: '100%', borderRadius: 25, paddingHorizontal: 15, height: 48 },
-  forgotPassword: { alignSelf: 'flex-end', marginTop: 8 },
-  forgotPasswordText: { fontSize: 14, fontWeight: '500', color: NeutralColors.textSecondary },
-  loginButton: { marginTop: 8, backgroundColor: PrimaryColors.main, borderRadius: 25, height: 50, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
-  socialSection: { alignItems: 'center', marginBottom: 20 },
-  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 12, width: '100%' },
-  dividerLine: { flex: 1 },
-  dividerText: { marginHorizontal: 10 },
-  socialButtons: { flexDirection: 'row', justifyContent: 'center', gap: 20 },
-  socialButton: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', backgroundColor: NeutralColors.divider },
-  socialButtonText: { fontSize: 22, fontWeight: '700', color: NeutralColors.textPrimary },
-          signupContainer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 10 },
-          signupText: { fontSize: 14, color: NeutralColors.textSecondary },
-          signupLink: { fontSize: 14, fontWeight: '600', color: PrimaryColors.main },
-          hospitalLinkContainer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 16 },
-          hospitalLinkText: { fontSize: 14, color: NeutralColors.textSecondary },
-          hospitalLink: { fontSize: 14, fontWeight: '600', color: PrimaryColors.main },
+  cardContent: {
+    paddingVertical: 8,
+  },
+  loginHeader: {
+    marginBottom: 28,
+    alignItems: 'center',
+  },
+  loginHeading: { 
+    fontSize: 28, 
+    fontWeight: '700', 
+    marginBottom: 8,
+    color: PrimaryColors.darkText,
+  },
+  loginSubheading: {
+    fontSize: 14,
+    color: NeutralColors.textSecondary,
+    textAlign: 'center',
+  },
+  inputGroup: { marginBottom: 20 },
+  input: { 
+    width: '100%', 
+    borderRadius: 16, 
+    paddingHorizontal: 18, 
+    height: 56,
+    backgroundColor: '#FAFAFA',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  forgotPassword: { alignSelf: 'flex-end', marginTop: 12, marginBottom: 4 },
+  forgotPasswordText: { 
+    fontSize: 14, 
+    fontWeight: '600', 
+    color: PrimaryColors.main,
+  },
+  loginButton: { 
+    marginTop: 12, 
+    backgroundColor: PrimaryColors.main, 
+    borderRadius: 16, 
+    height: 56, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginBottom: 24,
+    shadowColor: PrimaryColors.main,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  socialSection: { alignItems: 'center', marginBottom: 24, marginTop: 8 },
+  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 16, width: '100%' },
+  dividerLine: { flex: 1, height: 1, backgroundColor: '#E5E7EB' },
+  dividerText: { marginHorizontal: 12, fontSize: 13, color: NeutralColors.textSecondary },
+  socialButtons: { flexDirection: 'row', justifyContent: 'center', gap: 16 },
+  socialButton: { 
+    width: 52, 
+    height: 52, 
+    borderRadius: 26, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  socialButtonText: { fontSize: 20, fontWeight: '700', color: NeutralColors.textPrimary },
+  signupContainer: { 
+    flexDirection: 'row', 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginTop: 16,
+    paddingHorizontal: 20,
+  },
+  signupText: { fontSize: 15, color: NeutralColors.textSecondary },
+  signupLink: { fontSize: 15, fontWeight: '700', color: PrimaryColors.main },
+  hospitalLinkContainer: { 
+    flexDirection: 'row', 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginTop: 12,
+    marginBottom: 20,
+    paddingHorizontal: 20,
+  },
+  hospitalLinkText: { fontSize: 15, color: NeutralColors.textSecondary },
+  hospitalLink: { fontSize: 15, fontWeight: '700', color: PrimaryColors.main },
         });

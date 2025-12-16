@@ -13,6 +13,7 @@ import {
 import { router, useFocusEffect } from 'expo-router';
 import { MapPin, Clock, CheckCircle, XCircle, Building2, Navigation } from 'lucide-react-native';
 import { DoctorPrimaryColors as PrimaryColors, DoctorStatusColors as StatusColors, DoctorNeutralColors as NeutralColors } from '@/constants/doctor-theme';
+import { useSafeBottomPadding } from '@/components/screen-safe-area';
 import API from '../api';
 import * as Location from 'expo-location';
 import { BASE_BACKEND_URL } from '@/config/api';
@@ -23,6 +24,7 @@ export default function ApprovedApplicationsScreen() {
   const [applications, setApplications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [checkingIn, setCheckingIn] = useState<number | null>(null);
+  const safeBottomPadding = useSafeBottomPadding();
 
   const loadApplications = async () => {
     try {
@@ -124,6 +126,60 @@ export default function ApprovedApplicationsScreen() {
     }
   };
 
+  const handleStartTracking = async (application: any) => {
+    if (!application.job_session) {
+      Alert.alert('Error', 'Job session not found');
+      return;
+    }
+
+    if (application.job_session.tracking_started_at) {
+      router.push(`/check-in/${application.job_session.id}`);
+      return;
+    }
+
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Location permission is required to start tracking.');
+        return;
+      }
+
+      setCheckingIn(application.job_session.id);
+
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      const { latitude, longitude } = location.coords;
+
+      const response = await API.post('/doctor/start-tracking', {
+        job_session_id: application.job_session.id,
+        latitude,
+        longitude,
+      });
+
+      Alert.alert(
+        '✅ Location Tracking Started!',
+        'Your live location is now being shared with the hospital.',
+        [
+          {
+            text: 'View Tracking',
+            onPress: () => router.push(`/check-in/${application.job_session.id}`),
+          },
+          {
+            text: 'OK',
+            onPress: () => loadApplications(),
+          },
+        ]
+      );
+    } catch (error: any) {
+      console.error('Start tracking error:', error);
+      Alert.alert('Error', error.response?.data?.message || 'Failed to start location tracking');
+    } finally {
+      setCheckingIn(null);
+    }
+  };
+
 
   if (loading) {
     return (
@@ -139,7 +195,7 @@ export default function ApprovedApplicationsScreen() {
   return (
     <View style={styles.container}>
       <ScrollView
-        contentContainerStyle={styles.scrollContainer}
+        contentContainerStyle={[styles.scrollContainer, { paddingBottom: safeBottomPadding }]}
         showsVerticalScrollIndicator={false}
       >
         {applications.length === 0 ? (
@@ -156,6 +212,15 @@ export default function ApprovedApplicationsScreen() {
             const hospital = application.job_requirement?.hospital;
             const needsCheckIn = session && session.approved_at && !session.check_in_time;
             const isCheckedIn = session?.check_in_time;
+            
+            // Tracking window status
+            const trackingStatus = application.tracking_status;
+            const canStartTracking = application.can_start_tracking;
+            const timeUntilTracking = application.time_until_tracking_formatted;
+            const timeRemainingInWindow = application.time_remaining_formatted;
+            const minutesUntilCancellation = application.minutes_until_cancellation;
+            const isWithinWarningPeriod = application.is_within_warning_period;
+            const autoCancelled = application.auto_cancelled;
 
             return (
               <View key={application.id} style={styles.applicationCard}>
@@ -185,6 +250,81 @@ export default function ApprovedApplicationsScreen() {
                   </View>
                 )}
 
+                {/* Tracking Window Status */}
+                {trackingStatus && trackingStatus !== 'no_session' && (
+                  <View style={styles.trackingStatusContainer}>
+                    {trackingStatus === 'too_early' && (
+                      <View style={[styles.trackingBadge, styles.tooEarlyBadge]}>
+                        <Clock size={16} color={NeutralColors.textSecondary} />
+                        <View style={styles.trackingBadgeContent}>
+                          <Text style={[styles.trackingBadgeText, { color: NeutralColors.textSecondary }]}>
+                            Tracking starts in: {timeUntilTracking}
+                          </Text>
+                          <Text style={styles.trackingBadgeSubtext}>
+                            You can start tracking 1h before your shift
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+                    {trackingStatus === 'active' && !isWithinWarningPeriod && (
+                      <View style={[styles.trackingBadge, styles.activeBadge]}>
+                        <View style={styles.pulseDot} />
+                        <View style={styles.trackingBadgeContent}>
+                          <Text style={[styles.trackingBadgeText, { color: StatusColors.success }]}>
+                            🚨 Tracking Required Now!
+                          </Text>
+                          <Text style={styles.trackingBadgeSubtext}>
+                            {minutesUntilCancellation !== null && minutesUntilCancellation > 10 ? (
+                              `${minutesUntilCancellation} minutes until auto-cancel`
+                            ) : (
+                              `Time remaining: ${timeRemainingInWindow}`
+                            )}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+                    {trackingStatus === 'active' && isWithinWarningPeriod && (
+                      <View style={[styles.trackingBadge, styles.urgentWarningBadge]}>
+                        <View style={[styles.pulseDot, { backgroundColor: StatusColors.error }]} />
+                        <View style={styles.trackingBadgeContent}>
+                          <Text style={[styles.trackingBadgeText, { color: StatusColors.error, fontSize: 16, fontWeight: '800' }]}>
+                            ⚠️ URGENT: {minutesUntilCancellation} MIN LEFT!
+                          </Text>
+                          <Text style={[styles.trackingBadgeSubtext, { color: StatusColors.error, fontWeight: '600' }]}>
+                            Start tracking NOW or session will be cancelled!
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+                    {trackingStatus === 'started' && (
+                      <View style={[styles.trackingBadge, styles.startedBadge]}>
+                        <CheckCircle size={16} color={StatusColors.success} />
+                        <View style={styles.trackingBadgeContent}>
+                          <Text style={[styles.trackingBadgeText, { color: StatusColors.success }]}>
+                            ✓ Tracking Active
+                          </Text>
+                          <Text style={styles.trackingBadgeSubtext}>
+                            Started: {new Date(application.tracking_started_at).toLocaleTimeString()}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+                    {trackingStatus === 'expired' && (
+                      <View style={[styles.trackingBadge, styles.expiredBadge]}>
+                        <XCircle size={16} color={StatusColors.error} />
+                        <View style={styles.trackingBadgeContent}>
+                          <Text style={[styles.trackingBadgeText, { color: StatusColors.error }]}>
+                            {autoCancelled ? 'Session Auto-Cancelled' : 'Tracking Window Expired'}
+                          </Text>
+                          <Text style={styles.trackingBadgeSubtext}>
+                            {autoCancelled ? 'Tracking not started on time' : 'Contact hospital for assistance'}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                )}
+
                 {/* Check-In Status */}
                 <View style={styles.statusContainer}>
                   {isCheckedIn ? (
@@ -207,14 +347,51 @@ export default function ApprovedApplicationsScreen() {
                   ) : null}
                 </View>
 
-                {/* Check-In Button */}
-                {needsCheckIn && (
+                {/* Action Buttons */}
+                {needsCheckIn && !autoCancelled && (
                   <TouchableOpacity
-                    style={styles.checkInButton}
-                    onPress={() => router.push(`/check-in/${session.id}`)}
+                    style={[
+                      styles.checkInButton,
+                      !canStartTracking && styles.checkInButtonDisabled,
+                      trackingStatus === 'active' && !isWithinWarningPeriod && styles.urgentButton,
+                      isWithinWarningPeriod && styles.criticalUrgentButton,
+                    ]}
+                    onPress={() => handleStartTracking(application)}
+                    disabled={!canStartTracking}
                   >
-                    <Navigation size={20} color="#fff" />
-                    <Text style={styles.checkInButtonText}>View Details & Check In</Text>
+                    {trackingStatus === 'too_early' ? (
+                      <>
+                        <Clock size={20} color="#fff" />
+                        <Text style={styles.checkInButtonText}>Too Early - Wait {timeUntilTracking}</Text>
+                      </>
+                    ) : isWithinWarningPeriod ? (
+                      <>
+                        <Navigation size={20} color="#fff" />
+                        <Text style={[styles.checkInButtonText, { fontSize: 18, fontWeight: '900' }]}>
+                          ⚠️ START NOW - {minutesUntilCancellation} MIN!
+                        </Text>
+                      </>
+                    ) : trackingStatus === 'active' ? (
+                      <>
+                        <Navigation size={20} color="#fff" />
+                        <Text style={styles.checkInButtonText}>Start Tracking Now!</Text>
+                      </>
+                    ) : trackingStatus === 'started' ? (
+                      <>
+                        <Navigation size={20} color="#fff" />
+                        <Text style={styles.checkInButtonText}>View Live Tracking</Text>
+                      </>
+                    ) : trackingStatus === 'expired' ? (
+                      <>
+                        <XCircle size={20} color="#fff" />
+                        <Text style={styles.checkInButtonText}>Window Expired</Text>
+                      </>
+                    ) : (
+                      <>
+                        <Navigation size={20} color="#fff" />
+                        <Text style={styles.checkInButtonText}>View Details & Check In</Text>
+                      </>
+                    )}
                   </TouchableOpacity>
                 )}
 
@@ -244,7 +421,7 @@ const styles = StyleSheet.create({
   },
   scrollContainer: {
     padding: 16,
-    paddingBottom: 100,
+    // paddingBottom is now set dynamically using safeBottomPadding
   },
   loadingContainer: {
     flex: 1,
@@ -412,6 +589,65 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '700',
+  },
+  // New tracking status styles
+  trackingStatusContainer: {
+    marginBottom: 12,
+  },
+  trackingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    gap: 10,
+  },
+  trackingBadgeContent: {
+    flex: 1,
+  },
+  trackingBadgeText: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  trackingBadgeSubtext: {
+    fontSize: 12,
+    color: NeutralColors.textSecondary,
+  },
+  tooEarlyBadge: {
+    backgroundColor: NeutralColors.background,
+    borderWidth: 1,
+    borderColor: NeutralColors.divider,
+  },
+  activeBadge: {
+    backgroundColor: StatusColors.success + '15',
+    borderWidth: 2,
+    borderColor: StatusColors.success,
+  },
+  startedBadge: {
+    backgroundColor: StatusColors.success + '15',
+  },
+  expiredBadge: {
+    backgroundColor: StatusColors.error + '15',
+  },
+  pulseDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: StatusColors.success,
+    // Note: Animation would need to be added with Animated API
+  },
+  urgentWarningBadge: {
+    backgroundColor: StatusColors.error + '15',
+    borderWidth: 3,
+    borderColor: StatusColors.error,
+  },
+  urgentButton: {
+    backgroundColor: StatusColors.success,
+    shadowColor: StatusColors.success,
+  },
+  criticalUrgentButton: {
+    backgroundColor: StatusColors.error,
+    shadowColor: StatusColors.error,
   },
 });
 

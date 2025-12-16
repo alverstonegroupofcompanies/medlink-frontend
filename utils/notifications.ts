@@ -4,14 +4,42 @@
  */
 
 // Conditional import for expo-notifications to prevent build errors
+// Note: SDK 53+ removed Android push notifications from Expo Go
+// This is expected and the app will work with in-app notifications
 let Notifications: any = null;
 let Device: any = null;
 let Constants: any = null;
 
 try {
+  // Suppress SDK 53+ Android push notification warnings
+  const originalWarn = console.warn;
+  const originalError = console.error;
+
+  console.warn = (...args: any[]) => {
+    const message = args[0]?.toString() || '';
+    if (message.includes('expo-notifications') && message.includes('SDK 53')) {
+      // Suppress the SDK 53 Android push notification warning
+      return;
+    }
+    originalWarn.apply(console, args);
+  };
+
+  console.error = (...args: any[]) => {
+    const message = args[0]?.toString() || '';
+    if (message.includes('expo-notifications') && message.includes('SDK 53')) {
+      // Suppress the SDK 53 Android push notification error
+      return;
+    }
+    originalError.apply(console, args);
+  };
+
   Notifications = require('expo-notifications');
   Device = require('expo-device');
   Constants = require('expo-constants');
+
+  // Restore original console methods
+  console.warn = originalWarn;
+  console.error = originalError;
 } catch (error) {
   console.warn('⚠️ expo-notifications or expo-device not available:', error);
 }
@@ -103,11 +131,11 @@ export async function registerForPushNotifications(userType: 'doctor' | 'hospita
 
     // Get push token from Expo
     let token: string | null = null;
-    
+
     try {
       // Try to get project ID from multiple sources
       let projectId: string | undefined = undefined;
-      
+
       // Try from environment variable
       if (process.env.EXPO_PUBLIC_EAS_PROJECT_ID) {
         projectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
@@ -121,7 +149,7 @@ export async function registerForPushNotifications(userType: 'doctor' | 'hospita
         // For standalone builds, try to get from manifest
         projectId = Constants.manifest?.extra?.eas?.projectId;
       }
-      
+
       // For Android, we can try without projectId first
       if (Platform.OS === 'android' && !projectId) {
         try {
@@ -133,7 +161,7 @@ export async function registerForPushNotifications(userType: 'doctor' | 'hospita
           // Continue to try with projectId if available
         }
       }
-      
+
       // If we still don't have a token, try with projectId if available
       if (!token) {
         if (projectId) {
@@ -155,7 +183,7 @@ export async function registerForPushNotifications(userType: 'doctor' | 'hospita
           }
         }
       }
-      
+
       if (!token) {
         console.warn('⚠️ Failed to get push notification token');
         return null;
@@ -187,7 +215,7 @@ export async function registerForPushNotifications(userType: 'doctor' | 'hospita
     return token;
   } catch (error: any) {
     console.error('❌ Error registering for push notifications:', error);
-    
+
     // Don't break the app - just log the error
     if (error.message?.includes('projectId') || error.message?.includes('project')) {
       console.warn('⚠️ Push notifications require EAS Project ID setup.');
@@ -197,7 +225,7 @@ export async function registerForPushNotifications(userType: 'doctor' | 'hospita
       console.warn('⚠️ Push notification registration failed. App continues normally.');
       console.warn('⚠️ Notifications will still work in-app through the notification screen.');
     }
-    
+
     return null;
   }
 }
@@ -208,7 +236,7 @@ export async function registerForPushNotifications(userType: 'doctor' | 'hospita
 async function sendTokenToBackend(token: string, userType: 'doctor' | 'hospital' = 'doctor'): Promise<void> {
   try {
     let authToken: string | null = null;
-    
+
     if (userType === 'doctor') {
       authToken = await getDoctorToken();
     } else {
@@ -216,22 +244,22 @@ async function sendTokenToBackend(token: string, userType: 'doctor' | 'hospital'
       const AsyncStorage = require('@react-native-async-storage/async-storage').default;
       authToken = await AsyncStorage.getItem('hospitalToken');
     }
-    
+
     if (!authToken) {
       console.warn(`⚠️ No ${userType} token found, skipping push token registration`);
       return;
     }
 
-    const endpoint = userType === 'doctor' 
+    const endpoint = userType === 'doctor'
       ? '/doctor/register-push-token'
       : '/hospital/register-push-token';
-    
+
     try {
       await API.post(endpoint, {
         push_token: token,
         device_type: Platform.OS,
       });
-      
+
       console.log(`✅ Push token registered with backend for ${userType}`);
     } catch (apiError: any) {
       // Handle 404/401 errors gracefully (backend endpoints might not exist yet)
@@ -285,17 +313,17 @@ export function handleNotificationNavigation(data: any) {
             // Navigate to notifications screen or home
             router.push('/(tabs)');
             break;
-          
+
           case 'application_rejected':
             // Navigate to notifications screen
             router.push('/notifications');
             break;
-          
+
           case 'new_job_posting':
             // Navigate to home to see new openings
             router.push('/(tabs)');
             break;
-          
+
           default:
             // Default: go to notifications screen
             router.push('/notifications');
@@ -315,7 +343,7 @@ export function handleNotificationNavigation(data: any) {
               router.push('/hospital/dashboard');
             }
             break;
-          
+
           default:
             // Default: go to notifications screen
             router.push('/hospital/notifications');
@@ -346,7 +374,7 @@ export function setupNotificationListeners() {
     const responseSubscription = Notifications.addNotificationResponseReceivedListener((response: any) => {
       console.log('👆 Notification tapped:', response);
       const data = response.notification.request.content.data;
-      
+
       // Handle navigation based on notification data
       handleNotificationNavigation(data);
     });
@@ -386,7 +414,7 @@ async function hasNotificationBeenShown(notificationId: number): Promise<boolean
     if (!shownSetJson) {
       return false;
     }
-    
+
     const shownSet: Set<number> = new Set(JSON.parse(shownSetJson));
     return shownSet.has(notificationId);
   } catch (error) {
@@ -402,9 +430,9 @@ async function markNotificationAsShown(notificationId: number): Promise<void> {
   try {
     const shownSetJson = await AsyncStorage.getItem(SHOWN_NOTIFICATIONS_SET_KEY);
     const shownSet: Set<number> = shownSetJson ? new Set(JSON.parse(shownSetJson)) : new Set();
-    
+
     shownSet.add(notificationId);
-    
+
     // Keep only last 50 notification IDs to prevent storage bloat
     if (shownSet.size > 50) {
       const idsArray = Array.from(shownSet);
@@ -412,7 +440,7 @@ async function markNotificationAsShown(notificationId: number): Promise<void> {
       shownSet.clear();
       recentIds.forEach(id => shownSet.add(id));
     }
-    
+
     await AsyncStorage.setItem(SHOWN_NOTIFICATIONS_SET_KEY, JSON.stringify(Array.from(shownSet)));
     await AsyncStorage.setItem(LAST_SHOWN_NOTIFICATION_KEY, notificationId.toString());
   } catch (error) {
@@ -467,12 +495,12 @@ export async function scheduleLocalNotification(
       },
       trigger: null, // Show immediately
     });
-    
+
     // Mark as shown if notificationId provided
     if (notificationId) {
       await markNotificationAsShown(notificationId);
     }
-    
+
     console.log('✅ Local notification scheduled:', title);
     return true;
   } catch (error) {

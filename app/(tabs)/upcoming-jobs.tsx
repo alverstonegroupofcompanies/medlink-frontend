@@ -20,6 +20,7 @@ import {
   CheckCircle
 } from 'lucide-react-native';
 import { DoctorPrimaryColors as PrimaryColors, DoctorStatusColors as StatusColors, DoctorNeutralColors as NeutralColors } from '@/constants/doctor-theme';
+import { useSafeBottomPadding } from '@/components/screen-safe-area';
 import API from '../api';
 
 const { width } = Dimensions.get('window');
@@ -27,6 +28,7 @@ const { width } = Dimensions.get('window');
 export default function UpcomingJobsScreen() {
   const [applications, setApplications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const safeBottomPadding = useSafeBottomPadding();
 
   useEffect(() => {
     loadUpcomingJobs();
@@ -147,7 +149,7 @@ export default function UpcomingJobsScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scrollContainer}
+        contentContainerStyle={[styles.scrollContainer, { paddingBottom: safeBottomPadding }]}
         showsVerticalScrollIndicator={false}
       >
         {applications.length === 0 ? (
@@ -302,7 +304,7 @@ const styles = StyleSheet.create({
   },
   scrollContainer: {
     padding: 20,
-    paddingBottom: 100,
+    // paddingBottom is now set dynamically using safeBottomPadding
   },
   emptyContainer: {
     flex: 1,
