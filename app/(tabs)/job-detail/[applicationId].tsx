@@ -29,6 +29,7 @@ import {
 import { DoctorPrimaryColors as PrimaryColors, DoctorStatusColors as StatusColors, DoctorNeutralColors as NeutralColors } from '@/constants/doctor-theme';
 import API from '../../api';
 import * as Location from 'expo-location';
+import { formatISTDateTime } from '@/utils/timezone';
 
 // Import MapView - Metro will automatically resolve .web or .native based on platform
 import { MapViewComponent } from '@/components/MapView';
@@ -556,7 +557,7 @@ export default function JobDetailScreen() {
               <View style={styles.statusInfo}>
                 <Text style={styles.statusTitle}>Checked In</Text>
                 <Text style={styles.statusSubtitle}>
-                  {new Date(session.check_in_time).toLocaleString()}
+                  {formatISTDateTime(session.check_in_time)}
                 </Text>
                 {session.check_in_verified ? (
                   <Text style={styles.verifiedText}>✓ Location verified</Text>

@@ -127,7 +127,7 @@ export default function HospitalSessionsScreen() {
 
   if (loading) {
     return (
-      <ScreenSafeArea backgroundColor={NeutralColors.background}>
+      <ScreenSafeArea backgroundColor={PrimaryColors.dark}>
       <View style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={PrimaryColors.main} />

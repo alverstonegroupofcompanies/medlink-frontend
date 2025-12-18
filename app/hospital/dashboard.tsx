@@ -25,6 +25,7 @@ import * as Location from 'expo-location';
 import { DepartmentPicker } from '@/components/department-picker';
 import { DatePicker } from '@/components/date-picker';
 import { TimePicker } from '@/components/time-picker';
+import { formatISTDateTime, formatISTDateOnly } from '@/utils/timezone';
 
 // Import MapView - Metro will automatically resolve .web or .native based on platform
 import { LocationPickerMap } from '@/components/LocationPickerMap';
@@ -456,7 +457,7 @@ export default function HospitalDashboard() {
   };
 
   return (
-    <ScreenSafeArea backgroundColor={NeutralColors.background}>
+    <ScreenSafeArea backgroundColor={PrimaryColors.dark}>
       {/* Custom Logout Confirmation Modal - appears on top of everything */}
       <Modal
         visible={showLogoutModal}
@@ -665,15 +666,21 @@ export default function HospitalDashboard() {
                         </View>
                       )}
 
+                      {req.created_at && (
+                        <View style={styles.cardInfoRow}>
+                          <Clock size={14} color="#6B7280" />
+                          <Text style={styles.cardInfoText}>
+                            Posted: {formatISTDateTime(req.created_at)}
+                          </Text>
+                        </View>
+                      )}
+
                       {req.work_required_date && (
                         <View style={styles.cardInfoRow}>
                           <Clock size={14} color="#6B7280" />
                           <Text style={styles.cardInfoText}>
-                            {new Date(req.work_required_date).toLocaleDateString('en-US', {
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric'
-                            })}
+                            Work Date: {formatISTDateOnly(req.work_required_date)}
+                            {req.start_time && ` at ${req.start_time}`}
                           </Text>
                         </View>
                       )}

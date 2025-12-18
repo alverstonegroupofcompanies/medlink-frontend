@@ -23,6 +23,7 @@ import {
 } from 'lucide-react-native';
 import { DoctorPrimaryColors as PrimaryColors, DoctorNeutralColors as NeutralColors, DoctorStatusColors as StatusColors } from '@/constants/doctor-theme';
 import API from '@/app/api';
+import { formatISTDateTime } from '@/utils/timezone';
 
 export default function JobSessionScreen() {
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
@@ -268,7 +269,7 @@ export default function JobSessionScreen() {
             <View style={styles.infoRow}>
               <Clock size={16} color={NeutralColors.textSecondary} />
               <Text style={styles.infoText}>
-                Checked in: {new Date(session.check_in_time).toLocaleString()}
+                Checked in: {formatISTDateTime(session.check_in_time)}
               </Text>
             </View>
           )}
@@ -276,7 +277,7 @@ export default function JobSessionScreen() {
             <View style={styles.infoRow}>
               <CheckCircle size={16} color={StatusColors.success} />
               <Text style={styles.infoText}>
-                Completed: {new Date(session.end_time).toLocaleString()}
+                Completed: {formatISTDateTime(session.end_time)}
               </Text>
             </View>
           )}

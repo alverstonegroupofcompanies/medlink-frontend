@@ -12,7 +12,7 @@ import {
   Dimensions,
   Platform,
 } from "react-native";
-import { Star, Bell, MapPin, Clock, TrendingUp, Award, Building2, CheckCircle, ArrowRight } from "lucide-react-native";
+import { Star, Bell, MapPin, Clock, TrendingUp, Award, Building2, CheckCircle, ArrowRight, Calendar, AlertCircle, Phone, Navigation } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
 import { ModernColors, Spacing, BorderRadius, Shadows, Typography } from "@/constants/modern-theme";
@@ -30,6 +30,10 @@ export default function DoctorHome() {
   const [loadingRequirements, setLoadingRequirements] = useState(false);
   const [myApplications, setMyApplications] = useState<any[]>([]);
   const [loadingApplications, setLoadingApplications] = useState(false);
+  const [jobSessions, setJobSessions] = useState<any[]>([]);
+  const [loadingSessions, setLoadingSessions] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [weekDates, setWeekDates] = useState<Date[]>([]);
   const [activeJobsCount, setActiveJobsCount] = useState(0);
   const [completedJobsCount, setCompletedJobsCount] = useState(0);
   const [notificationCount, setNotificationCount] = useState(0);
@@ -124,6 +128,34 @@ export default function DoctorHome() {
     }
   };
 
+  const loadJobSessions = async () => {
+    setLoadingSessions(true);
+    try {
+      const response = await API.get('/doctor/sessions');
+      setJobSessions(response.data.sessions || []);
+    } catch (error) {
+      console.error("Error loading job sessions:", error);
+      setJobSessions([]);
+    } finally {
+      setLoadingSessions(false);
+    }
+  };
+
+  const generateWeekDates = () => {
+    const today = new Date();
+    const currentDay = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - (currentDay === 0 ? 6 : currentDay - 1));
+    
+    const week: Date[] = [];
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(monday);
+      date.setDate(monday.getDate() + i);
+      week.push(date);
+    }
+    setWeekDates(week);
+  };
+
   const handleApply = async (requirementId: number) => {
     try {
       await API.post('/doctor/apply', {
@@ -143,6 +175,8 @@ export default function DoctorHome() {
     loadJobRequirements();
     loadMyApplications();
     loadNotifications();
+    loadJobSessions();
+    generateWeekDates();
     
     const notificationInterval = setInterval(() => {
       loadNotifications();
@@ -154,6 +188,7 @@ export default function DoctorHome() {
         loadJobRequirements();
         loadMyApplications();
         loadNotifications();
+        loadJobSessions();
       }
     });
     return () => {
@@ -168,6 +203,7 @@ export default function DoctorHome() {
       loadJobRequirements();
       loadMyApplications();
       loadNotifications();
+      loadJobSessions();
     }, [])
   );
 
@@ -205,15 +241,77 @@ export default function DoctorHome() {
     return taskDate >= today;
   });
 
+  // Calculate session metrics
+  const activeSessions = jobSessions.filter((session: any) => session.status === 'in_progress');
+  const todaySessions = jobSessions.filter((session: any) => {
+    if (!session.session_date) return false;
+    const sessionDate = new Date(session.session_date);
+    const today = new Date();
+    sessionDate.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
+    return sessionDate.getTime() === today.getTime();
+  });
+
+  // Calculate issues: late check-ins, missing check-outs, etc.
+  const issuesCount = jobSessions.filter((session: any) => {
+    const now = new Date();
+    const sessionDate = session.session_date ? new Date(session.session_date) : null;
+    
+    // Late check-in: session date/time passed but no check_in_time
+    if (sessionDate && sessionDate < now && !session.check_in_time && session.status === 'scheduled') {
+      return true;
+    }
+    
+    // Missing check-out: status is in_progress for more than expected duration
+    if (session.status === 'in_progress' && session.check_in_time) {
+      const checkInTime = new Date(session.check_in_time);
+      const hoursSinceCheckIn = (now.getTime() - checkInTime.getTime()) / (1000 * 60 * 60);
+      if (hoursSinceCheckIn > 12) return true; // Arbitrary threshold
+    }
+    
+    return false;
+  }).length;
+
+  // Attention needed sessions
+  const attentionNeeded = jobSessions.filter((session: any) => {
+    const now = new Date();
+    const sessionDate = session.session_date ? new Date(session.session_date) : null;
+    
+    if (!sessionDate) return false;
+    
+    // Late check-in
+    if (sessionDate < now && !session.check_in_time && session.status === 'scheduled') {
+      return true;
+    }
+    
+    // Upcoming session within 1 hour
+    const hoursDiff = (sessionDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+    if (hoursDiff > 0 && hoursDiff < 1 && !session.check_in_time) {
+      return true;
+    }
+    
+    return false;
+  });
+
   const stats = [
     { 
-      label: "Active Jobs", 
-      value: activeJobsCount.toString(), 
+      label: "Total Shifts", 
+      value: jobSessions.length.toString(), 
       icon: Building2, 
       iconColor: ModernColors.primary.main,
       iconBg: ModernColors.primary.light,
       accentColor: ModernColors.primary.main,
-      navigate: '/active-jobs'
+      navigate: null
+    },
+    { 
+      label: "Active Now", 
+      value: activeSessions.length.toString(), 
+      icon: TrendingUp, 
+      iconColor: ModernColors.success.main,
+      iconBg: ModernColors.success.light,
+      accentColor: ModernColors.success.main,
+      navigate: '/active-jobs',
+      pulse: activeSessions.length > 0
     },
     { 
       label: "Upcoming", 
@@ -225,21 +323,12 @@ export default function DoctorHome() {
       navigate: '/upcoming-jobs'
     },
     { 
-      label: "Rating", 
-      value: rating > 0 ? rating.toFixed(1) : "0.0", 
-      icon: Star, 
-      iconColor: ModernColors.primary.dark,
-      iconBg: ModernColors.primary.light,
-      accentColor: ModernColors.primary.dark,
-      navigate: null
-    },
-    { 
-      label: "Completed", 
-      value: completedJobsCount.toString(), 
-      icon: CheckCircle, 
-      iconColor: ModernColors.secondary.dark,
-      iconBg: ModernColors.secondary.light,
-      accentColor: ModernColors.secondary.dark,
+      label: "Issues", 
+      value: issuesCount.toString(), 
+      icon: AlertCircle, 
+      iconColor: ModernColors.error.main,
+      iconBg: ModernColors.error.light,
+      accentColor: ModernColors.error.main,
       navigate: null
     },
   ];
@@ -301,6 +390,61 @@ export default function DoctorHome() {
           contentContainerStyle={[styles.scrollContainer, { paddingBottom: safeBottomPadding }]}
           showsVerticalScrollIndicator={false}
         >
+          {/* Calendar Week View */}
+          <View style={styles.calendarSection}>
+            <View style={styles.calendarHeader}>
+              <Calendar size={20} color={ModernColors.text.primary} />
+              <Text style={styles.calendarTitle}>Shift Schedule</Text>
+            </View>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.weekDaysContainer}
+            >
+              {weekDates.map((date, index) => {
+                const isToday = new Date().toDateString() === date.toDateString();
+                const isSelected = selectedDate.toDateString() === date.toDateString();
+                const dayName = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][index];
+                const dayNumber = date.getDate();
+                
+                // Check if this date has sessions
+                const hasSession = jobSessions.some((session: any) => {
+                  if (!session.session_date) return false;
+                  const sessionDate = new Date(session.session_date);
+                  return sessionDate.toDateString() === date.toDateString();
+                });
+                
+                return (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      styles.dayCard,
+                      isToday && styles.dayCardToday,
+                      isSelected && styles.dayCardSelected
+                    ]}
+                    onPress={() => setSelectedDate(date)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[
+                      styles.dayName,
+                      (isToday || isSelected) && styles.dayNameActive
+                    ]}>{dayName}</Text>
+                    <Text style={[
+                      styles.dayNumber,
+                      (isToday || isSelected) && styles.dayNumberActive
+                    ]}>{dayNumber}</Text>
+                    {hasSession && (
+                      <View style={[
+                        styles.sessionIndicator,
+                        isToday && styles.sessionIndicatorToday
+                      ]} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+
           {/* Modern Stats Grid - 2x2 Layout */}
           <View style={styles.statsContainer}>
             {stats.map((stat, index) => {
@@ -345,7 +489,76 @@ export default function DoctorHome() {
             })}
           </View>
 
-          {/* New Openings Section */}
+          {/* Attention Needed Section */}
+          {attentionNeeded.length > 0 && (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionTitleContainer}>
+                  <AlertCircle size={20} color={ModernColors.error.main} />
+                  <Text style={[styles.sectionTitle, { color: ModernColors.error.main }]}>Attention Needed</Text>
+                </View>
+              </View>
+              
+              <View style={styles.attentionContainer}>
+                {attentionNeeded.map((session: any) => {
+                  const sessionDate = session.session_date ? new Date(session.session_date) : null;
+                  const now = new Date();
+                  const isLate = sessionDate && sessionDate < now && !session.check_in_time;
+                  
+                  return (
+                    <ModernCard key={session.id} variant="elevated" padding="md" style={styles.attentionCard}>
+                      <View style={styles.attentionHeader}>
+                        <View style={styles.attentionInfo}>
+                          <View style={styles.attentionTitleRow}>
+                            <Text style={styles.attentionHospital} numberOfLines={1}>
+                              {session.jobRequirement?.hospital?.name || 'Hospital'}
+                            </Text>
+                            {isLate && (
+                              <View style={styles.lateBadge}>
+                                <Text style={styles.lateBadgeText}>LATE ({Math.floor((now.getTime() - sessionDate.getTime()) / (1000 * 60))}m)</Text>
+                              </View>
+                            )}
+                          </View>
+                          <Text style={styles.attentionDepartment} numberOfLines={1}>
+                            {session.jobRequirement?.department || 'Department'}
+                          </Text>
+                          {sessionDate && (
+                            <View style={styles.attentionTimeContainer}>
+                              <Clock size={14} color={ModernColors.text.secondary} />
+                              <Text style={styles.attentionTime}>
+                                {sessionDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                      <View style={styles.attentionActions}>
+                        <TouchableOpacity
+                          style={styles.attentionCallButton}
+                          onPress={() => {
+                            // TODO: Implement call functionality
+                            Alert.alert('Call', `Calling ${session.jobRequirement?.hospital?.name}`);
+                          }}
+                        >
+                          <Phone size={16} color={ModernColors.primary.main} />
+                          <Text style={styles.attentionCallText}>Call</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.attentionViewButton}
+                          onPress={() => router.push(`/job-session/${session.id}`)}
+                        >
+                          <Text style={styles.attentionViewText}>View Details</Text>
+                          <ArrowRight size={16} color="#fff" />
+                        </TouchableOpacity>
+                      </View>
+                    </ModernCard>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
+          {/* New Opportunities Section */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <View style={styles.sectionTitleContainer}>
@@ -845,5 +1058,157 @@ const styles = StyleSheet.create({
   taskButtonText: {
     ...Typography.captionBold,
     color: ModernColors.primary.main,
+  },
+  // Calendar Section Styles
+  calendarSection: {
+    marginBottom: Spacing.xl,
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  calendarTitle: {
+    ...Typography.h3,
+    color: ModernColors.text.primary,
+  },
+  weekDaysContainer: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    paddingHorizontal: 2,
+  },
+  dayCard: {
+    width: 72,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.xs,
+    borderRadius: BorderRadius.md,
+    backgroundColor: ModernColors.background.primary,
+    borderWidth: 1,
+    borderColor: ModernColors.border.light,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dayCardToday: {
+    borderColor: ModernColors.primary.main,
+    borderWidth: 2,
+  },
+  dayCardSelected: {
+    backgroundColor: ModernColors.primary.main,
+    borderColor: ModernColors.primary.main,
+  },
+  dayName: {
+    ...Typography.caption,
+    color: ModernColors.text.secondary,
+    marginBottom: 4,
+    fontSize: 12,
+  },
+  dayNameActive: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  dayNumber: {
+    ...Typography.h3,
+    color: ModernColors.text.primary,
+  },
+  dayNumberActive: {
+    color: '#fff',
+  },
+  sessionIndicator: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: ModernColors.primary.main,
+    marginTop: 4,
+  },
+  sessionIndicatorToday: {
+    backgroundColor: '#fff',
+  },
+  // Attention Needed Section Styles
+  attentionContainer: {
+    gap: Spacing.md,
+  },
+  attentionCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: ModernColors.error.main,
+  },
+  attentionHeader: {
+    marginBottom: Spacing.sm,
+  },
+  attentionInfo: {
+    flex: 1,
+  },
+  attentionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  attentionHospital: {
+    ...Typography.bodyBold,
+    color: ModernColors.text.primary,
+    flex: 1,
+    marginRight: Spacing.sm,
+  },
+  lateBadge: {
+    backgroundColor: ModernColors.error.main,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.sm,
+  },
+  lateBadgeText: {
+    ...Typography.caption,
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  attentionDepartment: {
+    ...Typography.caption,
+    color: ModernColors.text.secondary,
+    marginBottom: 6,
+  },
+  attentionTimeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  attentionTime: {
+    ...Typography.caption,
+    color: ModernColors.text.secondary,
+  },
+  attentionActions: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginTop: Spacing.sm,
+  },
+  attentionCallButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: ModernColors.primary.main,
+    backgroundColor: ModernColors.background.primary,
+  },
+  attentionCallText: {
+    ...Typography.captionBold,
+    color: ModernColors.primary.main,
+  },
+  attentionViewButton: {
+    flex: 1.5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    backgroundColor: ModernColors.primary.main,
+  },
+  attentionViewText: {
+    ...Typography.captionBold,
+    color: '#fff',
   },
 });

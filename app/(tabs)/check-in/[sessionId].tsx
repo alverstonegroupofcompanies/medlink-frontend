@@ -20,6 +20,7 @@ import * as Location from 'expo-location';
 // Import MapView - Metro will automatically resolve .web or .native based on platform
 import { MapViewComponent } from '@/components/MapView';
 import { BASE_BACKEND_URL } from '@/config/api';
+import { formatISTDateTime } from '@/utils/timezone';
 
 const { width, height } = Dimensions.get('window');
 
@@ -423,7 +424,7 @@ export default function CheckInDetailScreen() {
               
               Alert.alert(
                 'Work Completed! ✓',
-                `Your work session has been completed.\n\nCheckout time: ${new Date().toLocaleString()}\nTotal duration: ${formatTime(finalDuration)}`,
+                `Your work session has been completed.\n\nCheckout time: ${formatISTDateTime(new Date())}\nTotal duration: ${formatTime(finalDuration)}`,
                 [
                   {
                     text: 'OK',
@@ -569,7 +570,7 @@ export default function CheckInDetailScreen() {
               <View style={styles.statusInfo}>
                 <Text style={styles.statusTitle}>Checked In</Text>
                 <Text style={styles.statusTime}>
-                  {new Date(session.check_in_time).toLocaleString()}
+                  {formatISTDateTime(session.check_in_time)}
                 </Text>
                 {session.check_in_verified ? (
                   <Text style={styles.verifiedText}>✓ Location verified</Text>
@@ -649,7 +650,7 @@ export default function CheckInDetailScreen() {
             <View style={styles.checkoutInfo}>
               <Text style={styles.checkoutLabel}>Checkout Time:</Text>
               <Text style={styles.checkoutTime}>
-                {new Date(session.end_time).toLocaleString()}
+                {formatISTDateTime(session.end_time)}
               </Text>
               <Text style={styles.checkoutDuration}>
                 Duration: {formatTime(timeElapsed)}

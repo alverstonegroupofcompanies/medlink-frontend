@@ -24,6 +24,7 @@ import {
 import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors, HospitalStatusColors as StatusColors } from '@/constants/hospital-theme';
 import API from '../../api';
 import { ScreenSafeArea } from '@/components/screen-safe-area';
+import { formatISTDateTime, formatISTDateWithWeekday } from '@/utils/timezone';
 
 export default function HospitalJobSessionScreen() {
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
@@ -97,7 +98,7 @@ export default function HospitalJobSessionScreen() {
 
   if (loading) {
     return (
-      <ScreenSafeArea backgroundColor={NeutralColors.background}>
+      <ScreenSafeArea backgroundColor={PrimaryColors.dark}>
       <View style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={PrimaryColors.main} />
@@ -110,7 +111,7 @@ export default function HospitalJobSessionScreen() {
 
   if (!session) {
     return (
-      <ScreenSafeArea backgroundColor={NeutralColors.background}>
+      <ScreenSafeArea backgroundColor={PrimaryColors.dark}>
       <View style={styles.container}>
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>Session not found</Text>
@@ -183,7 +184,7 @@ export default function HospitalJobSessionScreen() {
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Check-In Time:</Text>
               <Text style={styles.infoValue}>
-                {new Date(session.check_in_time).toLocaleString()}
+                {formatISTDateTime(session.check_in_time)}
               </Text>
             </View>
             {session.check_in_verified && (
@@ -220,7 +221,7 @@ export default function HospitalJobSessionScreen() {
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Completed At:</Text>
               <Text style={styles.infoValue}>
-                {new Date(session.end_time).toLocaleString()}
+                {formatISTDateTime(session.end_time)}
               </Text>
             </View>
             {session.check_in_time && (
@@ -237,28 +238,28 @@ export default function HospitalJobSessionScreen() {
         {/* Session Details */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Calendar size={24} color={PrimaryColors.accent} />
+            <Calendar size={24} color={PrimaryColors.main} />
             <Text style={styles.cardTitle}>Session Details</Text>
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Date:</Text>
             <Text style={styles.infoValue}>
-              {new Date(session.session_date).toLocaleDateString()}
+              {formatISTDateWithWeekday(session.session_date)}
             </Text>
           </View>
           {session.start_time && (
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Start Time:</Text>
               <Text style={styles.infoValue}>
-                {new Date(`2000-01-01 ${session.start_time}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                {new Date(`2000-01-01 ${session.start_time}`).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
               </Text>
             </View>
           )}
-          {session.end_time && (
+          {session.schedule_end_time && (
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>End Time:</Text>
+              <Text style={styles.infoLabel}>Scheduled End Time:</Text>
               <Text style={styles.infoValue}>
-                {new Date(session.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                {new Date(`2000-01-01 ${session.schedule_end_time}`).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
               </Text>
             </View>
           )}
@@ -267,7 +268,7 @@ export default function HospitalJobSessionScreen() {
         {/* Payment Info */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Building2 size={24} color={PrimaryColors.accent} />
+            <Building2 size={24} color={PrimaryColors.main} />
             <Text style={styles.cardTitle}>Payment</Text>
           </View>
           {session.payment_amount && (
@@ -448,7 +449,7 @@ const styles = StyleSheet.create({
   paymentAmount: {
     fontSize: 32,
     fontWeight: '700',
-    color: PrimaryColors.accent,
+    color: PrimaryColors.main,
     marginTop: 8,
     marginBottom: 8,
   },

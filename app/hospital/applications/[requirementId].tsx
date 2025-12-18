@@ -18,6 +18,7 @@ import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as Neutra
 import API from '../../api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ScreenSafeArea } from '@/components/screen-safe-area';
+import { formatISTDateTime, formatISTDateTimeLong } from '@/utils/timezone';
 
 const HOSPITAL_TOKEN_KEY = 'hospitalToken';
 const HOSPITAL_INFO_KEY = 'hospitalInfo';
@@ -280,7 +281,7 @@ export default function ApplicationsScreen() {
 
   if (loading) {
     return (
-      <ScreenSafeArea backgroundColor={NeutralColors.background}>
+      <ScreenSafeArea backgroundColor={PrimaryColors.dark}>
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor={PrimaryColors.dark} />
         <View style={styles.header}>
@@ -455,7 +456,7 @@ export default function ApplicationsScreen() {
                 <View style={styles.detailItem}>
                   <Text style={styles.detailLabel}>Applied:</Text>
                   <Text style={styles.detailValue}>
-                    {new Date(application.created_at).toLocaleDateString()}
+                    {formatISTDateTime(application.created_at)}
                   </Text>
                 </View>
               </View>
@@ -605,14 +606,7 @@ export default function ApplicationsScreen() {
                     <View style={styles.modalDetailRow}>
                       <Text style={styles.modalDetailLabel}>Applied Date:</Text>
                       <Text style={styles.modalDetailValue}>
-                        {new Date(selectedApplication.created_at).toLocaleDateString('en-US', {
-                          weekday: 'long',
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
+                        {formatISTDateTimeLong(selectedApplication.created_at)}
                       </Text>
                     </View>
                     {selectedApplication.proposed_rate && (
@@ -627,12 +621,7 @@ export default function ApplicationsScreen() {
                       <View style={styles.modalDetailRow}>
                         <Text style={styles.modalDetailLabel}>Available Date:</Text>
                         <Text style={styles.modalDetailValue}>
-                          {new Date(selectedApplication.available_date).toLocaleDateString('en-US', {
-                            weekday: 'long',
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric'
-                          })}
+                          {formatISTDateTimeLong(selectedApplication.available_date)}
                         </Text>
                       </View>
                     )}
@@ -675,12 +664,7 @@ export default function ApplicationsScreen() {
                         <View style={styles.modalDetailRow}>
                           <Text style={styles.modalDetailLabel}>Work Date:</Text>
                           <Text style={styles.modalDetailValue}>
-                            {new Date(requirement.work_required_date).toLocaleDateString('en-US', {
-                              weekday: 'long',
-                              year: 'numeric',
-                              month: 'long',
-                              day: 'numeric'
-                            })}
+                            {formatISTDateTimeLong(requirement.work_required_date)}
                           </Text>
                         </View>
                       )}
