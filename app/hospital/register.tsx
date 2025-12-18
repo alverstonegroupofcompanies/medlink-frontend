@@ -14,6 +14,8 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import * as ImagePicker from 'expo-image-picker';
 import { ScreenSafeArea } from '@/components/screen-safe-area';
 
+import { LocationPickerMap } from '@/components/LocationPickerMap';
+
 const HOSPITAL_TOKEN_KEY = 'hospitalToken';
 const HOSPITAL_INFO_KEY = 'hospitalInfo';
 
@@ -24,6 +26,8 @@ export default function HospitalRegisterScreen() {
     password: '',
     phone_number: '',
     address: '',
+    latitude: '',
+    longitude: '',
   });
   const [logoUri, setLogoUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -88,6 +92,8 @@ export default function HospitalRegisterScreen() {
       data.append('password', formData.password);
       if (formData.phone_number) data.append('phone_number', formData.phone_number);
       if (formData.address) data.append('address', formData.address);
+      if (formData.latitude) data.append('latitude', formData.latitude);
+      if (formData.longitude) data.append('longitude', formData.longitude);
       if (logoUri) {
         const filename = logoUri.split('/').pop() || 'logo.jpg';
         const match = /\.(\w+)$/.exec(filename);
@@ -210,6 +216,21 @@ export default function HospitalRegisterScreen() {
               />
             </View>
 
+            <View style={styles.inputGroup}>
+              <ThemedText style={styles.label}>Hospital Location</ThemedText>
+              <ThemedText style={styles.subLabel}>Drag map to pin exact location</ThemedText>
+              <LocationPickerMap
+                onLocationSelect={(lat, lng) => {
+                  setFormData(prev => ({
+                    ...prev,
+                    latitude: lat.toString(),
+                    longitude: lng.toString()
+                  }));
+                }}
+                height={250}
+              />
+            </View>
+
             <TouchableOpacity style={styles.logoButton} onPress={handlePickLogo}>
               <ThemedText style={styles.logoButtonText}>
                 {logoUri ? 'Logo Selected ✓' : 'Upload Hospital Logo'}
@@ -271,5 +292,16 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   submitButton: { marginTop: 10, backgroundColor: PrimaryColors.main },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  subLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 8,
+  },
 });
 

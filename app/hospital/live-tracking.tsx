@@ -1,22 +1,136 @@
-import React from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Dimensions,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
-// import { router } from 'expo-router'; // Not used when disabled
+import { router, useFocusEffect } from 'expo-router';
 import { MapPin, User, CheckCircle, Clock, Navigation } from 'lucide-react-native';
-import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors } from '@/constants/hospital-theme';
+import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors, HospitalStatusColors as StatusColors } from '@/constants/hospital-theme';
 import { ScreenSafeArea } from '@/components/screen-safe-area';
-// import API from '../api'; // Disabled - feature off
+import API from '../api';
 import { LiveTrackingMap } from '@/components/LiveTrackingMap';
+import * as Location from 'expo-location';
 
-// const { width, height } = Dimensions.get('window'); // Not used when disabled
+const { width, height } = Dimensions.get('window');
 
 export default function LiveTrackingScreen() {
-  // Feature disabled - Live location tracking temporarily unavailable
+  const [loading, setLoading] = useState(true);
+  const [doctors, setDoctors] = useState<any[]>([]);
+  const [hospital, setHospital] = useState<any>(null);
+  const [selectedDoctor, setSelectedDoctor] = useState<string | null>(null);
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchTrackingData();
+      startPolling();
+
+      return () => {
+        stopPolling();
+      };
+    }, [])
+  );
+
+  const startPolling = () => {
+    stopPolling();
+    pollIntervalRef.current = setInterval(fetchTrackingData, 10000); // Poll every 10 seconds
+  };
+
+  const stopPolling = () => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+  };
+
+  const fetchTrackingData = async () => {
+    try {
+      // Don't set loading on subsequent polls to avoid flicker
+      if (!doctors.length) setLoading(true);
+      
+      const response = await API.get('/hospital/live-doctor-locations');
+      if (response.data) {
+        setDoctors(response.data.doctors || []);
+        setHospital(response.data.hospital);
+      }
+    } catch (error) {
+      console.error('Error fetching live locations:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Filter unique doctors (if a doctor has multiple active sessions, show them once)
+  const uniqueDoctors = doctors.reduce((acc: any[], current) => {
+    const x = acc.find(item => item.doctor_id === current.doctor_id);
+    if (!x) {
+      return acc.concat([current]);
+    } else {
+      // If duplicate, keep the one with more recent update or valid location
+      const currentHasLoc = current.latitude && current.longitude;
+      const xHasLoc = x.latitude && x.longitude;
+      
+      if (currentHasLoc && !xHasLoc) {
+        return acc.map(item => item.doctor_id === current.doctor_id ? current : item);
+      }
+      return acc;
+    }
+    return acc;
+  }, []);
+
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371; // Radius of the earth in km
+    const dLat = deg2rad(lat2 - lat1);
+    const dLon = deg2rad(lon2 - lon1);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const d = R * c; // Distance in km
+    return d;
+  };
+
+  const deg2rad = (deg: number) => {
+    return deg * (Math.PI / 180);
+  };
+
+  const getTimeAgo = (dateString: string) => {
+    if (!dateString) return 'Unknown';
+    const date = new Date(dateString);
+    const now = new Date();
+    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+    let interval = seconds / 31536000;
+    if (interval > 1) return Math.floor(interval) + " years ago";
+    interval = seconds / 2592000;
+    if (interval > 1) return Math.floor(interval) + " months ago";
+    interval = seconds / 86400;
+    if (interval > 1) return Math.floor(interval) + " days ago";
+    interval = seconds / 3600;
+    if (interval > 1) return Math.floor(interval) + " hours ago";
+    interval = seconds / 60;
+    if (interval > 1) return Math.floor(interval) + " minutes ago";
+        if (seconds < 10) return "Just now";
+    return Math.floor(seconds) + " seconds ago";
+  };
+
+  if (loading && !hospital) {
+    return (
+      <ScreenSafeArea backgroundColor={NeutralColors.background}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={PrimaryColors.main} />
+          <Text style={styles.loadingText}>Loading live locations...</Text>
+        </View>
+      </ScreenSafeArea>
+    );
+  }
 
   return (
     <ScreenSafeArea backgroundColor={NeutralColors.background}>
@@ -28,30 +142,16 @@ export default function LiveTrackingScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      {/* Feature Disabled Message */}
-      <View style={styles.disabledContainer}>
-        <MapPin size={64} color={NeutralColors.textTertiary} />
-        <Text style={styles.disabledTitle}>Feature Temporarily Disabled</Text>
-        <Text style={styles.disabledText}>
-          Live location tracking is currently unavailable. This feature will be enabled in a future update.
-        </Text>
-      </View>
-
-      {/* Original content hidden when disabled */}
-      {false && (
-      <>
-
       {/* Map */}
-      {hospital && hospital.latitude && hospital.longitude && 
-       !isNaN(parseFloat(hospital.latitude)) && !isNaN(parseFloat(hospital.longitude)) && (
-        <View style={styles.mapContainer}>
+      <View style={styles.mapContainer}>
+        {(hospital?.latitude || uniqueDoctors.length > 0) ? (
           <LiveTrackingMap
             hospital={{
-              latitude: typeof hospital.latitude === 'number' ? hospital.latitude : parseFloat(hospital.latitude),
-              longitude: typeof hospital.longitude === 'number' ? hospital.longitude : parseFloat(hospital.longitude),
-              name: hospital.name || 'Hospital',
+              latitude: typeof hospital?.latitude === 'number' ? hospital.latitude : parseFloat(hospital?.latitude || '0'),
+              longitude: typeof hospital?.longitude === 'number' ? hospital.longitude : parseFloat(hospital?.longitude || '0'),
+              name: hospital?.name || 'Hospital',
             }}
-            doctors={doctors.filter(d => 
+            doctors={uniqueDoctors.filter(d => 
               d.latitude && d.longitude && 
               !isNaN(parseFloat(d.latitude)) && !isNaN(parseFloat(d.longitude))
             ).map(d => ({
@@ -59,18 +159,37 @@ export default function LiveTrackingScreen() {
               latitude: typeof d.latitude === 'number' ? d.latitude : parseFloat(d.latitude),
               longitude: typeof d.longitude === 'number' ? d.longitude : parseFloat(d.longitude),
             }))}
-            height={height * 0.5}
+            height={height * 0.40}
+            initialRegion={selectedDoctor && uniqueDoctors.find(d => d.doctor_id === selectedDoctor) ? {
+              latitude: parseFloat(uniqueDoctors.find(d => d.doctor_id === selectedDoctor).latitude),
+              longitude: parseFloat(uniqueDoctors.find(d => d.doctor_id === selectedDoctor).longitude),
+              latitudeDelta: 0.01,
+              longitudeDelta: 0.01,
+            } : undefined}
           />
-        </View>
-      )}
+        ) : (
+          <View style={styles.mapPlaceholder}>
+            <MapPin size={40} color={NeutralColors.textTertiary} />
+            <Text style={styles.mapPlaceholderText}>
+              Waiting for location updates...
+            </Text>
+          </View>
+        )}
+      </View>
 
       {/* Doctors List */}
+      <View style={styles.doctorsListHeader}>
+        <Text style={styles.sectionTitle}>
+          Active Doctors ({uniqueDoctors.length})
+        </Text>
+      </View>
+      
       <ScrollView
         style={styles.doctorsList}
         contentContainerStyle={styles.doctorsListContent}
         showsVerticalScrollIndicator={false}
       >
-        {doctors.length === 0 ? (
+        {uniqueDoctors.length === 0 ? (
           <View style={styles.emptyContainer}>
             <User size={64} color={NeutralColors.textSecondary} />
             <Text style={styles.emptyTitle}>No Active Doctors</Text>
@@ -80,10 +199,7 @@ export default function LiveTrackingScreen() {
           </View>
         ) : (
           <>
-            <Text style={styles.sectionTitle}>
-              Active Doctors ({doctors.length})
-            </Text>
-            {doctors.map((doctor) => {
+            {uniqueDoctors.map((doctor, index) => {
               // Ensure coordinates are valid numbers
               const doctorLat = typeof doctor.latitude === 'number' ? doctor.latitude : parseFloat(doctor.latitude || '0');
               const doctorLng = typeof doctor.longitude === 'number' ? doctor.longitude : parseFloat(doctor.longitude || '0');
@@ -99,12 +215,17 @@ export default function LiveTrackingScreen() {
                   )
                 : null;
 
+              // Check if doctor is offline (location not updated in >2 minutes)
+              const locationUpdatedAt = doctor.location_updated_at ? new Date(doctor.location_updated_at) : null;
+              const isOffline = locationUpdatedAt ? (Date.now() - locationUpdatedAt.getTime()) > 120000 : false;
+
               return (
                 <TouchableOpacity
-                  key={doctor.doctor_id}
+                  key={`unique-doctor-${doctor.doctor_id}`}
                   style={[
                     styles.doctorCard,
-                    selectedDoctor === doctor.doctor_id && styles.doctorCardSelected
+                    selectedDoctor === doctor.doctor_id && styles.doctorCardSelected,
+                    isOffline && styles.doctorCardOffline,
                   ]}
                   onPress={() => setSelectedDoctor(
                     selectedDoctor === doctor.doctor_id ? null : doctor.doctor_id
@@ -115,7 +236,14 @@ export default function LiveTrackingScreen() {
                       <User size={24} color={PrimaryColors.main} />
                     </View>
                     <View style={styles.doctorInfo}>
-                      <Text style={styles.doctorName}>{doctor.doctor_name}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text style={styles.doctorName}>{doctor.doctor_name}</Text>
+                        {isOffline && (
+                          <View style={styles.offlineBadge}>
+                            <Text style={styles.offlineBadgeText}>OFFLINE</Text>
+                          </View>
+                        )}
+                      </View>
                       <Text style={styles.doctorDepartment}>{doctor.department}</Text>
                     </View>
                     <View style={styles.statusIndicator}>
@@ -169,8 +297,6 @@ export default function LiveTrackingScreen() {
           </>
         )}
       </ScrollView>
-      </>
-      )}
     </View>
     </ScreenSafeArea>
   );
@@ -199,8 +325,9 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   mapContainer: {
-    height: 300, // Fixed height since feature is disabled
-    backgroundColor: NeutralColors.cardBackground,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
   },
   mapPlaceholder: {
     flex: 1,
@@ -224,27 +351,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: NeutralColors.textSecondary,
   },
-  disabledContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 32,
-    paddingVertical: 80,
-  },
-  disabledTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: NeutralColors.textPrimary,
-    marginTop: 24,
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  disabledText: {
-    fontSize: 15,
-    color: NeutralColors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
+  // Disabled styles removed
   doctorsList: {
     flex: 1,
   },
@@ -278,22 +385,30 @@ const styles = StyleSheet.create({
     color: NeutralColors.textPrimary,
     marginBottom: 16,
   },
+  doctorsListHeader: {
+    backgroundColor: NeutralColors.background,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 8,
+  },
   doctorCard: {
     backgroundColor: '#fff',
-    borderRadius: 16,
+    borderRadius: 12,
     padding: 16,
     marginBottom: 12,
-    shadowColor: NeutralColors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-    borderWidth: 2,
-    borderColor: 'transparent',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   doctorCardSelected: {
     borderColor: PrimaryColors.main,
-    backgroundColor: PrimaryColors.lightest,
+    backgroundColor: '#F0F9FF',
+    shadowOpacity: 0.12,
+    elevation: 3,
   },
   doctorHeader: {
     flexDirection: 'row',
@@ -341,5 +456,20 @@ const styles = StyleSheet.create({
     color: NeutralColors.textSecondary,
     flex: 1,
   },
+  doctorCardOffline: {
+    opacity: 0.6,
+    backgroundColor: '#F9FAFB',
+  },
+  offlineBadge: {
+    backgroundColor: '#6B7280',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  offlineBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#fff',
+    letterSpacing: 0.5,
+  },
 });
-

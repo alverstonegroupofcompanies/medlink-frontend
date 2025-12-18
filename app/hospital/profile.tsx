@@ -220,7 +220,7 @@ export default function HospitalProfileScreen() {
                 <View style={styles.infoContent}>
                   <Text style={styles.infoLabel}>Location</Text>
                   <Text style={styles.infoValue}>
-                    {hospital.latitude.toFixed(6)}, {hospital.longitude.toFixed(6)}
+                    {parseFloat(String(hospital.latitude)).toFixed(6)}, {parseFloat(String(hospital.longitude)).toFixed(6)}
                   </Text>
                 </View>
               </View>

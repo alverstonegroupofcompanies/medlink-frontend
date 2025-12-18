@@ -36,6 +36,8 @@ import { BASE_BACKEND_URL } from '@/config/api';
 import { getUserFriendlyError } from '@/utils/errorMessages';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { LocationPickerMap } from '@/components/LocationPickerMap';
+
 const HOSPITAL_INFO_KEY = 'hospitalInfo';
 const { width } = Dimensions.get('window');
 
@@ -489,32 +491,23 @@ export default function HospitalProfileEditScreen() {
           {/* Location */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Location</Text>
+            <Text style={styles.label}>Update Hospital Location</Text>
+            <Text style={[styles.label, { fontSize: 12, color: NeutralColors.textSecondary, marginBottom: 12 }]}>
+              Drag the map to pinpoint your exact hospital location.
+            </Text>
             
-            <View style={styles.row}>
-              <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
-                <Text style={styles.label}>Latitude</Text>
-                <TextInput
-                  style={styles.input}
-                  value={formData.latitude}
-                  onChangeText={(text) => setFormData({ ...formData, latitude: text })}
-                  placeholder="e.g., 12.9716"
-                  placeholderTextColor={NeutralColors.textSecondary}
-                  keyboardType="numeric"
-                />
-              </View>
-
-              <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
-                <Text style={styles.label}>Longitude</Text>
-                <TextInput
-                  style={styles.input}
-                  value={formData.longitude}
-                  onChangeText={(text) => setFormData({ ...formData, longitude: text })}
-                  placeholder="e.g., 77.5946"
-                  placeholderTextColor={NeutralColors.textSecondary}
-                  keyboardType="numeric"
-                />
-              </View>
-            </View>
+            <LocationPickerMap
+              initialLatitude={formData.latitude}
+              initialLongitude={formData.longitude}
+              onLocationSelect={(lat, lng) => {
+                setFormData(prev => ({
+                  ...prev,
+                  latitude: lat.toString(),
+                  longitude: lng.toString()
+                }));
+              }}
+              height={300}
+            />
           </View>
 
           {/* License Information */}

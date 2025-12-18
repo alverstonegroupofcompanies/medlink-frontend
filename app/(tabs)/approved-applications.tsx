@@ -9,9 +9,10 @@ import {
   ActivityIndicator,
   Image,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { MapPin, Clock, CheckCircle, XCircle, Building2, Navigation } from 'lucide-react-native';
+import { MapPin, Clock, CheckCircle, XCircle, Building2, Navigation, AlertCircle } from 'lucide-react-native';
 import { DoctorPrimaryColors as PrimaryColors, DoctorStatusColors as StatusColors, DoctorNeutralColors as NeutralColors } from '@/constants/doctor-theme';
 import { useSafeBottomPadding } from '@/components/screen-safe-area';
 import API from '../api';
@@ -24,6 +25,7 @@ export default function ApprovedApplicationsScreen() {
   const [applications, setApplications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [checkingIn, setCheckingIn] = useState<number | null>(null);
+  const [gpsEnabled, setGpsEnabled] = useState(true);
   const safeBottomPadding = useSafeBottomPadding();
 
   const loadApplications = async () => {
@@ -38,6 +40,62 @@ export default function ApprovedApplicationsScreen() {
       setLoading(false);
     }
   };
+
+  // GPS Monitoring
+  useEffect(() => {
+    let gpsCheckInterval: NodeJS.Timeout;
+
+    const checkGPSStatus = async () => {
+      try {
+        const hasActiveSession = applications.some(app => 
+          app.job_session && 
+          (app.job_session.tracking_started_at && !app.job_session.check_out_time)
+        );
+
+        if (hasActiveSession) {
+          const { status } = await Location.getForegroundPermissionsAsync();
+          const locationEnabled = await Location.hasServicesEnabledAsync();
+          
+          const isGPSActive = status === 'granted' && locationEnabled;
+          
+          if (!isGPSActive && gpsEnabled) {
+            // GPS was just turned off
+            setGpsEnabled(false);
+            
+            // Show alert (works in Expo Go)
+            Alert.alert(
+              '⚠️ GPS Disabled',
+              'Your location services have been turned off. Please enable GPS to continue tracking your active session.',
+              [
+                {
+                  text: 'Enable GPS',
+                  onPress: () => {
+                    if (Platform.OS === 'ios') {
+                      Location.requestForegroundPermissionsAsync();
+                    }
+                  },
+                },
+                { text: 'Dismiss', style: 'cancel' },
+              ]
+            );
+          } else if (isGPSActive && !gpsEnabled) {
+            // GPS was re-enabled
+            setGpsEnabled(true);
+          }
+        }
+      } catch (error) {
+        console.error('GPS check error:', error);
+      }
+    };
+
+    // Check GPS status every 10 seconds if there are active sessions
+    gpsCheckInterval = setInterval(checkGPSStatus, 10000);
+    checkGPSStatus(); // Check immediately
+
+    return () => {
+      if (gpsCheckInterval) clearInterval(gpsCheckInterval);
+    };
+  }, [applications, gpsEnabled]);
 
   useEffect(() => {
     loadApplications();
@@ -349,6 +407,16 @@ export default function ApprovedApplicationsScreen() {
 
                 {/* Action Buttons */}
                 {needsCheckIn && !autoCancelled && (
+                  <View>
+                     {/* Friendly Reminder - Only show when tracking is active/required but not started */}
+                     {trackingStatus === 'active' && !isWithinWarningPeriod && (
+                      <View style={styles.reminderContainer}>
+                        <Text style={styles.reminderText}>
+                          📍 <Text style={{fontWeight: '700'}}>Friendly Reminder:</Text> Please share your live location to confirm this job. Failure to track may result in the job being reassigned to another doctor to ensure hospital operations are not affected.
+                        </Text>
+                      </View>
+                     )}
+
                   <TouchableOpacity
                     style={[
                       styles.checkInButton,
@@ -393,6 +461,7 @@ export default function ApprovedApplicationsScreen() {
                       </>
                     )}
                   </TouchableOpacity>
+                  </View>
                 )}
 
                 {/* View Details Button for Checked In */}
@@ -626,9 +695,6 @@ const styles = StyleSheet.create({
   startedBadge: {
     backgroundColor: StatusColors.success + '15',
   },
-  expiredBadge: {
-    backgroundColor: StatusColors.error + '15',
-  },
   pulseDot: {
     width: 12,
     height: 12,
@@ -648,6 +714,19 @@ const styles = StyleSheet.create({
   criticalUrgentButton: {
     backgroundColor: StatusColors.error,
     shadowColor: StatusColors.error,
+  },
+  reminderContainer: {
+    backgroundColor: '#FFF4E5', // Light orange/amber background
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#F59E0B', // Amber-500
+  },
+  reminderText: {
+    fontSize: 13,
+    color: '#92400E', // Amber-800
+    lineHeight: 18,
   },
 });
 

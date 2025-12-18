@@ -135,6 +135,58 @@ export default function JobDetailScreen() {
     return deg * (Math.PI / 180);
   };
 
+  const handleStartTracking = async () => {
+    // Determine session ID
+    let sessionId = application.job_session?.id;
+    if (!sessionId) {
+      Alert.alert('Error', 'No session found to track.');
+      return;
+    }
+
+    if (application.job_session?.tracking_started_at) {
+      Alert.alert('Already Tracking', 'Location tracking is already active.');
+      return;
+    }
+
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Location permission is required to start tracking.');
+        return;
+      }
+
+      setCheckingIn(true); // Re-use checkingIn loader
+
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      const { latitude, longitude } = location.coords;
+
+      await API.post('/doctor/start-tracking', {
+        job_session_id: sessionId,
+        latitude,
+        longitude,
+      });
+
+      Alert.alert(
+        '✅ Location Tracking Started!',
+        'Your live location is now being shared with the hospital.',
+        [
+          {
+            text: 'OK',
+            onPress: () => loadApplication(), // Reload to update status
+          },
+        ]
+      );
+    } catch (error: any) {
+      console.error('Start tracking error:', error);
+      Alert.alert('Error', error.response?.data?.message || 'Failed to start location tracking');
+    } finally {
+      setCheckingIn(false);
+    }
+  };
+
   const handleCheckIn = async () => {
     if (!currentLocation) {
       Alert.alert('Location Required', 'Please enable location services to check in.');
@@ -480,8 +532,8 @@ export default function JobDetailScreen() {
             )}
             <MapViewComponent
               initialLocation={{
-                latitude: hospital.latitude,
-                longitude: hospital.longitude,
+                latitude: typeof hospital.latitude === 'number' ? hospital.latitude : parseFloat(String(hospital.latitude || '0')),
+                longitude: typeof hospital.longitude === 'number' ? hospital.longitude : parseFloat(String(hospital.longitude || '0')),
               }}
               height={250}
               showCurrentLocationButton={true}
@@ -543,12 +595,59 @@ export default function JobDetailScreen() {
             <Text style={styles.checkInHint}>
               You must be within 100 meters of the hospital location to check in
             </Text>
+
+             {/* Live Location Sharing Status - Replaces "Start Tracking" button when active */}
+             {session?.tracking_started_at ? (
+               <View style={styles.locationSharingCard}>
+                 <View style={styles.locationSharingHeader}>
+                   <MapPin size={20} color={StatusColors.success} />
+                   <Text style={styles.locationSharingTitle}>📍 Live Location Sharing Active</Text>
+                 </View>
+                 <Text style={styles.locationSharingText}>
+                   Your location is currently being shared with the hospital.
+                 </Text>
+                 <View style={styles.locationStatusBadge}>
+                   <View style={styles.pulseDot} />
+                   <Text style={styles.locationStatusText}>
+                     Updating every 10 seconds
+                   </Text>
+                 </View>
+               </View>
+             ) : (
+               /* Start Tracking Section (Before Check-In Map) */
+               <View style={{ marginBottom: 20 }}>
+                {/* Friendly Reminder */}
+                <View style={styles.reminderContainer}>
+                  <Text style={styles.reminderText}>
+                    📍 <Text style={{fontWeight: '700'}}>Friendly Reminder:</Text> Please share your live location to confirm this job. Failure to track may result in the job being reassigned to another doctor to ensure hospital operations are not affected.
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  style={[
+                    styles.checkInButton,
+                    { backgroundColor: PrimaryColors.dark, marginBottom: 12 }
+                  ]}
+                  onPress={handleStartTracking}
+                  disabled={checkingIn}
+                >
+                  {checkingIn ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <Navigation size={20} color="#fff" />
+                      <Text style={styles.checkInButtonText}>Start Tracking Now</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+             )}
             
             {/* Hospital Address */}
             {(hospital?.address || application.job_requirement?.address) && (
-              <View style={styles.addressRow}>
+              <View style={styles.checkInAddressRow}>
                 <MapPin size={16} color={NeutralColors.textSecondary} />
-                <Text style={styles.addressText}>
+                <Text style={styles.checkInAddressText}>
                   {hospital?.address || application.job_requirement?.address}
                 </Text>
               </View>
@@ -919,7 +1018,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     textAlign: 'center',
   },
-  addressRow: {
+  checkInAddressRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     marginBottom: 12,
@@ -928,7 +1027,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     gap: 8,
   },
-  addressText: {
+  checkInAddressText: {
     flex: 1,
     fontSize: 14,
     color: NeutralColors.textPrimary,
@@ -991,6 +1090,70 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     color: NeutralColors.textSecondary,
+  },
+  reminderContainer: {
+    backgroundColor: '#FFF4E5', // Light orange/amber background
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#F59E0B', // Amber-500
+  },
+  reminderText: {
+    fontSize: 13,
+    color: '#92400E', // Amber-800
+    lineHeight: 18,
+  },
+  locationSharingCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: NeutralColors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 2,
+    borderColor: StatusColors.success,
+  },
+  locationSharingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+  },
+  locationSharingTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: NeutralColors.textPrimary,
+  },
+  locationSharingText: {
+    fontSize: 14,
+    color: NeutralColors.textSecondary,
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  locationStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
+  locationStatusText: {
+    fontSize: 12,
+    color: StatusColors.success,
+    fontWeight: '600',
+  },
+  pulseDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: StatusColors.success,
   },
 });
 

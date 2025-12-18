@@ -27,7 +27,7 @@ import { DatePicker } from '@/components/date-picker';
 import { TimePicker } from '@/components/time-picker';
 
 // Import MapView - Metro will automatically resolve .web or .native based on platform
-import { MapViewComponent } from '@/components/MapView';
+import { LocationPickerMap } from '@/components/LocationPickerMap';
 
 const HOSPITAL_TOKEN_KEY = 'hospitalToken';
 const HOSPITAL_INFO_KEY = 'hospitalInfo';
@@ -57,6 +57,7 @@ export default function HospitalDashboard() {
     salary_range_max: '',
   });
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [isCustomLocation, setIsCustomLocation] = useState(false);
 
   // Auto-calculate duration when start/end time changes
   useEffect(() => {
@@ -120,7 +121,16 @@ export default function HospitalDashboard() {
     try {
       const info = await AsyncStorage.getItem(HOSPITAL_INFO_KEY);
       if (info) {
-        setHospital(JSON.parse(info));
+        const hospitalData = JSON.parse(info);
+        setHospital(hospitalData);
+        
+        // Use hospital location as default if available
+        if (hospitalData.latitude && hospitalData.longitude) {
+           setLocation({
+             latitude: parseFloat(hospitalData.latitude),
+             longitude: parseFloat(hospitalData.longitude)
+           });
+        }
       }
     } catch (error) {
       console.error('Error loading hospital:', error);
@@ -314,7 +324,16 @@ export default function HospitalDashboard() {
         salary_range_min: '',
         salary_range_max: '',
       });
-      setLocation(null);
+      // Reset to hospital location if available
+      if (hospital?.latitude && hospital?.longitude) {
+        setLocation({
+          latitude: parseFloat(hospital.latitude),
+          longitude: parseFloat(hospital.longitude)
+        });
+      } else {
+        setLocation(null);
+      }
+      setIsCustomLocation(false);
       loadRequirements();
     } catch (error: any) {
       console.error('Error posting requirement:', error);
@@ -857,24 +876,71 @@ export default function HospitalDashboard() {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Location on Map *</Text>
-              <Text style={styles.mapHint}>
-                Tap on the map to select location or use current location button
-              </Text>
-              <MapViewComponent
-                initialLocation={location || undefined}
-                onLocationSelect={(loc) => {
-                  setLocation(loc);
-                }}
-                height={280}
-                showCurrentLocationButton={true}
-              />
-              {location && (
-                <View style={styles.locationDisplay}>
-                  <MapPin size={16} color={StatusColors.success} />
-                  <Text style={styles.locationDisplayText}>
-                    Location: {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}
-                  </Text>
+              <Text style={styles.label}>Location *</Text>
+              
+              {!isCustomLocation ? (
+                <View style={styles.defaultLocationCard}>
+                  <View style={styles.defaultLocationHeader}>
+                    <View style={styles.iconContainer}>
+                      <Building2 size={24} color={PrimaryColors.main} />
+                    </View>
+                    <View style={styles.defaultLocationText}>
+                      <Text style={styles.defaultLocationTitle}>Using Hospital Location</Text>
+                      <Text style={styles.defaultLocationAddress} numberOfLines={2}>
+                        {hospital?.address || 'Your registered hospital address'}
+                      </Text>
+                      {hospital?.latitude && hospital?.longitude && (
+                         <Text style={styles.coordinateText}>
+                           {parseFloat(String(hospital.latitude)).toFixed(4)}, {parseFloat(String(hospital.longitude)).toFixed(4)}
+                         </Text>
+                      )}
+                    </View>
+                  </View>
+                  <Button 
+                    mode="outlined" 
+                    onPress={() => setIsCustomLocation(true)}
+                    style={styles.changeLocationButton}
+                    textColor={PrimaryColors.main}
+                  >
+                    Change Location
+                  </Button>
+                </View>
+              ) : (
+                <View style={styles.customLocationContainer}>
+                  <View style={styles.customLocationHeader}>
+                    <Text style={styles.mapHint}>
+                      Drag map to pin exact job location
+                    </Text>
+                    <TouchableOpacity onPress={() => {
+                      setIsCustomLocation(false);
+                      if (hospital?.latitude && hospital?.longitude) {
+                        setLocation({
+                          latitude: parseFloat(hospital.latitude),
+                          longitude: parseFloat(hospital.longitude)
+                        });
+                      }
+                    }}>
+                      <Text style={styles.resetLocationText}>Reset to Default</Text>
+                    </TouchableOpacity>
+                  </View>
+                  
+                  <LocationPickerMap
+                    initialLatitude={location?.latitude}
+                    initialLongitude={location?.longitude}
+                    onLocationSelect={(lat, lng) => {
+                      setLocation({ latitude: lat, longitude: lng });
+                    }}
+                    height={280}
+                  />
+                  
+                  {location && (
+                    <View style={styles.locationDisplay}>
+                      <MapPin size={16} color={StatusColors.success} />
+                      <Text style={styles.locationDisplayText}>
+                        Selected: {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}
+                      </Text>
+                    </View>
+                  )}
                 </View>
               )}
             </View>
@@ -1349,9 +1415,64 @@ const styles = StyleSheet.create({
         marginBottom: 4,
       },
       liveTrackingSubtitle: {
-        color: 'rgba(255, 255, 255, 0.9)',
-        fontSize: 13,
-        lineHeight: 18,
-      },
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  defaultLocationCard: {
+    backgroundColor: '#EFF6FF',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  defaultLocationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 12,
+  },
+  iconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  defaultLocationText: {
+    flex: 1,
+  },
+  defaultLocationTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1E3A8A',
+    marginBottom: 2,
+  },
+  defaultLocationAddress: {
+    fontSize: 13,
+    color: '#3B82F6',
+    marginBottom: 2,
+  },
+  coordinateText: {
+    fontSize: 11,
+    color: '#60A5FA',
+  },
+  changeLocationButton: {
+    borderColor: PrimaryColors.main,
+  },
+  customLocationContainer: {
+    marginTop: 8,
+  },
+  customLocationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  resetLocationText: {
+    color: PrimaryColors.main,
+    fontSize: 13,
+    fontWeight: '600',
+  },
 });
-

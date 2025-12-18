@@ -93,12 +93,8 @@ export default function CheckInDetailScreen() {
     }
   }, [session?.check_in_time, session?.end_time]);
 
-  useEffect(() => {
-    // Send location to backend when it changes
-    if (currentLocation && sessionId) {
-      updateLocationOnBackend();
-    }
-  }, [currentLocation, sessionId]);
+  // Location is already being sent in getCurrentLocation function
+  // No need for separate updateLocationOnBackend call
 
   useFocusEffect(
     React.useCallback(() => {
@@ -197,6 +193,53 @@ export default function CheckInDetailScreen() {
 
   const deg2rad = (deg: number): number => {
     return deg * (Math.PI / 180);
+  };
+
+  const handleStartTracking = async () => {
+    if (!session) return;
+
+    if (session.tracking_started_at) {
+      Alert.alert('Already Tracking', 'Location tracking is already active.');
+      return;
+    }
+
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Location permission is required to start tracking.');
+        return;
+      }
+
+      setCheckingIn(true); // Re-using checkingIn state for loading indicator
+
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      const { latitude, longitude } = location.coords;
+
+      await API.post('/doctor/start-tracking', {
+        job_session_id: session.id,
+        latitude,
+        longitude,
+      });
+
+      Alert.alert(
+        '✅ Location Tracking Started!',
+        'Your live location is now being shared with the hospital.',
+        [
+          {
+            text: 'OK',
+            onPress: () => loadSession(),
+          },
+        ]
+      );
+    } catch (error: any) {
+      console.error('Start tracking error:', error);
+      Alert.alert('Error', error.response?.data?.message || 'Failed to start location tracking');
+    } finally {
+      setCheckingIn(false);
+    }
   };
 
   const handleCheckIn = async () => {
@@ -612,6 +655,64 @@ export default function CheckInDetailScreen() {
                 Duration: {formatTime(timeElapsed)}
               </Text>
             </View>
+          </View>
+        )}
+
+        {/* Live Location Sharing Status */}
+        {/* Live Location Sharing Status */}
+        {(needsCheckIn || isCheckedIn) && !session.end_time && (
+          <View style={styles.locationSharingCard}>
+            <View style={styles.locationSharingHeader}>
+              <MapPin size={20} color={currentLocation ? StatusColors.success : StatusColors.warning} />
+              <Text style={styles.locationSharingTitle}>
+                {session.tracking_started_at ? '📍 Live Location Sharing Active' : (currentLocation ? '📍 Location Available' : '⚠️ Location Not Available')}
+              </Text>
+            </View>
+            <Text style={styles.locationSharingText}>
+              {session.tracking_started_at
+                ? 'Your location is currently being shared with the hospital.'
+                : (currentLocation 
+                  ? 'Your location is available but you haven\'t started tracking yet.'
+                  : 'Please enable GPS to share your location.')}
+            </Text>
+            {session.tracking_started_at && currentLocation && (
+              <View style={styles.locationStatusBadge}>
+                <View style={styles.pulseDot} />
+                <Text style={styles.locationStatusText}>
+                  Updating every 10 seconds
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Start Tracking Section (Before Check-In) */}
+        {needsCheckIn && !session.tracking_started_at && (
+          <View style={{ marginHorizontal: 20, marginBottom: 20 }}>
+            {/* Friendly Reminder */}
+            <View style={styles.reminderContainer}>
+              <Text style={styles.reminderText}>
+                📍 <Text style={{fontWeight: '700'}}>Friendly Reminder:</Text> Please share your live location to confirm this job. Failure to track may result in the job being reassigned to another doctor to ensure hospital operations are not affected.
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.checkInButton,
+                { backgroundColor: PrimaryColors.dark, marginBottom: 0 } // Different color or reuse checkInButton style
+              ]}
+              onPress={handleStartTracking}
+              disabled={checkingIn}
+            >
+              {checkingIn ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Navigation size={20} color="#fff" />
+                  <Text style={styles.checkInButtonText}>Start Tracking Now</Text>
+                </>
+              )}
+            </TouchableOpacity>
           </View>
         )}
 
@@ -1093,6 +1194,70 @@ const styles = StyleSheet.create({
     color: StatusColors.warning,
     fontWeight: '600',
     textAlign: 'center',
+  },
+  locationSharingCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    marginHorizontal: 20,
+    marginBottom: 20,
+    shadowColor: NeutralColors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 2,
+    borderColor: StatusColors.success,
+  },
+  locationSharingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+  },
+  locationSharingTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: NeutralColors.textPrimary,
+  },
+  locationSharingText: {
+    fontSize: 14,
+    color: NeutralColors.textSecondary,
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  locationStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
+  locationStatusText: {
+    fontSize: 12,
+    color: StatusColors.success,
+    fontWeight: '600',
+  },
+  statusSubtitle: {
+    fontSize: 14,
+    color: NeutralColors.textSecondary,
+    marginTop: 4,
+  },
+  reminderContainer: {
+    backgroundColor: '#FFF4E5', // Light orange/amber background
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#F59E0B', // Amber-500
+  },
+  reminderText: {
+    fontSize: 13,
+    color: '#92400E', // Amber-800
+    lineHeight: 18,
   },
 });
 

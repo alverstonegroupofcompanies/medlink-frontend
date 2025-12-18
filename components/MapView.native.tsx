@@ -118,10 +118,10 @@ export function MapViewComponent({
         </TouchableOpacity>
       )}
 
-      {selectedLocation && (
+      {selectedLocation && selectedLocation.latitude && selectedLocation.longitude && (
         <View style={styles.locationInfo}>
           <Text style={styles.locationInfoText}>
-            📍 {selectedLocation.latitude.toFixed(6)}, {selectedLocation.longitude.toFixed(6)}
+            📍 {parseFloat(String(selectedLocation.latitude)).toFixed(6)}, {parseFloat(String(selectedLocation.longitude)).toFixed(6)}
           </Text>
         </View>
       )}
