@@ -133,7 +133,7 @@ export default function LiveTrackingScreen() {
   }
 
   return (
-    <ScreenSafeArea backgroundColor={NeutralColors.background}>
+    <ScreenSafeArea backgroundColor={PrimaryColors.main} statusBarStyle="light-content">
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>

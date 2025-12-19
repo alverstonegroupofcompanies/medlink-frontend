@@ -25,6 +25,7 @@ import {
   Clock,
   Shield,
   Lock,
+  Calendar,
 } from 'lucide-react-native';
 import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors, HospitalStatusColors as StatusColors } from '@/constants/hospital-theme';
 import API from '../api';
@@ -120,7 +121,7 @@ export default function HospitalProfileScreen() {
   }
 
   return (
-    <ScreenSafeArea backgroundColor={NeutralColors.background}>
+    <ScreenSafeArea backgroundColor={PrimaryColors.dark} statusBarStyle="light-content">
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor={PrimaryColors.dark} />
         
@@ -265,6 +266,30 @@ export default function HospitalProfileScreen() {
               ) : null}
             </View>
           )}
+
+          {/* Quick Access Section */}
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <Calendar size={24} color={PrimaryColors.main} />
+              <Text style={styles.cardTitle}>Quick Access</Text>
+            </View>
+            
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={() => router.push('/hospital/live-tracking')}
+            >
+              <MapPin size={18} color={PrimaryColors.main} />
+              <Text style={styles.actionButtonText}>Live Doctor Tracking</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.actionButton, { marginTop: 12 }]}
+              onPress={() => router.push('/hospital/sessions')}
+            >
+              <Calendar size={18} color={PrimaryColors.main} />
+              <Text style={styles.actionButtonText}>View All Sessions</Text>
+            </TouchableOpacity>
+          </View>
 
           {/* Security Section */}
           <View style={styles.card}>

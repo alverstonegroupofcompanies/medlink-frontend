@@ -174,11 +174,9 @@ export default function UpcomingJobsScreen() {
                 key={application.id}
                 style={styles.jobCard}
                 onPress={() => {
-                  // If job session exists, navigate to session, otherwise to job detail
+                  // Navigate directly to job session if it exists
                   if (session?.id) {
-                    router.push(`/job-session/${session.id}`);
-                  } else {
-                    router.push(`/job-detail/${application.id}`);
+                    router.push(`/(tabs)/job-session/${session.id}`);
                   }
                 }}
                 activeOpacity={0.7}
@@ -241,17 +239,15 @@ export default function UpcomingJobsScreen() {
                   <TouchableOpacity
                     style={styles.viewButton}
                     onPress={() => {
-                      // If job session exists, navigate to session, otherwise to job detail
+                      // Always navigate to job session if it exists
                       if (session?.id) {
-                        router.push(`/job-session/${session.id}`);
-                      } else {
-                        router.push(`/job-detail/${application.id}`);
+                        router.push(`/(tabs)/job-session/${session.id}`);
                       }
                     }}
                   >
                     <Navigation size={16} color={PrimaryColors.main} />
                     <Text style={styles.viewButtonText}>
-                      {session?.id ? 'Open Session' : 'View Details'}
+                      {isCheckedIn ? 'View Session' : 'View Details'}
                     </Text>
                   </TouchableOpacity>
                 </View>

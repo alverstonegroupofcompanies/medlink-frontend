@@ -515,18 +515,22 @@ export default function DoctorHome() {
                             </Text>
                             {isLate && (
                               <View style={styles.lateBadge}>
-                                <Text style={styles.lateBadgeText}>LATE ({Math.floor((now.getTime() - sessionDate.getTime()) / (1000 * 60))}m)</Text>
+                                <Text style={styles.lateBadgeText}>
+                                  {Math.floor((now.getTime() - sessionDate.getTime()) / (1000 * 60 * 60)) >= 1 
+                                    ? 'MISSED CHECK-IN' 
+                                    : 'PENALTY'}
+                                </Text>
                               </View>
                             )}
                           </View>
                           <Text style={styles.attentionDepartment} numberOfLines={1}>
                             {session.jobRequirement?.department || 'Department'}
                           </Text>
-                          {sessionDate && (
+                          {session.jobRequirement?.start_time && (
                             <View style={styles.attentionTimeContainer}>
                               <Clock size={14} color={ModernColors.text.secondary} />
                               <Text style={styles.attentionTime}>
-                                {sessionDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                                {new Date(`2000-01-01 ${session.jobRequirement.start_time}`).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
                               </Text>
                             </View>
                           )}
@@ -545,7 +549,7 @@ export default function DoctorHome() {
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={styles.attentionViewButton}
-                          onPress={() => router.push(`/job-session/${session.id}`)}
+                          onPress={() => router.push(`/(tabs)/job-session/${session.id}`)}
                         >
                           <Text style={styles.attentionViewText}>View Details</Text>
                           <ArrowRight size={16} color="#fff" />
@@ -595,6 +599,7 @@ export default function DoctorHome() {
                   );
                   const hasApplied = !!application;
                   const applicationStatus = application?.status || null;
+                  const isExpired = requirement.is_expired || false;
                   
                   return (
                     <ModernCard key={requirement.id} variant="elevated" style={styles.openingCard}>
@@ -610,9 +615,16 @@ export default function DoctorHome() {
                           </View>
                         )}
                         <View style={styles.openingHeaderText}>
-                          <Text style={styles.hospitalName} numberOfLines={1}>
-                            {requirement.hospital?.name || 'Hospital'}
-                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <Text style={styles.hospitalName} numberOfLines={1}>
+                              {requirement.hospital?.name || 'Hospital'}
+                            </Text>
+                            {isExpired && (
+                              <View style={styles.expiredBadge}>
+                                <Text style={styles.expiredBadgeText}>EXPIRED</Text>
+                              </View>
+                            )}
+                          </View>
                           <Text style={styles.departmentName} numberOfLines={1}>
                             {requirement.department}
                           </Text>
@@ -639,6 +651,10 @@ export default function DoctorHome() {
                              applicationStatus === 'selected' ? 'Approved' :
                              applicationStatus === 'rejected' ? 'Rejected' : 'Applied'}
                           </Text>
+                        </View>
+                      ) : isExpired ? (
+                        <View style={[styles.applyButton, styles.expiredButton]}>
+                          <Text style={styles.expiredButtonText}>Expired</Text>
                         </View>
                       ) : (
                         <TouchableOpacity
@@ -1005,6 +1021,25 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   appliedButtonText: {
+    ...Typography.captionBold,
+    color: ModernColors.text.secondary,
+  },
+  expiredBadge: {
+    backgroundColor: ModernColors.error.main,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.sm,
+  },
+  expiredBadgeText: {
+    ...Typography.caption,
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  expiredButton: {
+    backgroundColor: ModernColors.neutral.gray300,
+  },
+  expiredButtonText: {
     ...Typography.captionBold,
     color: ModernColors.text.secondary,
   },

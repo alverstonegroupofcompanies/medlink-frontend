@@ -1,5 +1,5 @@
-import React from 'react';
-import { StyleProp, ViewStyle, Platform } from 'react-native';
+import React, { useEffect } from 'react';
+import { StyleProp, ViewStyle, Platform, StatusBar } from 'react-native';
 import { Edge, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type ScreenSafeAreaProps = {
@@ -8,6 +8,7 @@ type ScreenSafeAreaProps = {
   backgroundColor?: string;
   edges?: Edge[];
   excludeBottom?: boolean; // When true, excludes bottom edge (useful for tab screens)
+  statusBarStyle?: 'light-content' | 'dark-content' | 'default';
 };
 
 export function ScreenSafeArea({
@@ -16,7 +17,17 @@ export function ScreenSafeArea({
   backgroundColor = '#ffffff',
   edges,
   excludeBottom = false,
+  statusBarStyle = 'dark-content',
 }: ScreenSafeAreaProps) {
+  // Configure Android status bar for proper visibility
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      StatusBar.setBackgroundColor(backgroundColor, true);
+      StatusBar.setTranslucent(true);
+      StatusBar.setBarStyle(statusBarStyle, true);
+    }
+  }, [backgroundColor, statusBarStyle]);
+
   // If excludeBottom is true, remove 'bottom' from edges
   // Default edges if not provided
   const defaultEdges: Edge[] = ['top', 'right', 'bottom', 'left'];

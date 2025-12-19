@@ -620,12 +620,22 @@ export default function HospitalDashboard() {
                   <Card key={req.id} style={styles.requirementCard} mode="outlined">
                     <Card.Content>
                       <View style={styles.cardHeader}>
-                        <Chip 
-                          style={[styles.deptChip, { backgroundColor: '#EFF6FF' }]}
-                          textStyle={{ color: '#2563EB', fontSize: 13, fontWeight: '500' }}
-                        >
-                          {req.department}
-                        </Chip>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                          <Chip 
+                            style={[styles.deptChip, { backgroundColor: '#EFF6FF' }]}
+                            textStyle={{ color: '#2563EB', fontSize: 13, fontWeight: '500' }}
+                          >
+                            {req.department}
+                          </Chip>
+                          {req.is_expired && (
+                            <Chip 
+                              style={[styles.expiredChip, { backgroundColor: '#FEE2E2' }]}
+                              textStyle={{ color: '#DC2626', fontSize: 11, fontWeight: '700' }}
+                            >
+                              EXPIRED
+                            </Chip>
+                          )}
+                        </View>
                         <TouchableOpacity 
                           onPress={() => handleDelete(req.id)}
                           style={styles.deleteIcon}
@@ -680,7 +690,7 @@ export default function HospitalDashboard() {
                           <Clock size={14} color="#6B7280" />
                           <Text style={styles.cardInfoText}>
                             Work Date: {formatISTDateOnly(req.work_required_date)}
-                            {req.start_time && ` at ${req.start_time}`}
+                            {req.start_time && ` at ${new Date(`2000-01-01 ${req.start_time}`).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}`}
                           </Text>
                         </View>
                       )}
@@ -1170,6 +1180,9 @@ const styles = StyleSheet.create({
   },
   deptChip: {
     height: 28,
+  },
+  expiredChip: {
+    height: 26,
   },
   deleteIcon: {
     padding: 4,

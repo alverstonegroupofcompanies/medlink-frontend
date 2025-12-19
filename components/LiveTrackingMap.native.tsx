@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Text } from 'react-native';
+import { View, StyleSheet, Text, Image } from 'react-native';
 import { MapPin } from 'lucide-react-native';
 import { HospitalPrimaryColors as PrimaryColors } from '@/constants/hospital-theme';
 import MapView, { Marker, Polyline } from 'react-native-maps';
@@ -236,8 +236,12 @@ export function LiveTrackingMap({ hospital, doctors, height = 400, initialRegion
                 title={doctor.doctor_name}
                 description={`${doctor.department || 'Doctor'} - On the way`}
               >
-                <View style={styles.carMarker}>
-                  <Text style={styles.carMarkerIcon}>🚗</Text>
+                <View style={styles.doctorMarkerContainer}>
+                  <Image
+                    source={require('../assets/images/doctor-marker.png')}
+                    style={styles.doctorMarkerImage}
+                    resizeMode="contain"
+                  />
                 </View>
               </Marker>
             </React.Fragment>
@@ -258,21 +262,15 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
   },
-  carMarker: {
-    backgroundColor: '#2563EB',
-    borderRadius: 16,
-    width: 32,
-    height: 32,
+  doctorMarkerContainer: {
+    width: 50,
+    height: 50,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3,
-    elevation: 5,
   },
-  carMarkerIcon: {
-    fontSize: 18,
+  doctorMarkerImage: {
+    width: 48,
+    height: 48,
   },
   hospitalMarker: {
     backgroundColor: '#10B981',
