@@ -123,11 +123,11 @@ export default function UpcomingJobsScreen() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <View style={styles.header}>
+        <View style={[styles.header, { backgroundColor: PrimaryColors.main }]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <ArrowLeft size={24} color={PrimaryColors.dark} />
+            <ArrowLeft size={24} color="#fff" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Upcoming Jobs</Text>
+          <Text style={[styles.headerTitle, { color: '#fff' }]}>Upcoming Jobs</Text>
           <View style={{ width: 40 }} />
         </View>
         <View style={styles.loadingContainer}>
@@ -272,9 +272,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 60,
     paddingBottom: 20,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: NeutralColors.divider,
+    backgroundColor: '#1E40AF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 4,
   },
   backButton: {
     width: 40,
@@ -285,7 +288,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: PrimaryColors.dark,
+    color: '#fff',
   },
   loadingContainer: {
     flex: 1,

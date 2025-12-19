@@ -636,12 +636,12 @@ export default function DoctorHome() {
                           <Clock size={14} color={ModernColors.text.secondary} />
                           <Text style={styles.detailText}>{requirement.required_sessions} sessions</Text>
                         </View>
-                        <View style={styles.detailRow}>
-                          <MapPin size={14} color={ModernColors.text.secondary} />
-                          <Text style={styles.detailText} numberOfLines={1}>
-                            {requirement.location || 'Location TBD'}
-                          </Text>
-                        </View>
+                          <View style={styles.requirementInfoRow}>
+                            <MapPin size={14} color={ModernColors.text.secondary} />
+                            <Text style={styles.requirementInfoText} numberOfLines={1}>
+                            {requirement.hospital?.address || requirement.location || 'Location not specified'}
+                            </Text>
+                          </View>
                       </View>
 
                       {hasApplied ? (

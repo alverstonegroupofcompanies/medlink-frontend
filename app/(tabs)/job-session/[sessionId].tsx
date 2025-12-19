@@ -196,9 +196,9 @@ export default function JobSessionScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={PrimaryColors.dark} />
+      <StatusBar barStyle="light-content" backgroundColor="#1E40AF" />
       
-      {/* Header */}
+      {/* Header with Gradient Effect */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <ArrowLeft size={24} color="#fff" />
@@ -355,13 +355,18 @@ const styles = StyleSheet.create({
     color: NeutralColors.textSecondary,
   },
   header: {
-    backgroundColor: PrimaryColors.dark,
+    backgroundColor: '#1E40AF',
     paddingTop: 50,
     paddingBottom: 16,
     paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 4,
   },
   backButton: {
     padding: 8,
