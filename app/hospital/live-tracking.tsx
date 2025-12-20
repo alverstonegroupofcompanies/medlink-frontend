@@ -237,6 +237,15 @@ export default function LiveTrackingScreen() {
                     </View>
                     <View style={styles.doctorInfo}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        {/* Live Status Indicator */}
+                        {!isOffline ? (
+                          <View style={styles.onlineIndicatorContainer}>
+                            <View style={styles.onlinePulse} />
+                            <View style={styles.onlineDot} />
+                          </View>
+                        ) : (
+                          <View style={styles.offlineDot} />
+                        )}
                         <Text style={styles.doctorName}>{doctor.doctor_name}</Text>
                         {isOffline && (
                           <View style={styles.offlineBadge}>
@@ -471,5 +480,32 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#fff',
     letterSpacing: 0.5,
+  },
+  onlineIndicatorContainer: {
+    width: 12,
+    height: 12,
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  onlinePulse: {
+    position: 'absolute',
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#10B981',
+    opacity: 0.4,
+  },
+  onlineDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10B981',
+  },
+  offlineDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#EF4444',
   },
 });
