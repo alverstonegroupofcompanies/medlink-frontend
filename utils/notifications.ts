@@ -66,6 +66,30 @@ if (Notifications) {
       shouldSetBadge: true,
     }),
   });
+
+  // Configure Android notification channels
+  if (Platform.OS === 'android') {
+    // Default channel
+    Notifications.setNotificationChannelAsync('default', {
+      name: 'Default',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#FF231F7C',
+      sound: 'default',
+      enableVibrate: true,
+    }).catch((error) => console.warn('Failed to set default channel:', error));
+
+    // Job alerts channel for high-priority notifications
+    Notifications.setNotificationChannelAsync('job-alerts', {
+      name: 'Job Alerts',
+      importance: Notifications.AndroidImportance.HIGH,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#2563eb',
+      sound: 'default',
+      enableVibrate: true,
+      description: 'Notifications about job applications and approvals',
+    }).catch((error) => console.warn('Failed to set job-alerts channel:', error));
+  }
 }
 
 const PUSH_TOKEN_KEY = 'expoPushToken';
@@ -324,6 +348,19 @@ export function handleNotificationNavigation(data: any) {
             router.push('/(tabs)');
             break;
 
+          case 'missed_checkin':
+          case 'attention_needed':
+          case 'upcoming_session':
+            // Navigate to specific job session details if session ID provided
+            if (data?.job_session_id || data?.session_id) {
+              const sessionId = data.job_session_id || data.session_id;
+              router.push(`/(tabs)/job-session/${sessionId}`);
+            } else {
+              // Fallback to home page where TAT section is visible
+              router.push('/(tabs)');
+            }
+            break;
+
           default:
             // Default: go to notifications screen
             router.push('/notifications');
@@ -492,6 +529,15 @@ export async function scheduleLocalNotification(
         data: data || {},
         sound: true,
         badge: 1,
+        priority: Notifications.AndroidNotificationPriority.HIGH,
+        ...(Platform.OS === 'android' && {
+          channelId: data?.type === 'job_approved' ||
+            data?.type === 'attention_needed' ||
+            data?.type === 'missed_checkin' ||
+            data?.type === 'upcoming_session'
+            ? 'job-alerts'
+            : 'default',
+        }),
       },
       trigger: null, // Show immediately
     });

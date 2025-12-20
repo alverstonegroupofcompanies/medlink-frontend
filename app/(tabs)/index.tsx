@@ -132,6 +132,15 @@ export default function DoctorHome() {
     setLoadingSessions(true);
     try {
       const response = await API.get('/doctor/sessions');
+      console.log('📋 Job Sessions Response:', response.data);
+      console.log('📋 First Session Sample:', response.data.sessions?.[0]);
+      if (response.data.sessions?.[0]) {
+        console.log('  🏥 Hospital:', response.data.sessions[0].job_requirement?.hospital);
+        console.log('  🏢 Department:', response.data.sessions[0].job_requirement?.department);
+        console.log('  📅 Session Date:', response.data.sessions[0].session_date);
+        console.log('  ✅ Check-in Time:', response.data.sessions[0].check_in_time);
+        console.log('  📊 Status:', response.data.sessions[0].status);
+      }
       setJobSessions(response.data.sessions || []);
     } catch (error) {
       console.error("Error loading job sessions:", error);
@@ -272,22 +281,32 @@ export default function DoctorHome() {
     return false;
   }).length;
 
-  // Attention needed sessions
+  // Attention needed sessions - ONLY missed check-ins (approved but didn't check in after scheduled time)
   const attentionNeeded = jobSessions.filter((session: any) => {
     const now = new Date();
-    const sessionDate = session.session_date ? new Date(session.session_date) : null;
     
-    if (!sessionDate) return false;
+    if (!session.session_date) return false;
     
-    // Late check-in
-    if (sessionDate < now && !session.check_in_time && session.status === 'scheduled') {
-      return true;
+    // Combine session_date and start_time to get actual session datetime
+    let sessionDateTime = new Date(session.session_date);
+    
+    // If start_time is available, set the time component
+    if (session.job_requirement?.start_time) {
+      const [hours, minutes] = session.job_requirement.start_time.split(':');
+      sessionDateTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
     }
     
-    // Upcoming session within 1 hour
-    const hoursDiff = (sessionDate.getTime() - now.getTime()) / (1000 * 60 * 60);
-    if (hoursDiff > 0 && hoursDiff < 1 && !session.check_in_time) {
-      return true;
+    // Show if:
+    // 1. Approved (status is 'scheduled')
+    // 2. No check-in yet
+    // 3. Either session time has passed OR session is coming up soon (within 24 hours)
+    if (session.status === 'scheduled' && !session.check_in_time) {
+      const hoursDiff = (sessionDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+      
+      // Show if session time passed OR if it's within 24 hours
+      if (sessionDateTime < now || (hoursDiff > 0 && hoursDiff < 24)) {
+        return true;
+      }
     }
     
     return false;
@@ -501,9 +520,18 @@ export default function DoctorHome() {
               
               <View style={styles.attentionContainer}>
                 {attentionNeeded.map((session: any) => {
-                  const sessionDate = session.session_date ? new Date(session.session_date) : null;
                   const now = new Date();
-                  const isLate = sessionDate && sessionDate < now && !session.check_in_time;
+                  
+                  // Combine session_date and start_time to get actual session datetime
+                  let sessionDateTime = new Date(session.session_date);
+                  if (session.job_requirement?.start_time) {
+                    const [hours, minutes] = session.job_requirement.start_time.split(':');
+                    sessionDateTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+                  }
+                  
+                  // Check if session time has actually passed
+                  const isActuallyLate = sessionDateTime < now && !session.check_in_time;
+                  const isUpcoming = sessionDateTime >= now;
                   
                   return (
                     <ModernCard key={session.id} variant="elevated" padding="md" style={styles.attentionCard}>
@@ -511,27 +539,46 @@ export default function DoctorHome() {
                         <View style={styles.attentionInfo}>
                           <View style={styles.attentionTitleRow}>
                             <Text style={styles.attentionHospital} numberOfLines={1}>
-                              {session.jobRequirement?.hospital?.name || 'Hospital'}
+                              {session.job_requirement?.hospital?.name || 'Hospital'}
                             </Text>
-                            {isLate && (
-                              <View style={styles.lateBadge}>
-                                <Text style={styles.lateBadgeText}>
-                                  {Math.floor((now.getTime() - sessionDate.getTime()) / (1000 * 60 * 60)) >= 1 
-                                    ? 'MISSED CHECK-IN' 
-                                    : 'PENALTY'}
-                                </Text>
-                              </View>
-                            )}
+                            <View style={[
+                              styles.lateBadge, 
+                              isUpcoming && styles.upcomingBadge
+                            ]}>
+                              <Text style={styles.lateBadgeText}>
+                                {isUpcoming ? "DON'T MISS OUT" : 'MISSED CHECK-IN'}
+                              </Text>
+                            </View>
                           </View>
                           <Text style={styles.attentionDepartment} numberOfLines={1}>
-                            {session.jobRequirement?.department || 'Department'}
+                            {session.job_requirement?.department || 'Department'}
                           </Text>
-                          {session.jobRequirement?.start_time && (
-                            <View style={styles.attentionTimeContainer}>
-                              <Clock size={14} color={ModernColors.text.secondary} />
-                              <Text style={styles.attentionTime}>
-                                {new Date(`2000-01-01 ${session.jobRequirement.start_time}`).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
-                              </Text>
+                          {sessionDateTime && (
+                            <View style={styles.attentionDateTimeContainer}>
+                              <View style={styles.attentionDateRow}>
+                                <Calendar size={14} color={isUpcoming ? ModernColors.warning.main : ModernColors.error.main} />
+                                <Text style={[
+                                  styles.attentionDate,
+                                  isUpcoming && styles.attentionDateUpcoming
+                                ]}>
+                                  {sessionDateTime.toLocaleDateString('en-IN', { 
+                                    day: '2-digit', 
+                                    month: 'short', 
+                                    year: 'numeric' 
+                                  })}
+                                </Text>
+                              </View>
+                              {session.job_requirement?.start_time && (
+                                <View style={styles.attentionTimeContainer}>
+                                  <Clock size={14} color={isUpcoming ? ModernColors.warning.main : ModernColors.error.main} />
+                                  <Text style={[
+                                    styles.attentionTime,
+                                    isUpcoming && styles.attentionTimeUpcoming
+                                  ]}>
+                                    {new Date(`2000-01-01 ${session.job_requirement.start_time}`).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                                  </Text>
+                                </View>
+                              )}
                             </View>
                           )}
                         </View>
@@ -541,7 +588,7 @@ export default function DoctorHome() {
                           style={styles.attentionCallButton}
                           onPress={() => {
                             // TODO: Implement call functionality
-                            Alert.alert('Call', `Calling ${session.jobRequirement?.hospital?.name}`);
+                            Alert.alert('Call', `Calling ${session.job_requirement?.hospital?.name}`);
                           }}
                         >
                           <Phone size={16} color={ModernColors.primary.main} />
@@ -1191,6 +1238,9 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: BorderRadius.sm,
   },
+  upcomingBadge: {
+    backgroundColor: ModernColors.warning.main,
+  },
   lateBadgeText: {
     ...Typography.caption,
     color: '#fff',
@@ -1202,6 +1252,21 @@ const styles = StyleSheet.create({
     color: ModernColors.text.secondary,
     marginBottom: 6,
   },
+  attentionDateTimeContainer: {
+    gap: Spacing.xs,
+  },
+  attentionDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  attentionDate: {
+    ...Typography.captionBold,
+    color: ModernColors.error.main,
+  },
+  attentionDateUpcoming: {
+    color: ModernColors.warning.main,
+  },
   attentionTimeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1210,6 +1275,10 @@ const styles = StyleSheet.create({
   attentionTime: {
     ...Typography.caption,
     color: ModernColors.text.secondary,
+  },
+  attentionTimeUpcoming: {
+    color: ModernColors.warning.main,
+    fontWeight: '600',
   },
   attentionActions: {
     flexDirection: 'row',

@@ -208,35 +208,7 @@ export default function JobSessionScreen() {
       </View>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
-        {/* Map Section - ONLY ONCE and ONLY ON NATIVE */}
-        {Platform.OS !== 'web' && hospitalLat && hospitalLng && MapView && (
-          <View style={styles.mapContainer}>
-            <MapView
-              style={styles.map}
-              initialRegion={{
-                latitude: hospitalLat,
-                longitude: hospitalLng,
-                latitudeDelta: 0.01,
-                longitudeDelta: 0.01,
-              }}
-              scrollEnabled={false}
-              zoomEnabled={false}
-            >
-              <Marker
-                coordinate={{ latitude: hospitalLat, longitude: hospitalLng }}
-                title={hospital?.name}
-              >
-                <View style={styles.hospitalMarker}>
-                  <Text style={styles.hospitalMarkerIcon}>🏥</Text>
-                </View>
-              </Marker>
-            </MapView>
-            <TouchableOpacity style={styles.directionsButton} onPress={openDirections}>
-              <Navigation size={18} color={PrimaryColors.main} />
-              <Text style={styles.directionsText}>Get Directions</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        {/* Map removed - use check-in screen for live tracking map */}
 
         {/* ALL INFO IN ONE CARD - No Repetition */}
         <View style={styles.mainCard}>

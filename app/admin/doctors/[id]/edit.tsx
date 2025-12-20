@@ -31,7 +31,6 @@ export default function EditDoctor() {
     email: '',
     phone_number: '',
     current_location: '',
-    specialization: '',
     qualifications: '',
     experience: '',
     medical_council_reg_no: '',
@@ -39,6 +38,7 @@ export default function EditDoctor() {
     preferred_work_type: '',
     preferred_location: '',
     professional_achievements: '',
+    department_id: '',
   });
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [profilePhotoUri, setProfilePhotoUri] = useState<string | null>(null);
@@ -56,12 +56,13 @@ export default function EditDoctor() {
       if (response.data.status) {
         const doctorData = response.data.doctor;
         setDoctor(doctorData);
+        
+        
         setFormData({
           name: doctorData.name || '',
           email: doctorData.email || '',
           phone_number: doctorData.phone_number || '',
           current_location: doctorData.current_location || '',
-          specialization: doctorData.specialization || '',
           qualifications: doctorData.qualifications || '',
           experience: doctorData.experience || '',
           medical_council_reg_no: doctorData.medical_council_reg_no || '',
@@ -69,6 +70,7 @@ export default function EditDoctor() {
           preferred_work_type: doctorData.preferred_work_type || '',
           preferred_location: doctorData.preferred_location || '',
           professional_achievements: doctorData.professional_achievements || '',
+          department_id: doctorData.department_id || '',
         });
         if (doctorData.profile_photo) {
           const photoUrl = doctorData.profile_photo.startsWith('http')
@@ -134,7 +136,7 @@ export default function EditDoctor() {
       // Add all form fields
       Object.keys(formData).forEach((key) => {
         if (formData[key as keyof typeof formData]) {
-          formDataToSend.append(key, formData[key as keyof typeof formData]);
+          formDataToSend.append(key, formData[key as keyof typeof formData] as string);
         }
       });
 
@@ -264,12 +266,8 @@ export default function EditDoctor() {
         {/* Professional Information */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Professional Information</Text>
-          <InputField
-            label="Specialization"
-            value={formData.specialization}
-            onChangeText={(text) => setFormData({ ...formData, specialization: text })}
-            placeholder="Enter specialization"
-          />
+
+          
           <InputField
             label="Qualifications"
             value={formData.qualifications}

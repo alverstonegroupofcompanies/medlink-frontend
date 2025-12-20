@@ -15,7 +15,6 @@ import { DoctorPrimaryColors as PrimaryColors, DoctorNeutralColors as NeutralCol
 import { saveDoctorAuth } from '@/utils/auth';
 import { useEffect, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { MultiDepartmentPicker } from '@/components/multi-department-picker';
 
 export default function ProfessionalDetailsScreen() {
   const params = useLocalSearchParams();
@@ -25,7 +24,7 @@ export default function ProfessionalDetailsScreen() {
     medicalCouncilRegNo: '',
     qualifications: '',
     specialization: '',
-    departments: [] as Array<{ department_id: number; experience?: string }>,
+    department_id: '',
     experience: '',
     currentHospital: '',
     currentLocation: '',
@@ -71,19 +70,7 @@ export default function ProfessionalDetailsScreen() {
 
       // Professional Details
       Object.entries(formData).forEach(([key, value]) => {
-        if (key === 'departments') {
-          // Handle departments array
-          if (Array.isArray(value) && value.length > 0) {
-            value.forEach((dept: any, index: number) => {
-              if (dept.department_id) {
-                data.append(`departments[${index}][department_id]`, String(dept.department_id));
-                if (dept.experience) {
-                  data.append(`departments[${index}][experience]`, String(dept.experience));
-                }
-              }
-            });
-          }
-        } else if (value !== null && value !== '') {
+        if (value !== null && value !== '') {
           data.append(key, value);
         }
       });
@@ -219,18 +206,9 @@ export default function ProfessionalDetailsScreen() {
                 Add your qualifications and experience (optional fields are allowed)
               </ThemedText>
             </View>
-            <View style={styles.inputGroup}>
-              <ThemedText style={styles.label}>Departments *</ThemedText>
-              <MultiDepartmentPicker
-                value={formData.departments}
-                onValueChange={(departments) => setFormData(prev => ({ ...prev, departments }))}
-                placeholder="Select your departments"
-                required
-              />
-            </View>
+
             
             {Object.entries(formData)
-              .filter(([key]) => key !== 'departments')
               .map(([key, value]) => (
                 <ThemedTextInput
                   key={key}

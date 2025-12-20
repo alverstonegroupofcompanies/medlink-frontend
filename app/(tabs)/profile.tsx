@@ -43,7 +43,6 @@ import { ModernColors, Spacing, BorderRadius, Shadows, Typography } from '@/cons
 import { getDoctorInfo, saveDoctorAuth, getProfilePhotoUrl } from '@/utils/auth';
 import { ModernCard } from '@/components/modern-card';
 import { ScreenSafeArea, useSafeBottomPadding } from '@/components/screen-safe-area';
-import { MultiDepartmentPicker } from '@/components/multi-department-picker';
 
 const { width } = Dimensions.get('window');
 
@@ -106,19 +105,6 @@ export default function ProfileScreen() {
             await saveDoctorAuth(token, doctorData);
           }
           
-          // Format departments from API response - handle both formatted (id, name, experience) and pivot formats
-          const formattedDepartments = (doctorData.departments || []).map((dept: any) => {
-            // Backend returns: { id, name, experience } or pivot format
-            const departmentId = dept.id || dept.department_id || dept.pivot?.department_id;
-            const experience = dept.experience || dept.pivot?.experience || '';
-            return {
-              department_id: departmentId,
-              experience: experience,
-            };
-          }).filter((dept: any) => dept.department_id);
-          
-          console.log('✅ Formatted departments for form:', formattedDepartments);
-          console.log('✅ Doctor departments set:', doctorData.departments?.length || 0, 'departments');
           
           setFormData({
             name: doctorData.name || '',
@@ -128,7 +114,7 @@ export default function ProfileScreen() {
             professional_achievements: doctorData.professional_achievements || '',
             medical_council_reg_no: doctorData.medical_council_reg_no || '',
             qualifications: doctorData.qualifications || '',
-            departments: formattedDepartments,
+            department_id: doctorData.department_id || '',
             experience: doctorData.experience || '',
             current_hospital: doctorData.current_hospital || '',
             preferred_work_type: doctorData.preferred_work_type || '',
@@ -152,17 +138,6 @@ export default function ProfileScreen() {
       if (info) {
         console.log('📋 Using cached doctor data, departments:', info.departments?.length || 0);
         setDoctor(info);
-        // Format departments from cached data
-        // Handle both direct department objects and pivot data
-        const formattedDepartments = (info.departments || []).map((dept: any) => {
-          // Backend returns: { id, name, experience } or might have pivot format
-          const departmentId = dept.id || dept.department_id || dept.pivot?.department_id;
-          const experience = dept.experience || dept.pivot?.experience || '';
-          return {
-            department_id: departmentId,
-            experience: experience,
-          };
-        }).filter((dept: any) => dept.department_id); // Filter out any invalid entries
         
         setFormData({
           name: info.name || '',
@@ -172,7 +147,7 @@ export default function ProfileScreen() {
           professional_achievements: info.professional_achievements || '',
           medical_council_reg_no: info.medical_council_reg_no || '',
           qualifications: info.qualifications || '',
-          departments: formattedDepartments,
+          department_id: info.department_id || '',
           experience: info.experience || '',
           current_hospital: info.current_hospital || '',
           preferred_work_type: info.preferred_work_type || '',
@@ -270,21 +245,10 @@ export default function ProfileScreen() {
         if (key === 'profile_photo' || key === 'degree_certificate' || key === 'id_proof' || key === 'medical_registration_certificate') {
           return;
         }
-        if (key === 'departments') {
-          // Handle departments array
-          if (Array.isArray(value) && value.length > 0) {
-            value.forEach((dept: any, index: number) => {
-              if (dept.department_id) {
-                data.append(`departments[${index}][department_id]`, String(dept.department_id));
-                if (dept.experience) {
-                  data.append(`departments[${index}][experience]`, String(dept.experience));
-                }
-              }
-            });
-          }
-          return;
-        }
         if (value) {
+          if (key === 'department_id') {
+            console.log('📋 Sending department_id:', value);
+          }
           data.append(key, String(value));
         }
       });
@@ -471,13 +435,6 @@ export default function ProfileScreen() {
                 <Text style={styles.profileName}>
                   {doctor?.name || 'Doctor Name'}
                 </Text>
-                {((doctor?.departments && doctor.departments.length > 0) || doctor?.specialization) && (
-                  <Text style={styles.profileSpecialization}>
-                    {doctor?.departments && doctor.departments.length > 0
-                      ? doctor.departments.map((d: any) => d.name || d.department?.name).filter(Boolean).join(', ')
-                      : doctor?.specialization}
-                  </Text>
-                )}
                 {doctor?.current_location && (
                   <View style={styles.locationRow}>
                     <MapPin size={14} color={ModernColors.text.secondary} />
@@ -542,34 +499,15 @@ export default function ProfileScreen() {
                   </View>
                   <Text style={styles.sectionTitle}>Professional Details</Text>
                 </View>
-                <View style={styles.detailSection}>
+
+                {doctor?.department && (
                   <View style={styles.detailRow}>
                     <Briefcase size={18} color={ModernColors.text.secondary} />
-                    <Text style={styles.detailLabel}>Departments</Text>
+                    <Text style={styles.detailLabel}>Department</Text>
+                    <Text style={styles.detailValue}>{doctor.department.name || doctor.department}</Text>
                   </View>
-                  {doctor?.departments && Array.isArray(doctor.departments) && doctor.departments.length > 0 ? (
-                    <View style={styles.departmentsList}>
-                      {doctor.departments.map((dept: any, index: number) => {
-                        // Backend API returns: { id, name, experience }
-                        // Handle both formatted API response and pivot data formats
-                        const deptName = dept.name || dept.department?.name || 'Unknown Department';
-                        const experience = dept.experience || dept.pivot?.experience || null;
-                        const deptId = dept.id || dept.department_id || dept.pivot?.department_id || `dept-${index}`;
-                        
-                        return (
-                          <View key={deptId} style={styles.departmentItem}>
-                            <Text style={styles.detailValue}>
-                              {deptName}
-                              {experience && experience.trim() ? ` (${experience})` : ''}
-                            </Text>
-                          </View>
-                        );
-                      })}
-                    </View>
-                  ) : (
-                    <Text style={[styles.detailValue, { marginLeft: 28, color: ModernColors.text.tertiary }]}>Not provided</Text>
-                  )}
-                </View>
+                )}
+
                 {doctor?.qualifications && (
                   <View style={styles.detailRow}>
                     <GraduationCap size={18} color={ModernColors.text.secondary} />
@@ -715,12 +653,30 @@ export default function ProfileScreen() {
               <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
                 <Text style={styles.editSectionTitle}>Professional Information</Text>
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Departments</Text>
-                  <MultiDepartmentPicker
-                    value={formData.departments || []}
-                    onValueChange={(departments) => updateField('departments', departments)}
-                    placeholder="Select your departments"
-                  />
+                  <Text style={styles.inputLabel}>Department</Text>
+                  <TouchableOpacity
+                    style={styles.input}
+                    onPress={() => {
+                      Alert.alert(
+                        'Select Department',
+                        'Choose your department',
+                        [
+                          { text: 'None', onPress: () => updateField('department_id', '') },
+                          ...departments.map((dept: any) => ({
+                            text: dept.name,
+                            onPress: () => updateField('department_id', dept.id),
+                          })),
+                          { text: 'Cancel', style: 'cancel' },
+                        ]
+                      );
+                    }}
+                  >
+                    <Text style={{ color: formData.department_id ? ModernColors.text.primary : ModernColors.text.tertiary }}>
+                      {formData.department_id  
+                        ? departments.find((d: any) => d.id === formData.department_id)?.name || 'Select department...'
+                        : 'Select department...'}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
                 <View style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Qualifications</Text>

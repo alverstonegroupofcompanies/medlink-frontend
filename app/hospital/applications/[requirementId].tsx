@@ -573,13 +573,13 @@ export default function ApplicationsScreen() {
                           {selectedApplication.doctor.qualifications}
                         </Text>
                       )}
-                      {selectedApplication.doctor?.departments && selectedApplication.doctor.departments.length > 0 && (
+                      {selectedApplication.doctor?.department && (
                         <View style={styles.modalDepartments}>
-                          {selectedApplication.doctor.departments.map((dept: any, idx: number) => (
-                            <View key={idx} style={styles.modalDepartmentBadge}>
-                              <Text style={styles.modalDepartmentText}>{dept.name || dept}</Text>
-                            </View>
-                          ))}
+                          <View style={styles.modalDepartmentBadge}>
+                            <Text style={styles.modalDepartmentText}>
+                              {selectedApplication.doctor.department.name || selectedApplication.doctor.department}
+                            </Text>
+                          </View>
                         </View>
                       )}
                       {renderStars(selectedApplication.doctor?.average_rating || 0, selectedApplication.doctor?.total_ratings || 0)}

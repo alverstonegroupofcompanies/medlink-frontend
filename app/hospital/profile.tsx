@@ -127,9 +127,6 @@ export default function HospitalProfileScreen() {
         
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <ArrowLeft size={24} color="#fff" />
-          </TouchableOpacity>
           <Text style={styles.headerTitle}>Profile</Text>
           <TouchableOpacity 
             onPress={() => router.push('/hospital/profile/edit')} 
@@ -345,13 +342,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  backButton: {
-    padding: 8,
-  },
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: '#fff',
+    flex: 1,
   },
   editButton: {
     padding: 8,
