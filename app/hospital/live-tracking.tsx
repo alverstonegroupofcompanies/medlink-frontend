@@ -215,9 +215,13 @@ export default function LiveTrackingScreen() {
                   )
                 : null;
 
-              // Check if doctor is offline (location not updated in >2 minutes)
+              // Check if doctor is offline using backend status (matches Admin Panel)
+              // If is_online is explicitly provided, use !is_online. 
+              // Fallback to location check only if is_online is missing (legacy support)
               const locationUpdatedAt = doctor.location_updated_at ? new Date(doctor.location_updated_at) : null;
-              const isOffline = locationUpdatedAt ? (Date.now() - locationUpdatedAt.getTime()) > 120000 : false;
+              const isOffline = doctor.hasOwnProperty('is_online') 
+                ? !doctor.is_online 
+                : (locationUpdatedAt ? (Date.now() - locationUpdatedAt.getTime()) > 120000 : true);
 
               return (
                 <TouchableOpacity
