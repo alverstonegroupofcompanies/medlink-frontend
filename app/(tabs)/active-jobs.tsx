@@ -8,8 +8,10 @@ import {
   ActivityIndicator,
   Image,
   Dimensions,
+  StatusBar,
 } from 'react-native';
 import { router } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { 
   ArrowLeft, 
   Building2, 
@@ -20,6 +22,7 @@ import {
   Navigation
 } from 'lucide-react-native';
 import { DoctorPrimaryColors as PrimaryColors, DoctorStatusColors as StatusColors, DoctorNeutralColors as NeutralColors } from '@/constants/doctor-theme';
+import { ModernColors } from '@/constants/modern-theme';
 import API from '../api';
 
 const { width } = Dimensions.get('window');
@@ -80,13 +83,19 @@ export default function ActiveJobsScreen() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <View style={styles.header}>
+        <StatusBar barStyle="light-content" backgroundColor={ModernColors.primary.main} />
+        <LinearGradient
+            colors={ModernColors.primary.gradient as [string, string]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.header}
+        >
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <ArrowLeft size={24} color={PrimaryColors.dark} />
+            <ArrowLeft size={24} color="#FFFFFF" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Active Jobs</Text>
           <View style={{ width: 40 }} />
-        </View>
+        </LinearGradient>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={PrimaryColors.main} />
           <Text style={styles.loadingText}>Loading active jobs...</Text>
@@ -97,13 +106,19 @@ export default function ActiveJobsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <StatusBar barStyle="light-content" backgroundColor={ModernColors.primary.main} />
+      <LinearGradient
+          colors={ModernColors.primary.gradient as [string, string]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.header}
+      >
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <ArrowLeft size={24} color={PrimaryColors.dark} />
+          <ArrowLeft size={24} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Active Jobs</Text>
         <View style={{ width: 40 }} />
-      </View>
+      </LinearGradient>
 
       <ScrollView
         contentContainerStyle={styles.scrollContainer}
@@ -130,12 +145,8 @@ export default function ActiveJobsScreen() {
                 key={application.id}
                 style={styles.jobCard}
                 onPress={() => {
-                  // If job session exists, navigate to session, otherwise to job detail
-                  if (session?.id) {
-                    router.push(`/job-session/${session.id}`);
-                  } else {
-                    router.push(`/job-detail/${application.id}`);
-                  }
+                  // Always navigate to job detail
+                  router.push(`/job-detail/${application.id}`);
                 }}
                 activeOpacity={0.7}
               >
@@ -175,11 +186,11 @@ export default function ActiveJobsScreen() {
                   ) : null}
                 </View>
 
-                {hospital?.address && (
+                {(application.job_requirement?.address || application.job_requirement?.latitude || hospital?.address) && (
                   <View style={styles.addressRow}>
                     <MapPin size={14} color={NeutralColors.textSecondary} />
                     <Text style={styles.addressText} numberOfLines={1}>
-                      {hospital.address}
+                      {application.job_requirement?.address || (application.job_requirement?.latitude ? "Custom Location" : hospital?.address)}
                     </Text>
                   </View>
                 )}
@@ -188,17 +199,13 @@ export default function ActiveJobsScreen() {
                   <TouchableOpacity
                     style={styles.viewButton}
                     onPress={() => {
-                      // If job session exists, navigate to session, otherwise to job detail
-                      if (session?.id) {
-                        router.push(`/job-session/${session.id}`);
-                      } else {
-                        router.push(`/job-detail/${application.id}`);
-                      }
+                      // Always navigate to job detail
+                      router.push(`/job-detail/${application.id}`);
                     }}
                   >
                     <Navigation size={16} color={PrimaryColors.main} />
                     <Text style={styles.viewButtonText}>
-                      {session?.id ? 'Open Session' : 'View Details'}
+                      View Details
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -223,9 +230,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 60,
     paddingBottom: 20,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: NeutralColors.divider,
+    // Removed bg color, gradient handles it
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 4,
   },
   backButton: {
     width: 40,
@@ -236,7 +246,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: PrimaryColors.dark,
+    color: '#FFFFFF', // White text
   },
   loadingContainer: {
     flex: 1,

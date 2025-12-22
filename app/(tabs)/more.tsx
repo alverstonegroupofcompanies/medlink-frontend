@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Alert, ScrollView, TouchableOpacity, ActivityIndicator, Modal, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, Alert, ScrollView, TouchableOpacity, ActivityIndicator, Modal, Keyboard, Platform, StatusBar } from 'react-native';
 import { LogOut, User, Shield, HelpCircle, Info } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { DoctorPrimaryColors as PrimaryColors, DoctorNeutralColors as NeutralColors, DoctorStatusColors as StatusColors } from '@/constants/doctor-theme';
+import { ModernColors } from '@/constants/modern-theme';
 import { logoutDoctor, getDoctorInfo } from '@/utils/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import API from '../api';
@@ -161,6 +163,7 @@ export default function MoreScreen() {
 
   return (
     <>
+      <StatusBar barStyle="light-content" backgroundColor={ModernColors.primary.main} />
       {/* Custom Logout Confirmation Modal - appears on top of everything */}
       <Modal
         visible={showLogoutModal}
@@ -195,93 +198,100 @@ export default function MoreScreen() {
         </View>
       </Modal>
 
-      <ScrollView 
-        style={[styles.container, { backgroundColor: NeutralColors.background }]}
-        contentContainerStyle={[styles.contentContainer, { paddingBottom: safeBottomPadding }]}
-      >
+      <View style={styles.container}>
         {/* Header */}
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: PrimaryColors.main }]}>Settings</Text>
-        {doctor && (
-          <Text style={[styles.subtitle, { color: NeutralColors.textSecondary }]}>
-            {doctor.name || doctor.email}
-          </Text>
-        )}
-      </View>
-
-      {/* Account Section */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <User size={20} color={PrimaryColors.main} />
-          <Text style={[styles.sectionTitle, { color: PrimaryColors.dark }]}>Account</Text>
-        </View>
-        <View style={styles.sectionContent}>
+        <LinearGradient
+            colors={ModernColors.primary.gradient as [string, string]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.header}
+        >
+          <Text style={styles.title}>Settings</Text>
           {doctor && (
-            <>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Name:</Text>
-                <Text style={styles.infoValue}>{doctor.name || 'Not set'}</Text>
-              </View>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Email:</Text>
-                <Text style={styles.infoValue}>{doctor.email || 'Not set'}</Text>
-              </View>
-              {doctor.phone_number && (
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Phone:</Text>
-                  <Text style={styles.infoValue}>{doctor.phone_number}</Text>
-                </View>
-              )}
-            </>
+            <Text style={styles.subtitle}>
+              {doctor.name || doctor.email}
+            </Text>
           )}
-        </View>
-      </View>
+        </LinearGradient>
 
-      {/* Security Section */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Shield size={20} color={PrimaryColors.main} />
-          <Text style={[styles.sectionTitle, { color: PrimaryColors.dark }]}>Security</Text>
-        </View>
-        <View style={styles.sectionContent}>
-          <TouchableOpacity 
-            style={styles.logoutButton}
-            onPress={handleLogout}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <>
-                <LogOut size={20} color="#fff" />
-                <Text style={styles.logoutButtonText}>Logout</Text>
-              </>
-            )}
-          </TouchableOpacity>
-          <Text style={styles.logoutHint}>
-            This will remove all your login details and redirect you to the home page.
-          </Text>
-        </View>
-      </View>
+        <ScrollView 
+          style={[styles.scrollView, { backgroundColor: NeutralColors.background }]}
+          contentContainerStyle={[styles.contentContainer, { paddingBottom: safeBottomPadding }]}
+        >
+          {/* Account Section */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <User size={20} color={PrimaryColors.main} />
+              <Text style={[styles.sectionTitle, { color: PrimaryColors.dark }]}>Account</Text>
+            </View>
+            <View style={styles.sectionContent}>
+              {doctor && (
+                <>
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Name:</Text>
+                    <Text style={styles.infoValue}>{doctor.name || 'Not set'}</Text>
+                  </View>
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Email:</Text>
+                    <Text style={styles.infoValue}>{doctor.email || 'Not set'}</Text>
+                  </View>
+                  {doctor.phone_number && (
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>Phone:</Text>
+                      <Text style={styles.infoValue}>{doctor.phone_number}</Text>
+                    </View>
+                  )}
+                </>
+              )}
+            </View>
+          </View>
 
-      {/* Help Section */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <HelpCircle size={20} color={PrimaryColors.main} />
-          <Text style={[styles.sectionTitle, { color: PrimaryColors.dark }]}>Help & Support</Text>
-        </View>
-        <View style={styles.sectionContent}>
-          <TouchableOpacity style={styles.helpItem}>
-            <Info size={18} color={NeutralColors.textSecondary} />
-            <Text style={styles.helpText}>About</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.helpItem}>
-            <HelpCircle size={18} color={NeutralColors.textSecondary} />
-            <Text style={styles.helpText}>Help Center</Text>
-          </TouchableOpacity>
-        </View>
+          {/* Security Section */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Shield size={20} color={PrimaryColors.main} />
+              <Text style={[styles.sectionTitle, { color: PrimaryColors.dark }]}>Security</Text>
+            </View>
+            <View style={styles.sectionContent}>
+              <TouchableOpacity 
+                style={styles.logoutButton}
+                onPress={handleLogout}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <>
+                    <LogOut size={20} color="#fff" />
+                    <Text style={styles.logoutButtonText}>Logout</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+              <Text style={styles.logoutHint}>
+                This will remove all your login details and redirect you to the home page.
+              </Text>
+            </View>
+          </View>
+
+          {/* Help Section */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <HelpCircle size={20} color={PrimaryColors.main} />
+              <Text style={[styles.sectionTitle, { color: PrimaryColors.dark }]}>Help & Support</Text>
+            </View>
+            <View style={styles.sectionContent}>
+              <TouchableOpacity style={styles.helpItem}>
+                <Info size={18} color={NeutralColors.textSecondary} />
+                <Text style={styles.helpText}>About</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.helpItem}>
+                <HelpCircle size={18} color={NeutralColors.textSecondary} />
+                <Text style={styles.helpText}>Help Center</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
       </View>
-      </ScrollView>
     </>
   );
 }
@@ -289,23 +299,36 @@ export default function MoreScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  scrollView: {
+    flex: 1,
   },
   contentContainer: {
     padding: 20,
-    paddingTop: 60,
-    // paddingBottom is now set dynamically using safeBottomPadding
+    // Header is now separated, so content needs normal top padding
+    paddingTop: 20,
   },
   header: {
-    marginBottom: 32,
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 60 : 50,
+    paddingBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 4,
   },
   title: {
     fontSize: 32,
     fontWeight: '700',
+    color: '#FFFFFF', // White text
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
     fontWeight: '500',
+    color: '#E6F2FF', // Light blue/white text
   },
   section: {
     marginBottom: 24,

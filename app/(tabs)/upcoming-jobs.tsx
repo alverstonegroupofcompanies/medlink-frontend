@@ -8,8 +8,10 @@ import {
   ActivityIndicator,
   Image,
   Dimensions,
+  StatusBar,
 } from 'react-native';
 import { router } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { 
   ArrowLeft, 
   Building2, 
@@ -20,6 +22,7 @@ import {
   CheckCircle
 } from 'lucide-react-native';
 import { DoctorPrimaryColors as PrimaryColors, DoctorStatusColors as StatusColors, DoctorNeutralColors as NeutralColors } from '@/constants/doctor-theme';
+import { ModernColors } from '@/constants/modern-theme';
 import { useSafeBottomPadding } from '@/components/screen-safe-area';
 import API from '../api';
 
@@ -72,7 +75,7 @@ export default function UpcomingJobsScreen() {
       });
       
       // Sort by date
-      upcomingJobs.sort((a, b) => {
+      upcomingJobs.sort((a: any, b: any) => {
         let dateA: Date | null = null;
         let dateB: Date | null = null;
         
@@ -123,13 +126,19 @@ export default function UpcomingJobsScreen() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <View style={[styles.header, { backgroundColor: PrimaryColors.main }]}>
+        <StatusBar barStyle="light-content" backgroundColor={ModernColors.primary.main} />
+        <LinearGradient
+            colors={ModernColors.primary.gradient as [string, string]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.header}
+        >
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <ArrowLeft size={24} color="#fff" />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: '#fff' }]}>Upcoming Jobs</Text>
+          <Text style={styles.headerTitle}>Upcoming Jobs</Text>
           <View style={{ width: 40 }} />
-        </View>
+        </LinearGradient>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={PrimaryColors.main} />
           <Text style={styles.loadingText}>Loading upcoming jobs...</Text>
@@ -140,13 +149,19 @@ export default function UpcomingJobsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <StatusBar barStyle="light-content" backgroundColor={ModernColors.primary.main} />
+      <LinearGradient
+          colors={ModernColors.primary.gradient as [string, string]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.header}
+      >
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <ArrowLeft size={24} color={PrimaryColors.dark} />
+          <ArrowLeft size={24} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Upcoming Jobs</Text>
         <View style={{ width: 40 }} />
-      </View>
+      </LinearGradient>
 
       <ScrollView
         contentContainerStyle={[styles.scrollContainer, { paddingBottom: safeBottomPadding }]}
@@ -174,10 +189,8 @@ export default function UpcomingJobsScreen() {
                 key={application.id}
                 style={styles.jobCard}
                 onPress={() => {
-                  // Navigate directly to job session if it exists
-                  if (session?.id) {
-                    router.push(`/(tabs)/job-session/${session.id}`);
-                  }
+                  // Always navigate to job detail
+                  router.push(`/(tabs)/job-detail/${application.id}`);
                 }}
                 activeOpacity={0.7}
               >
@@ -226,11 +239,11 @@ export default function UpcomingJobsScreen() {
                   </View>
                 )}
 
-                {hospital?.address && (
+                {(application.job_requirement?.address || application.job_requirement?.latitude || hospital?.address) && (
                   <View style={styles.addressRow}>
                     <MapPin size={14} color={NeutralColors.textSecondary} />
                     <Text style={styles.addressText} numberOfLines={1}>
-                      {hospital.address}
+                      {application.job_requirement?.address || (application.job_requirement?.latitude ? "Custom Location" : hospital?.address)}
                     </Text>
                   </View>
                 )}
@@ -239,10 +252,8 @@ export default function UpcomingJobsScreen() {
                   <TouchableOpacity
                     style={styles.viewButton}
                     onPress={() => {
-                      // Always navigate to job session if it exists
-                      if (session?.id) {
-                        router.push(`/(tabs)/job-session/${session.id}`);
-                      }
+                      // Always navigate to job detail
+                      router.push(`/(tabs)/job-detail/${application.id}`);
                     }}
                   >
                     <Navigation size={16} color={PrimaryColors.main} />
@@ -272,7 +283,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 60,
     paddingBottom: 20,
-    backgroundColor: '#1E40AF',
+    // Gradient handles background
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,

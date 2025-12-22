@@ -34,21 +34,20 @@ export function LocationPickerMap({
       const lng = typeof initialLongitude === 'number' ? initialLongitude : parseFloat(initialLongitude as string);
       
       if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
-        setRegion({
+        setRegion(prev => ({
+          ...prev,
           latitude: lat,
           longitude: lng,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        });
-        setLoading(false);
+        }));
+        // Don't set loading to false here, it might cause flashing if we are just updating
+        if (loading) setLoading(false);
         return;
       }
     }
 
-    // Just use default location (India center) - don't try to get current location
-    // This prevents the infinite loading issue
-    setLoading(false);
-  }, []) // Remove dependencies to run only on mount
+    // Only stop loading if we haven't found valid coordinates initially
+    if (loading) setLoading(false);
+  }, [initialLatitude, initialLongitude]);
 
   const onRegionChangeComplete = (newRegion: Region) => {
     setRegion(newRegion);

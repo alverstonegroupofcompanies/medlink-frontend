@@ -10,10 +10,13 @@ import {
   Image,
   Dimensions,
   Platform,
+  StatusBar,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { MapPin, Clock, CheckCircle, XCircle, Building2, Navigation, AlertCircle } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { MapPin, Clock, CheckCircle, XCircle, Building2, Navigation, AlertCircle, ArrowLeft } from 'lucide-react-native';
 import { DoctorPrimaryColors as PrimaryColors, DoctorStatusColors as StatusColors, DoctorNeutralColors as NeutralColors } from '@/constants/doctor-theme';
+import { ModernColors } from '@/constants/modern-theme';
 import { useSafeBottomPadding } from '@/components/screen-safe-area';
 import API from '../api';
 import * as Location from 'expo-location';
@@ -25,6 +28,7 @@ export default function ApprovedApplicationsScreen() {
   const [applications, setApplications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [checkingIn, setCheckingIn] = useState<number | null>(null);
+  const [gpsCheckInterval, setGpsCheckInterval] = useState<any>(null);
   const [gpsEnabled, setGpsEnabled] = useState(true);
   const safeBottomPadding = useSafeBottomPadding();
 
@@ -43,7 +47,7 @@ export default function ApprovedApplicationsScreen() {
 
   // GPS Monitoring
   useEffect(() => {
-    let gpsCheckInterval: NodeJS.Timeout;
+    let gpsCheckInterval: any;
 
     const checkGPSStatus = async () => {
       try {
@@ -242,6 +246,19 @@ export default function ApprovedApplicationsScreen() {
   if (loading) {
     return (
       <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={ModernColors.primary.main} />
+        <LinearGradient
+            colors={ModernColors.primary.gradient as [string, string]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.header}
+        >
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <ArrowLeft size={24} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Approved Applications</Text>
+          <View style={{ width: 40 }} />
+        </LinearGradient>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={PrimaryColors.main} />
           <Text style={styles.loadingText}>Loading approved applications...</Text>
@@ -252,6 +269,20 @@ export default function ApprovedApplicationsScreen() {
 
   return (
     <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={ModernColors.primary.main} />
+      <LinearGradient
+          colors={ModernColors.primary.gradient as [string, string]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.header}
+      >
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <ArrowLeft size={24} color="#fff" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Approved Applications</Text>
+        <View style={{ width: 40 }} />
+      </LinearGradient>
+
       <ScrollView
         contentContainerStyle={[styles.scrollContainer, { paddingBottom: safeBottomPadding }]}
         showsVerticalScrollIndicator={false}
@@ -301,10 +332,13 @@ export default function ApprovedApplicationsScreen() {
                 </View>
 
                 {/* Address */}
-                {hospital?.address && (
+                {/* Address */}
+                {(application.job_requirement?.address || application.job_requirement?.latitude || hospital?.address) && (
                   <View style={styles.addressRow}>
                     <MapPin size={16} color={NeutralColors.textSecondary} />
-                    <Text style={styles.addressText}>{hospital.address}</Text>
+                    <Text style={styles.addressText}>
+                      {application.job_requirement?.address || (application.job_requirement?.latitude ? "Custom Location" : hospital?.address)}
+                    </Text>
                   </View>
                 )}
 
@@ -424,7 +458,7 @@ export default function ApprovedApplicationsScreen() {
                       trackingStatus === 'active' && !isWithinWarningPeriod && styles.urgentButton,
                       isWithinWarningPeriod && styles.criticalUrgentButton,
                     ]}
-                    onPress={() => handleStartTracking(application)}
+                    onPress={() => router.push(`/(tabs)/job-detail/${application.id}`)}
                     disabled={!canStartTracking}
                   >
                     {trackingStatus === 'too_early' ? (
@@ -468,7 +502,7 @@ export default function ApprovedApplicationsScreen() {
                 {isCheckedIn && (
                   <TouchableOpacity
                     style={[styles.checkInButton, { backgroundColor: StatusColors.success }]}
-                    onPress={() => router.push(`/check-in/${session.id}`)}
+                    onPress={() => router.push(`/(tabs)/job-detail/${application.id}`)}
                   >
                     <CheckCircle size={20} color="#fff" />
                     <Text style={styles.checkInButtonText}>View Check-In Details</Text>
@@ -488,6 +522,30 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: NeutralColors.background,
   },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 60,
+    paddingBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 4,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#fff',
+  },
   scrollContainer: {
     padding: 16,
     // paddingBottom is now set dynamically using safeBottomPadding
@@ -496,7 +554,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 50,
   },
   loadingText: {
     marginTop: 16,

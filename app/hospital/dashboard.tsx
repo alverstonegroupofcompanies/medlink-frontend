@@ -210,6 +210,35 @@ export default function HospitalDashboard() {
     }
   };
 
+  const reverseGeocode = async (latitude: number, longitude: number) => {
+    try {
+      const result = await Location.reverseGeocodeAsync({ latitude, longitude });
+      if (result.length > 0) {
+        const addr = result[0];
+        const addressParts = [
+          addr.name,
+          addr.street,
+          addr.district,
+          addr.city,
+          addr.subregion,
+          addr.region,
+          addr.postalCode,
+          addr.country
+        ].filter(part => part && part !== null);
+        
+        const formattedAddress = [...new Set(addressParts)].join(', '); // Remove duplicates
+        
+        setFormData(prev => ({
+          ...prev,
+          address: formattedAddress,
+          location_name: addr.city || addr.subregion || addr.region || ''
+        }));
+      }
+    } catch (error) {
+      console.log('Reverse geocoding failed:', error);
+    }
+  };
+
   const getCurrentLocation = async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -219,10 +248,14 @@ export default function HospitalDashboard() {
       }
 
       const loc = await Location.getCurrentPositionAsync({});
-      setLocation({
+      const newLocation = {
         latitude: loc.coords.latitude,
         longitude: loc.coords.longitude,
-      });
+      };
+      
+      setLocation(newLocation);
+      await reverseGeocode(newLocation.latitude, newLocation.longitude);
+      
       Alert.alert('Success', 'Location captured!');
     } catch (error) {
       Alert.alert('Error', 'Failed to get location');
@@ -924,28 +957,37 @@ export default function HospitalDashboard() {
                 </View>
               ) : (
                 <View style={styles.customLocationContainer}>
-                  <View style={styles.customLocationHeader}>
-                    <Text style={styles.mapHint}>
-                      Drag map to pin exact job location
-                    </Text>
-                    <TouchableOpacity onPress={() => {
-                      setIsCustomLocation(false);
-                      if (hospital?.latitude && hospital?.longitude) {
-                        setLocation({
-                          latitude: parseFloat(hospital.latitude),
-                          longitude: parseFloat(hospital.longitude)
-                        });
-                      }
-                    }}>
-                      <Text style={styles.resetLocationText}>Reset to Default</Text>
+                    <View style={styles.locationActionsRow}>
+                      <Text style={styles.mapHint}>
+                        Drag map to pin exact job location
+                      </Text>
+                      <TouchableOpacity onPress={() => {
+                        setIsCustomLocation(false);
+                        if (hospital?.latitude && hospital?.longitude) {
+                          setLocation({
+                            latitude: parseFloat(hospital.latitude),
+                            longitude: parseFloat(hospital.longitude)
+                          });
+                        }
+                      }}>
+                        <Text style={styles.resetLocationText}>Reset to Default</Text>
+                      </TouchableOpacity>
+                    </View>
+                    
+                    <TouchableOpacity 
+                      style={styles.useCurrentLocationBtn}
+                      onPress={getCurrentLocation}
+                    >
+                      <Navigation size={16} color="#fff" fill="#fff" />
+                      <Text style={styles.useCurrentLocationText}>Use Current Device Location</Text>
                     </TouchableOpacity>
-                  </View>
                   
                   <LocationPickerMap
                     initialLatitude={location?.latitude}
                     initialLongitude={location?.longitude}
                     onLocationSelect={(lat, lng) => {
                       setLocation({ latitude: lat, longitude: lng });
+                      reverseGeocode(lat, lng);
                     }}
                     height={280}
                   />
@@ -1489,6 +1531,28 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
+  },
+  locationActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  useCurrentLocationBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: PrimaryColors.main,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginBottom: 12,
+    gap: 8,
+  },
+  useCurrentLocationText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   resetLocationText: {
     color: PrimaryColors.main,

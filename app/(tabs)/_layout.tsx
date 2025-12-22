@@ -113,7 +113,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="history"
         options={{
-          title: 'Job Sessions',
+          title: 'History',
           tabBarIcon: ({ color, focused }) => (
             <View
               style={{
@@ -170,19 +170,7 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="check-in"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
         name="job-detail"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="job-session"
         options={{
           href: null,
         }}

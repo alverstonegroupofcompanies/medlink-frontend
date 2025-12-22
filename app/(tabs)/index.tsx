@@ -596,7 +596,7 @@ export default function DoctorHome() {
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={styles.attentionViewButton}
-                          onPress={() => router.push(`/(tabs)/job-session/${session.id}`)}
+                          onPress={() => router.push(`/(tabs)/job-detail/${session.application_id}`)}
                         >
                           <Text style={styles.attentionViewText}>View Details</Text>
                           <ArrowRight size={16} color="#fff" />
@@ -686,7 +686,7 @@ export default function DoctorHome() {
                           <View style={styles.requirementInfoRow}>
                             <MapPin size={14} color={ModernColors.text.secondary} />
                             <Text style={styles.requirementInfoText} numberOfLines={1}>
-                            {requirement.hospital?.address || requirement.location || 'Location not specified'}
+                            {requirement.address || (requirement.latitude ? "Custom Location" : requirement.location || requirement.hospital?.address || 'Location not specified')}
                             </Text>
                           </View>
                       </View>
@@ -1314,5 +1314,16 @@ const styles = StyleSheet.create({
   attentionViewText: {
     ...Typography.captionBold,
     color: '#fff',
+  },
+  requirementInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    marginTop: 4,
+  },
+  requirementInfoText: {
+    ...Typography.caption,
+    color: ModernColors.text.secondary,
+    flex: 1,
   },
 });

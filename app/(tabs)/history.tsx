@@ -11,6 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { router } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import {
   Calendar,
   Clock,
@@ -25,6 +26,7 @@ import {
   ArrowRight,
 } from 'lucide-react-native';
 import { DoctorPrimaryColors as PrimaryColors, DoctorNeutralColors as NeutralColors, DoctorStatusColors as StatusColors } from '@/constants/doctor-theme';
+import { ModernColors } from '@/constants/modern-theme';
 import { useSafeBottomPadding } from '@/components/screen-safe-area';
 import API from '../api';
 import * as Location from 'expo-location';
@@ -133,6 +135,32 @@ export default function HistoryScreen() {
     return R * c; // Distance in km
   };
 
+  const getDerivedStatus = (session: any) => {
+    if (session.status === 'cancelled') return 'cancelled';
+    if (session.status === 'completed') return 'completed';
+    // If checked in, it's effectively in progress or completed
+    if (session.check_in_time || session.attendance?.check_in_time) {
+        return session.status === 'completed' ? 'completed' : 'in_progress';
+    }
+    
+    // Check if missed (scheduled but time passed)
+    if (session.status === 'scheduled') {
+      const sessionDateStr = session.session_date; // YYYY-MM-DD
+      const startTimeStr = session.start_time; // HH:mm:ss
+      
+      const sessionStart = new Date(`${sessionDateStr}T${startTimeStr}`);
+      const now = new Date();
+      
+      // If session start time is more than 30 mins in the past and no check-in
+      // (Using 30 mins buffer as reasonable grace period before marking "Not Attended")
+      if (now.getTime() > sessionStart.getTime() + (30 * 60 * 1000)) {
+        return 'missed';
+      }
+    }
+    
+    return session.status;
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed':
@@ -143,6 +171,8 @@ export default function HistoryScreen() {
         return PrimaryColors.main;
       case 'cancelled':
         return StatusColors.error;
+      case 'missed':
+        return '#EF4444'; // Red for missed
       default:
         return NeutralColors.textTertiary;
     }
@@ -158,6 +188,8 @@ export default function HistoryScreen() {
         return 'Scheduled';
       case 'cancelled':
         return 'Cancelled';
+      case 'missed':
+        return 'Not Attended';
       default:
         return status;
     }
@@ -180,10 +212,15 @@ export default function HistoryScreen() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor="#f8f9fa" />
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Job Sessions</Text>
-        </View>
+        <StatusBar barStyle="light-content" backgroundColor={ModernColors.primary.main} />
+        <LinearGradient
+            colors={ModernColors.primary.gradient as [string, string]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.header}
+        >
+          <Text style={styles.headerTitle}>Job History</Text>
+        </LinearGradient>
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>Loading...</Text>
         </View>
@@ -193,19 +230,24 @@ export default function HistoryScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f8f9fa" />
+      <StatusBar barStyle="light-content" backgroundColor={ModernColors.primary.main} />
       
       {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Job Sessions</Text>
+      <LinearGradient
+          colors={ModernColors.primary.gradient as [string, string]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.header}
+      >
+        <Text style={styles.headerTitle}>Job History</Text>
         <TouchableOpacity
           style={styles.walletButton}
-          onPress={() => router.push('/doctor/wallet')}
+          onPress={() => router.push('/doctor/wallet' as any)}
         >
           <Wallet size={18} color={PrimaryColors.main} />
           <Text style={styles.walletButtonText}>Wallet</Text>
         </TouchableOpacity>
-      </View>
+      </LinearGradient>
 
       {/* Sessions List */}
       <ScrollView
@@ -228,6 +270,7 @@ export default function HistoryScreen() {
             const canCheckIn = session.status === 'scheduled' && !hasCheckedIn;
             const canCheckOut = hasCheckedIn && !hasCheckedOut;
             const hospital = session.job_requirement?.hospital || session.jobRequirement?.hospital;
+            const status = getDerivedStatus(session);
 
             return (
               <View key={session.id} style={styles.sessionCard}>
@@ -240,9 +283,9 @@ export default function HistoryScreen() {
                     <View style={styles.hospitalTextContainer}>
                       <Text style={styles.hospitalName}>{hospital?.name || 'Hospital'}</Text>
                       <View style={styles.statusBadgeContainer}>
-                        <View style={[styles.statusDot, { backgroundColor: getStatusColor(session.status) }]} />
-                        <Text style={[styles.statusText, { color: getStatusColor(session.status) }]}>
-                          {getStatusText(session.status)}
+                        <View style={[styles.statusDot, { backgroundColor: getStatusColor(status) }]} />
+                        <Text style={[styles.statusText, { color: getStatusColor(status) }]}>
+                          {getStatusText(status)}
                         </Text>
                       </View>
                     </View>
@@ -284,12 +327,14 @@ export default function HistoryScreen() {
                     </View>
                   )}
                   
-                  {hospital?.address && (
+                  {(session.job_requirement?.address || session.job_requirement?.latitude || hospital?.address) && (
                     <View style={[styles.detailItem, styles.detailItemFull]}>
                       <MapPin size={16} color={NeutralColors.textSecondary} />
                       <View style={styles.detailItemContent}>
                         <Text style={styles.detailLabel}>Location</Text>
-                        <Text style={styles.detailText} numberOfLines={2}>{hospital.address}</Text>
+                        <Text style={styles.detailText} numberOfLines={2}>
+                          {session.job_requirement?.address || (session.job_requirement?.latitude ? "Custom Location" : hospital?.address)}
+                        </Text>
                       </View>
                     </View>
                   )}
@@ -346,7 +391,11 @@ export default function HistoryScreen() {
                   {canCheckIn && (
                     <TouchableOpacity
                       style={[styles.actionButton, styles.checkInButton]}
-                      onPress={() => handleCheckIn(session.id, hospital?.latitude, hospital?.longitude)}
+                      onPress={() => handleCheckIn(
+                        session.id, 
+                        Number(session.job_requirement?.latitude || hospital?.latitude), 
+                        Number(session.job_requirement?.longitude || hospital?.longitude)
+                      )}
                     >
                       <LogIn size={16} color="#fff" />
                       <Text style={styles.actionButtonText}>Check In</Text>
@@ -355,7 +404,11 @@ export default function HistoryScreen() {
                   {canCheckOut && (
                     <TouchableOpacity
                       style={[styles.actionButton, styles.checkOutButton]}
-                      onPress={() => handleCheckOut(session.id, hospital?.latitude, hospital?.longitude)}
+                      onPress={() => handleCheckOut(
+                        session.id, 
+                        Number(session.job_requirement?.latitude || hospital?.latitude), 
+                        Number(session.job_requirement?.longitude || hospital?.longitude)
+                      )}
                     >
                       <LogOut size={16} color="#fff" />
                       <Text style={styles.actionButtonText}>Check Out</Text>
@@ -363,7 +416,7 @@ export default function HistoryScreen() {
                   )}
                   <TouchableOpacity
                     style={[styles.actionButton, styles.detailsButton]}
-                    onPress={() => router.push(`/(tabs)/job-session/${session.id}`)}
+                    onPress={() => router.push(`/(tabs)/job-detail/${session.application_id}`)}
                   >
                     <Text style={styles.detailsButtonText}>View Details</Text>
                     <ArrowRight size={16} color={PrimaryColors.main} />
@@ -388,29 +441,34 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
-    paddingBottom: 16,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    paddingTop: Platform.OS === 'ios' ? 60 : 50, // Adjusted padding for gradient header (safe area + spacing)
+    paddingBottom: 20,
+    // Removed backgroundColor and borderBottom styles as gradient handles them
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 4,
   },
   headerTitle: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#111827',
+    color: '#ffffff', // White text
     letterSpacing: -0.3,
   },
   walletButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#f0f4ff',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)', // Translucent white for button on gradient
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
   },
   walletButtonText: {
-    color: PrimaryColors.main,
+    color: '#ffffff', // White text
     fontWeight: '600',
     fontSize: 13,
   },
