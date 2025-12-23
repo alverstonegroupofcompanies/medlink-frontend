@@ -32,6 +32,12 @@ export default function DoctorHome() {
   const [loadingApplications, setLoadingApplications] = useState(false);
   const [jobSessions, setJobSessions] = useState<any[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
+  
+  // Loading states
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [weekDates, setWeekDates] = useState<Date[]>([]);
   const [activeJobsCount, setActiveJobsCount] = useState(0);

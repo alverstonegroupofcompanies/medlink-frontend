@@ -169,6 +169,13 @@ export default function TabLayout() {
           href: null,
         }}
       />
+      <Tabs.Screen
+        name="job-detail"
+        options={{
+          href: null,
+          tabBarStyle: { display: 'flex' } // Explicitly ensure it shows
+        }}
+      />
     </Tabs>
   );
 }

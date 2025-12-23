@@ -30,7 +30,7 @@ import {
 } from 'lucide-react-native';
 import { DoctorPrimaryColors as PrimaryColors, DoctorStatusColors as StatusColors, DoctorNeutralColors as NeutralColors } from '@/constants/doctor-theme';
 import { ModernColors } from '@/constants/modern-theme';
-import API from '../api';
+import API from '../../api';
 import * as Location from 'expo-location';
 import { CheckInMapView } from '@/components/CheckInMapView';
 import { StopwatchTimer } from '@/components/StopwatchTimer';
@@ -246,6 +246,40 @@ export default function JobDetailScreen() {
         setCheckingIn(false);
     }
   };
+
+  const handleFinishWork = async () => {
+      try {
+          const sessionId = application.job_session?.id;
+          if (!sessionId) return;
+
+          setLoading(true);
+          const response = await API.post(`/doctor/sessions/${sessionId}/complete`);
+          
+          console.log('Finished work response:', JSON.stringify(response.data, null, 2));
+
+          // Update local state immediately with the returned session
+          if (response.data.session) {
+             console.log('Updating local session with:', response.data.session);
+             setApplication(prev => ({
+                 ...prev,
+                 job_session: response.data.session
+             }));
+             // Force reload in background to be safe
+             loadApplication();
+          } else {
+             console.log('No session in response, reloading...');
+             // Fallback reload if no session returned
+             await loadApplication();
+          }
+          
+          Alert.alert("Success", "Work completed successfully! Waiting for hospital review.");
+      } catch (error: any) {
+          console.error("Finish work error:", error);
+          Alert.alert("Error", error.response?.data?.message || "Failed to complete work");
+      } finally {
+          setLoading(false);
+      }
+  };
   
   const openMaps = () => {
       const hospital = application?.job_requirement?.hospital;
@@ -333,9 +367,67 @@ export default function JobDetailScreen() {
         {/* Status Banner (if checked in) */}
         {isCheckedIn && (
             <View style={styles.timerCard}>
-                 <Text style={styles.timerLabel}>Session Active</Text>
-                 <StopwatchTimer startTime={session.check_in_time} />
-                 <Text style={styles.checkedInTime}>Checked in at {new Date(session.check_in_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
+                 {(session?.status === 'completed' || session?.check_out_time || session?.end_time) ? (() => {
+                    const checkInTime = new Date(session.check_in_time);
+                    const checkOutTime = new Date(session.check_out_time || session.end_time);
+                    let durationMins = session.work_duration_minutes;
+                    
+                    if (!durationMins || durationMins === 0) {
+                        const diffMs = checkOutTime.getTime() - checkInTime.getTime();
+                        durationMins = Math.floor(diffMs / 60000);
+                    }
+                    
+                    const hours = Math.floor(durationMins / 60);
+                    const minutes = Math.round(durationMins % 60);
+
+                    return (
+                        <>
+                            <View style={styles.completedHeader}>
+                                <CheckCircle size={20} color="#16A34A" style={{marginRight: 6}} />
+                                <Text style={[styles.timerLabel, {color: '#16A34A', marginBottom: 0}]}>Session Completed</Text>
+                            </View>
+                            
+                            <View style={styles.timeRow}>
+                                <View style={styles.timeBlock}>
+                                    <Text style={styles.timeLabel}>Check In</Text>
+                                    <Text style={styles.timeValue}>
+                                        {checkInTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                    </Text>
+                                    <Text style={styles.dateLabel}>
+                                        {checkInTime.toLocaleDateString([], {day: 'numeric', month: 'short'})}
+                                    </Text>
+                                </View>
+                                
+                                <View style={styles.dividerContainer}>
+                                    <View style={styles.dividerLine} />
+                                </View>
+
+                                <View style={styles.timeBlock}>
+                                    <Text style={styles.timeLabel}>Check Out</Text>
+                                    <Text style={styles.timeValue}>
+                                        {checkOutTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                    </Text>
+                                    <Text style={styles.dateLabel}>
+                                        {checkOutTime.toLocaleDateString([], {day: 'numeric', month: 'short'})}
+                                    </Text>
+                                </View>
+                            </View>
+                            
+                            <View style={styles.durationBadge}>
+                                <Clock size={14} color="#F59E0B" style={{marginRight: 6}} />
+                                <Text style={styles.durationText}>
+                                    Total Duration: <Text style={{fontWeight: '700', color: '#B45309'}}>{hours}h {minutes}m</Text>
+                                </Text>
+                            </View>
+                        </>
+                    );
+                 })() : (
+                    <>
+                        <Text style={styles.timerLabel}>Session Active</Text>
+                        <StopwatchTimer startTime={session.check_in_time} />
+                        <Text style={styles.checkedInTime}>Checked in at {new Date(session.check_in_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
+                    </>
+                 )}
             </View>
         )}
 
@@ -474,6 +566,41 @@ export default function JobDetailScreen() {
             </View>
         )}
 
+        {/* Finish Work / Payment Status Section */}
+        {isCheckedIn && (
+            <View style={styles.actionContainer}>
+                {session?.status === 'completed' ? (
+                     <View style={styles.statusCard}>
+                        <CheckCircle size={48} color="#16A34A" style={{marginBottom: 12}} />
+                        <Text style={styles.statusTitle}>Work Completed</Text>
+                        <Text style={styles.statusSub}>Waiting for hospital review & payment.</Text>
+                        
+                        <View style={styles.paymentBox}>
+                            <DollarSign size={20} color="#D97706" />
+                            <Text style={styles.paymentText}>Payment Pending</Text>
+                        </View>
+                     </View>
+                ) : (
+                    <TouchableOpacity 
+                        style={[styles.actionButton, { backgroundColor: '#EF4444' }]}
+                        onPress={() => {
+                            Alert.alert(
+                                "Finish Work?",
+                                "Are you sure you want to stop the timer and finish the session?",
+                                [
+                                    { text: "Cancel", style: "cancel" },
+                                    { text: "Yes, Finish", onPress: handleFinishWork }
+                                ]
+                            );
+                        }}
+                    >
+                        <Clock size={20} color="#fff" />
+                        <Text style={styles.btnTextPrimary}>Finish Work</Text>
+                    </TouchableOpacity>
+                )}
+            </View>
+        )}
+
       </ScrollView>
     </View>
   );
@@ -560,23 +687,88 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     marginHorizontal: 16,
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     marginBottom: 16,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  completedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
   },
   timerLabel: {
     fontSize: 12,
     color: '#64748B',
     marginBottom: 8,
-    fontWeight: '600',
+    fontWeight: '700',
     textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   checkedInTime: {
     fontSize: 12,
     color: '#94A3B8',
     marginTop: 8,
+  },
+  timeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      width: '100%',
+      marginBottom: 16,
+  },
+  timeBlock: {
+      alignItems: 'center',
+      flex: 1,
+  },
+  timeLabel: {
+      fontSize: 11,
+      color: '#64748B',
+      marginBottom: 4,
+      fontWeight: '600',
+      textTransform: 'uppercase',
+  },
+  timeValue: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: '#0F172A',
+  },
+  dateLabel: {
+      fontSize: 11,
+      color: '#94A3B8',
+      marginTop: 2,
+  },
+  dividerContainer: {
+      width: 1,
+      height: 40,
+      justifyContent: 'center',
+      alignItems: 'center',
+  },
+  dividerLine: {
+      width: 1,
+      height: '100%',
+      backgroundColor: '#E2E8F0',
+  },
+  durationBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: '#FEF3C7',
+      paddingVertical: 6,
+      paddingHorizontal: 16,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: '#FCD34D',
+  },
+  durationText: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: '#92400E',
   },
   gridContainer: {
     flexDirection: 'row',
@@ -751,5 +943,43 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#fff',
+  },
+  statusCard: {
+      backgroundColor: '#fff',
+      borderRadius: 16,
+      padding: 24,
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 4,
+      width: '100%',
+  },
+  statusTitle: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: '#0F172A',
+      marginBottom: 8,
+  },
+  statusSub: {
+      fontSize: 14,
+      color: '#64748B',
+      marginBottom: 20,
+      textAlign: 'center',
+  },
+  paymentBox: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: '#FEF3C7',
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 20,
+      gap: 8,
+  },
+  paymentText: {
+      color: '#D97706',
+      fontWeight: '600',
+      fontSize: 14,
   },
 });

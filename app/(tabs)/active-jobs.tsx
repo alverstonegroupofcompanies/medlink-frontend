@@ -10,7 +10,7 @@ import {
   Dimensions,
   StatusBar,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { 
   ArrowLeft, 
@@ -31,9 +31,11 @@ export default function ActiveJobsScreen() {
   const [applications, setApplications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadActiveJobs();
-  }, []);
+  useFocusEffect(
+    React.useCallback(() => {
+      loadActiveJobs();
+    }, [])
+  );
 
   const loadActiveJobs = async () => {
     try {

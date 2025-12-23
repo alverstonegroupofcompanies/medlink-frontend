@@ -12,6 +12,7 @@ import {
   Keyboard,
   Modal,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { Card, Surface, Button, useTheme, Chip, Avatar, FAB } from 'react-native-paper';
 import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors, HospitalStatusColors as StatusColors } from '@/constants/hospital-theme';
@@ -35,7 +36,41 @@ const HOSPITAL_INFO_KEY = 'hospitalInfo';
 
 export default function HospitalDashboard() {
   const theme = useTheme();
+  // Use refs to track if data has been loaded at least once to avoid spinner flicker on focus
+  const hasLoadedSessions = React.useRef(false);
+
   const [hospital, setHospital] = useState<any>(null);
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [loadingSessions, setLoadingSessions] = useState(false);
+
+  const loadSessions = async (silent = false) => {
+      try {
+          // Only show spinner if we haven't loaded before and it's not a silent request
+          if (!silent && !hasLoadedSessions.current) {
+             setLoadingSessions(true);
+          }
+          
+          const response = await API.get('/hospital/sessions');
+          const allSessions = response.data.sessions || [];
+          const sorted = allSessions.sort((a: any, b: any) => {
+              const scoreA = (a.status === 'completed' && !a.hospital_confirmed) ? 3 : (a.status === 'in_progress' ? 2 : 1);
+              const scoreB = (b.status === 'completed' && !b.hospital_confirmed) ? 3 : (b.status === 'in_progress' ? 2 : 1);
+              return scoreB - scoreA;
+          });
+          
+          setSessions(prev => {
+             const isDifferent = JSON.stringify(prev) !== JSON.stringify(sorted);
+             return isDifferent ? sorted : prev;
+          });
+          
+          hasLoadedSessions.current = true;
+      } catch (error) {
+          console.log('Error loading sessions', error);
+      } finally {
+          setLoadingSessions(false);
+      }
+  };
+
   const [requirements, setRequirements] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -88,6 +123,7 @@ export default function HospitalDashboard() {
         }
         // If authenticated, load data
         loadHospital();
+        loadSessions(); // Load sessions initially
         loadRequirements();
         loadNotifications();
       } catch (error) {
@@ -99,25 +135,104 @@ export default function HospitalDashboard() {
     checkAuth();
   }, []);
 
-  // Reload requirements when screen comes into focus
+  // Poll for updates when screen is focused
   useFocusEffect(
-    React.useCallback(() => {
-      console.log('🔄 Hospital dashboard focused - reloading requirements');
-      loadRequirements();
-      loadNotifications();
-      
-      // Set up polling for live notifications (every 60 seconds, only when focused)
-      const notificationInterval = setInterval(() => {
-        loadNotifications();
-      }, 60000); // Poll every 60 seconds (reduced from 30)
-      
-      // Cleanup interval when screen loses focus
-      return () => {
-        clearInterval(notificationInterval);
-      };
+    useCallback(() => {
+        let isActive = true;
+
+        const pollData = async () => {
+            if (!isActive) return;
+            // Silent refresh to avoid flickering
+            await Promise.all([
+                loadSessions(true),
+                loadRequirements(true),
+                loadNotifications(true)
+            ]);
+        };
+
+        // Poll every 15 seconds
+        const intervalId = setInterval(pollData, 15000);
+        
+        // Initial load on focus (silent)
+        pollData();
+
+        return () => {
+            isActive = false;
+            clearInterval(intervalId);
+        };
     }, [])
   );
 
+  const loadRequirements = async (silent = false) => {
+    try {
+      const response = await API.get('/hospital/my-requirements');
+      const newData = response.data.requirements || [];
+      
+      setRequirements(prev => {
+        const isDifferent = JSON.stringify(prev) !== JSON.stringify(newData);
+        return isDifferent ? newData : prev;
+      });
+    } catch (error: any) {
+      console.error('Error loading requirements:', error);
+    }
+  };
+
+  const [isShowingNotification, setIsShowingNotification] = useState(false);
+  const notificationCountRef = React.useRef(0); // Use ref for stable comparison in callbacks
+
+  const loadNotifications = async (silent = false) => {
+    try {
+      // 1. Get Unread Count first (lightweight)
+      const countResponse = await API.get('/hospital/notifications/unread-count');
+      const newCount = countResponse.data.unread_count || 0;
+      
+      // Only update state if changed
+      if (newCount !== notificationCount) {
+         setNotificationCount(newCount);
+      }
+
+      // 2. Handling Local Notifications
+      const previousCount = notificationCountRef.current;
+      
+      if (newCount > previousCount && !isShowingNotification) {
+          setIsShowingNotification(true);
+          // ... fetch latest notification logic ...
+           try {
+             // Get latest notification
+             const notificationsResponse = await API.get('/hospital/notifications?page=1&per_page=1');
+             const latestNotification = notificationsResponse.data.notifications?.[0];
+
+             if (latestNotification && !latestNotification.is_read) {
+                 if (Platform.OS !== 'web') {
+                    try {
+                        const { scheduleLocalNotification } = require('@/utils/notifications');
+                        await scheduleLocalNotification(
+                            latestNotification.title,
+                            latestNotification.message,
+                            {
+                                type: latestNotification.type,
+                                user_type: latestNotification.user_type || 'hospital',
+                                notification_id: latestNotification.id,
+                                ...(latestNotification.data || {}),
+                            },
+                            latestNotification.id 
+                        );
+                    } catch (e) { console.warn('Local notif error', e); }
+                 }
+             }
+          } catch (e) { console.warn('Fetch latest notif error', e); }
+          finally {
+              setTimeout(() => setIsShowingNotification(false), 2000);
+          }
+      }
+      
+      notificationCountRef.current = newCount;
+
+    } catch (error: any) {
+      console.error('Error loading notifications:', error);
+    }
+  };
+  
   const loadHospital = async () => {
     try {
       const info = await AsyncStorage.getItem(HOSPITAL_INFO_KEY);
@@ -135,78 +250,6 @@ export default function HospitalDashboard() {
       }
     } catch (error) {
       console.error('Error loading hospital:', error);
-    }
-  };
-
-  const loadRequirements = async () => {
-    try {
-      const response = await API.get('/hospital/my-requirements');
-      setRequirements(response.data.requirements || []);
-    } catch (error: any) {
-      console.error('Error loading requirements:', error);
-    }
-  };
-
-  const [isShowingNotification, setIsShowingNotification] = useState(false);
-
-  const loadNotifications = async () => {
-    try {
-      const response = await API.get('/hospital/notifications/unread-count');
-      const newCount = response.data.unread_count || 0;
-      const previousCount = notificationCount;
-      
-      // If count increased (new notification arrived), show local notification
-      if (newCount > previousCount && !isShowingNotification) {
-        setIsShowingNotification(true);
-        try {
-          // Get latest notification to show
-          const notificationsResponse = await API.get('/hospital/notifications?page=1&per_page=1');
-          const latestNotification = notificationsResponse.data.notifications?.[0];
-          
-          // Only show if this is a new unread notification
-          if (latestNotification && !latestNotification.is_read) {
-            // Skip local notifications on web (not supported)
-            if (Platform.OS !== 'web') {
-              try {
-                const { scheduleLocalNotification } = require('@/utils/notifications');
-                await scheduleLocalNotification(
-                  latestNotification.title,
-                  latestNotification.message,
-                  {
-                    type: latestNotification.type,
-                    user_type: latestNotification.user_type || 'hospital',
-                    notification_id: latestNotification.id,
-                    ...(latestNotification.data || {}),
-                  },
-                  latestNotification.id // Pass notification ID for deduplication
-                );
-              } catch (notifError) {
-                console.warn('⚠️ Failed to schedule local notification:', notifError);
-              }
-            } else {
-              // On web, just log the notification
-              console.log('📬 New notification:', latestNotification.title, latestNotification.message);
-            }
-          }
-        } catch (notifError) {
-          console.warn('⚠️ Failed to show local notification:', notifError);
-          // Don't break - just continue
-        } finally {
-          // Reset flag after a short delay to allow for proper processing
-          setTimeout(() => {
-            setIsShowingNotification(false);
-          }, 2000);
-        }
-      } else {
-        // Reset flag if count didn't increase (notification already processed)
-        setIsShowingNotification(false);
-      }
-      
-      setNotificationCount(newCount);
-    } catch (error: any) {
-      console.error('Error loading notifications:', error);
-      setNotificationCount(0);
-      setIsShowingNotification(false);
     }
   };
 
@@ -789,6 +832,78 @@ export default function HospitalDashboard() {
                 ))
               )}
             </View>
+
+            {/* Active & Recent Work Section */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                 <Text style={styles.sectionTitle}>Active & Recent Work</Text>
+                 <TouchableOpacity onPress={() => router.push('/hospital/sessions' as any)}>
+                    <Text style={{color: '#2563EB', fontWeight: '600'}}>View All</Text>
+                 </TouchableOpacity>
+              </View>
+              
+              {loadingSessions && sessions.length === 0 ? (
+                  <View style={{padding: 20, alignItems: 'center'}}>
+                      <ActivityIndicator size="small" color={PrimaryColors.main} />
+                  </View>
+              ) : (!sessions || sessions.length === 0) ? (
+                  <Card style={styles.emptyCard} mode="outlined">
+                    <Card.Content style={styles.emptyContent}>
+                       <Clock size={40} color="#9CA3AF" />
+                       <Text style={styles.emptyTitle}>No Active Work</Text>
+                       <Text style={styles.emptySubtitle}>Approved job sessions will appear here</Text>
+                    </Card.Content>
+                  </Card>
+              ) : (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{paddingRight: 16}}>
+                      {sessions.slice(0, 5).map((session: any) => (
+                          <TouchableOpacity 
+                            key={session.id} 
+                            style={styles.workCard}
+                            onPress={() => {
+                                // If completed and not confirmed, go to review. Else details.
+                                if (session.status === 'completed' && !session.hospital_confirmed) {
+                                  router.push(`/hospital/review-session/${session.id}` as any);
+                                } else {
+                                  router.push(`/hospital/job-session/${session.id}` as any);
+                                }
+                            }}
+                          >
+                             <View style={styles.workHeader}>
+                                <Avatar.Image 
+                                    size={40} 
+                                    source={session.doctor?.profile_photo ? { uri: session.doctor.profile_photo } : require('@/assets/images/placeholder-doctor.png')} 
+                                />
+                                <View style={{marginLeft: 10, flex: 1}}>
+                                    <Text style={styles.workDoctorName} numberOfLines={1}>{session.doctor?.name}</Text>
+                                    <Text style={styles.workDept} numberOfLines={1}>{session.job_requirement?.department}</Text>
+                                </View>
+                             </View>
+                             
+                             <View style={styles.workStatusRow}>
+                                <View style={[
+                                    styles.workStatusBadge, 
+                                    { backgroundColor: session.status === 'completed' ? '#DCFCE7' : '#DBEAFE' }
+                                ]}>
+                                    <Text style={{
+                                        color: session.status === 'completed' ? '#166534' : '#1E40AF',
+                                        fontSize: 10, fontWeight: '700'
+                                    }}>
+                                        {session.status === 'completed' ? (session.hospital_confirmed ? 'APPROVED' : 'REVIEW NEEDED') : 'IN PROGRESS'}
+                                    </Text>
+                                </View>
+                             </View>
+                             
+                             <Text style={styles.workDate}>
+                                {new Date(session.session_date).toLocaleDateString()}
+                             </Text>
+                          </TouchableOpacity>
+                      ))}
+                  </ScrollView>
+              )}
+            </View>
+
+            {/* Requirements Section */}
           </>
         ) : (
           <Card style={styles.formCard} mode="outlined">
@@ -1558,5 +1673,46 @@ const styles = StyleSheet.create({
     color: PrimaryColors.main,
     fontSize: 13,
     fontWeight: '600',
+  },
+  workCard: {
+      backgroundColor: '#fff',
+      borderRadius: 12,
+      padding: 12,
+      marginRight: 12,
+      width: 200,
+      borderWidth: 1,
+      borderColor: '#E5E7EB',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.05,
+      shadowRadius: 2,
+      elevation: 2,
+  },
+  workHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 10,
+  },
+  workDoctorName: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: '#1F2937',
+  },
+  workDept: {
+      fontSize: 12,
+      color: '#6B7280',
+  },
+  workStatusRow: {
+      marginBottom: 8,
+  },
+  workStatusBadge: {
+      alignSelf: 'flex-start',
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 4,
+  },
+  workDate: {
+      fontSize: 12,
+      color: '#9CA3AF',
   },
 });

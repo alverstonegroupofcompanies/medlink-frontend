@@ -228,22 +228,15 @@ export default function HospitalSessionsScreen() {
                   </View>
                 </View>
 
-                {/* Actions */}
+                {/* Actions - Review & Pay */}
                 {isCompleted && !isApproved && (
                   <View style={styles.actionsContainer}>
                     <TouchableOpacity
                       style={[styles.actionButton, styles.approveButton]}
-                      onPress={() => handleApproveSession(session.id)}
-                      disabled={processingId === session.id}
+                      onPress={() => router.push(`/hospital/review-session/${session.id}`)}
                     >
-                      {processingId === session.id ? (
-                        <ActivityIndicator size="small" color="#fff" />
-                      ) : (
-                        <>
-                          <CheckCircle size={18} color="#fff" />
-                          <Text style={styles.actionButtonText}>Approve Work</Text>
-                        </>
-                      )}
+                        <CheckCircle size={18} color="#fff" />
+                        <Text style={styles.actionButtonText}>Review & Pay</Text>
                     </TouchableOpacity>
                   </View>
                 )}

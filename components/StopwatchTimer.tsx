@@ -4,25 +4,42 @@ import { Clock } from 'lucide-react-native';
 
 interface StopwatchTimerProps {
   startTime: string; // ISO string
+  endTime?: string | null; // Optional ISO string
 }
 
-export function StopwatchTimer({ startTime }: StopwatchTimerProps) {
+export function StopwatchTimer({ startTime, endTime }: StopwatchTimerProps) {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
-    const start = new Date(startTime).getTime();
+    // Safe parse function for SQL timestamp format (YYYY-MM-DD HH:mm:ss)
+    const parseDate = (dateStr: string) => {
+      if (!dateStr) return 0;
+      // Replace space with T for ISO format compliance on mobile
+      const safeStr = dateStr.replace(' ', 'T'); 
+      return new Date(safeStr).getTime();
+    };
+
+    const start = parseDate(startTime);
+    
+    // If endTime is provided, just show the fixed duration
+    if (endTime) {
+      const end = parseDate(endTime);
+      setElapsed(Math.max(0, end - start));
+      return;
+    }
     
     // Update immediately
-    const now = new Date().getTime();
-    setElapsed(Math.max(0, now - start));
+    const updateElapsed = () => {
+      const now = new Date().getTime();
+      setElapsed(Math.max(0, now - start));
+    };
+    
+    updateElapsed();
 
-    const interval = setInterval(() => {
-      const currentNow = new Date().getTime();
-      setElapsed(Math.max(0, currentNow - start));
-    }, 1000);
+    const interval = setInterval(updateElapsed, 1000);
 
     return () => clearInterval(interval);
-  }, [startTime]);
+  }, [startTime, endTime]);
 
   const formatTime = (ms: number) => {
     const totalSeconds = Math.floor(ms / 1000);
