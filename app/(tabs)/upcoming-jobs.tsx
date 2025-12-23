@@ -190,7 +190,7 @@ export default function UpcomingJobsScreen() {
                 style={styles.jobCard}
                 onPress={() => {
                   // Always navigate to job detail
-                  router.push(`/(tabs)/job-detail/${application.id}`);
+                  router.push(`/job-detail/${application.id}`);
                 }}
                 activeOpacity={0.7}
               >

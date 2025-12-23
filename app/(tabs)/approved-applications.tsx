@@ -502,7 +502,7 @@ export default function ApprovedApplicationsScreen() {
                 {isCheckedIn && (
                   <TouchableOpacity
                     style={[styles.checkInButton, { backgroundColor: StatusColors.success }]}
-                    onPress={() => router.push(`/(tabs)/job-detail/${application.id}`)}
+                    onPress={() => router.push(`/job-detail/${application.id}`)}
                   >
                     <CheckCircle size={20} color="#fff" />
                     <Text style={styles.checkInButtonText}>View Check-In Details</Text>

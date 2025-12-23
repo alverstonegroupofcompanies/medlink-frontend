@@ -117,8 +117,7 @@ export default function HospitalLoginScreen() {
           >
             <LinearGradient colors={[PrimaryColors.lighter, NeutralColors.background]} style={styles.header}>
               <ThemedText style={styles.helloText}>Hello Hospital!</ThemedText>
-              <ThemedText style={styles.welcomeText}>Welcome to</ThemedText>
-              <ThemedText style={styles.welcomeText}>Alverstone MedLink</ThemedText>
+              <ThemedText style={styles.welcomeText}>Welcome to Alverstone MedLink</ThemedText>
             </LinearGradient>
 
           <View style={formStyle}>
@@ -152,12 +151,18 @@ export default function HospitalLoginScreen() {
               />
             </View>
 
-            <ThemedButton
-              title="Login"
-              onPress={handleLogin}
-              loading={loading}
+            <TouchableOpacity 
               style={styles.loginButton}
-            />
+              onPress={handleLogin}
+              activeOpacity={0.8}
+              disabled={loading}
+            >
+              {loading ? (
+                <ThemedText style={{ color: '#FFFFFF', fontWeight: '600' }}>Logging in...</ThemedText>
+              ) : (
+                <ThemedText style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 16 }}>Login</ThemedText>
+              )}
+            </TouchableOpacity>
 
             <View style={styles.signupContainer}>
               <ThemedText style={styles.signupText}>Don't have an account?{' '}</ThemedText>
@@ -200,60 +205,90 @@ const styles = StyleSheet.create({
   },
   container: { flex: 1, backgroundColor: NeutralColors.background },
   keyboardView: { flex: 1 },
-  scrollContent: { flexGrow: 1, paddingBottom: 20 },
+  scrollContent: { 
+    flexGrow: 1, 
+    justifyContent: 'center',
+    paddingBottom: 20 
+  },
   scrollContentTablet: { paddingHorizontal: 48, paddingBottom: 32 },
   header: {
     backgroundColor: PrimaryColors.lighter,
-    borderBottomLeftRadius: 80,
-    borderBottomRightRadius: 80,
-    paddingTop: Platform.OS === 'ios' ? 60 : 50,
-    paddingBottom: 60,
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingBottom: 40,
     paddingHorizontal: 30,
-    alignItems: 'flex-start',
-    minHeight: 200,
+    minHeight: 180,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   helloText: { 
-    fontSize: 38, 
+    fontSize: 32, 
     fontWeight: '700', 
-    color: PrimaryColors.darkText, 
-    marginBottom: 12,
-    lineHeight: 48,
+    color: PrimaryColors.darker, 
+    marginBottom: 8,
     includeFontPadding: false,
   },
   welcomeText: { 
     fontSize: 16, 
     color: NeutralColors.textSecondary, 
-    marginTop: 2,
-    lineHeight: 22,
-    includeFontPadding: false,
+    marginTop: 0,
+    fontWeight: '500',
   },
   form: {
     backgroundColor: NeutralColors.cardBackground,
-    marginHorizontal: 20,
-    marginTop: -40,
-    borderRadius: 25,
-    paddingVertical: 30,
+    marginHorizontal: 24,
+    marginTop: -30,
+    borderRadius: 24,
+    paddingVertical: 32,
     paddingHorizontal: 24,
     shadowColor: '#000',
     shadowOpacity: 0.1,
     shadowRadius: 10,
-    elevation: 4,
+    elevation: 8,
   },
   formTablet: {
     alignSelf: 'center',
-    width: '80%',
-    maxWidth: 640,
-    paddingVertical: 40,
-    paddingHorizontal: 36,
+    width: '70%',
+    maxWidth: 500,
   },
-  loginHeading: { fontSize: 22, fontWeight: '700', marginBottom: 20 },
+  loginHeading: { 
+    fontSize: 24, 
+    fontWeight: '700', 
+    marginBottom: 24, 
+    textAlign: 'center',
+    color: PrimaryColors.darker
+  },
   inputGroup: { marginBottom: 16 },
-  input: { width: '100%', borderRadius: 25, paddingHorizontal: 15, height: 48 },
-  loginButton: { marginTop: 8, backgroundColor: PrimaryColors.main, borderRadius: 25, height: 50, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
-  signupContainer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 10 },
+  input: { 
+    width: '100%', 
+    borderRadius: 12, 
+    paddingHorizontal: 16, 
+    height: 50,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  loginButton: { 
+    marginTop: 8, 
+    backgroundColor: PrimaryColors.main, 
+    borderRadius: 12, 
+    height: 50, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginBottom: 16,
+    shadowColor: PrimaryColors.main,
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  signupContainer: { 
+    flexDirection: 'row', 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginTop: 8, 
+  },
   signupText: { fontSize: 14, color: NeutralColors.textSecondary },
   signupLink: { fontSize: 14, fontWeight: '600', color: PrimaryColors.main },
-  backContainer: { marginTop: 20, alignItems: 'center' },
+  backContainer: { marginTop: 16, alignItems: 'center' },
   backLink: { fontSize: 14, fontWeight: '600', color: PrimaryColors.main },
 });
 

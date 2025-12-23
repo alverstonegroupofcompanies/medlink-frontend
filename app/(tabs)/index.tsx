@@ -360,7 +360,11 @@ export default function DoctorHome() {
   };
 
   return (
-    <ScreenSafeArea backgroundColor={ModernColors.background.secondary} excludeBottom={true}>
+    <ScreenSafeArea 
+      backgroundColor={ModernColors.primary.main} 
+      excludeBottom={true}
+      statusBarStyle="light-content"
+    >
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor={ModernColors.primary.main} />
         
@@ -596,7 +600,13 @@ export default function DoctorHome() {
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={styles.attentionViewButton}
-                          onPress={() => router.push(`/(tabs)/job-detail/${session.application_id}`)}
+                          onPress={() => {
+                            if (session.application_id) {
+                              router.push(`/job-detail/${session.application_id}`);
+                            } else {
+                              console.warn("No application ID for session:", session.id);
+                            }
+                          }}
                         >
                           <Text style={styles.attentionViewText}>View Details</Text>
                           <ArrowRight size={16} color="#fff" />

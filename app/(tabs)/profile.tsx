@@ -372,9 +372,12 @@ export default function ProfileScreen() {
   const profileCompletion = doctor ? Math.round(calculateProfileCompletion(doctor) * 100) : 0;
 
   return (
-    <ScreenSafeArea backgroundColor={ModernColors.background.secondary} excludeBottom={true}>
+    <ScreenSafeArea 
+      backgroundColor={ModernColors.primary.main} 
+      excludeBottom={true}
+      statusBarStyle="light-content"
+    >
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={ModernColors.primary.main} />
         
         {/* Modern Header with Gradient */}
         <LinearGradient

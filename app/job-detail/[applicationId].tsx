@@ -30,7 +30,7 @@ import {
 } from 'lucide-react-native';
 import { DoctorPrimaryColors as PrimaryColors, DoctorStatusColors as StatusColors, DoctorNeutralColors as NeutralColors } from '@/constants/doctor-theme';
 import { ModernColors } from '@/constants/modern-theme';
-import API from '../../api';
+import API from '../api';
 import * as Location from 'expo-location';
 import { CheckInMapView } from '@/components/CheckInMapView';
 import { StopwatchTimer } from '@/components/StopwatchTimer';
@@ -62,9 +62,8 @@ export default function JobDetailScreen() {
   const loadApplication = async () => {
     try {
       setLoading(true);
-      const response = await API.get('/doctor/applications');
-      const applications = response.data.applications || [];
-      const app = applications.find((a: any) => a.id.toString() === applicationId);
+      const response = await API.get(`/doctor/applications/${applicationId}`);
+      const app = response.data.application;
       setApplication(app);
       
       // Pre-fill address if available
@@ -208,8 +207,8 @@ export default function JobDetailScreen() {
     }
     
     // Allow check-in attempt for feedback even if far, but block api call
-    if (distance && distance > 0.1) { // 0.1 km = 100m
-        Alert.alert('Too Far to Check In', `You are ${distance < 1 ? Math.round(distance * 1000) + 'm' : distance.toFixed(2) + 'km'} away.\n\nYou must be within 100m of the hospital to check in.`);
+    if (distance && distance > 0.5) { // 0.5 km = 500m
+        Alert.alert('Too Far to Check In', `You are ${distance < 1 ? Math.round(distance * 1000) + 'm' : distance.toFixed(2) + 'km'} away.\n\nYou must be within 500m of the hospital to check in.`);
         return;
     }
 
@@ -411,7 +410,7 @@ export default function JobDetailScreen() {
                 {/* Actually, always show inside 100m hint */}
                 <View style={styles.checkInInfo}>
                     <Text style={styles.checkInHint}>
-                         <MapPin size={12} color={NeutralColors.textSecondary} /> 100m inside to check in
+                         <MapPin size={12} color={NeutralColors.textSecondary} /> 500m inside to check in
                     </Text>
                 </View>
                 

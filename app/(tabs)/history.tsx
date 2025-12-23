@@ -416,7 +416,7 @@ export default function HistoryScreen() {
                   )}
                   <TouchableOpacity
                     style={[styles.actionButton, styles.detailsButton]}
-                    onPress={() => router.push(`/(tabs)/job-detail/${session.application_id}`)}
+                    onPress={() => router.push(`/job-detail/${session.application_id}`)}
                   >
                     <Text style={styles.detailsButtonText}>View Details</Text>
                     <ArrowRight size={16} color={PrimaryColors.main} />
