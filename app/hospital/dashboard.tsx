@@ -67,7 +67,7 @@ export default function HospitalDashboard() {
       } catch (error) {
           console.log('Error loading sessions', error);
       } finally {
-          setLoadingSessions(false);
+          if (!silent) setLoadingSessions(false);
       }
   };
 
@@ -870,10 +870,20 @@ export default function HospitalDashboard() {
                             }}
                           >
                              <View style={styles.workHeader}>
-                                <Avatar.Image 
-                                    size={40} 
-                                    source={session.doctor?.profile_photo ? { uri: session.doctor.profile_photo } : require('@/assets/images/placeholder-doctor.png')} 
-                                />
+                                {(() => {
+                                    if (session.doctor?.profile_photo) {
+                                        console.log(`Doctor ${session.doctor.id} photo:`, session.doctor.profile_photo);
+                                    }
+                                    return session.doctor?.profile_photo ? (
+                                        <Avatar.Image 
+                                            size={40} 
+                                            source={{ uri: session.doctor.profile_photo }} 
+                                            onError={(e) => console.log(`Image load error for ${session.doctor?.name}:`, e.nativeEvent.error)}
+                                        />
+                                    ) : (
+                                        <Avatar.Icon size={40} icon="account" style={{backgroundColor: '#F1F5F9'}} color="#64748B" />
+                                    );
+                                })()}
                                 <View style={{marginLeft: 10, flex: 1}}>
                                     <Text style={styles.workDoctorName} numberOfLines={1}>{session.doctor?.name}</Text>
                                     <Text style={styles.workDept} numberOfLines={1}>{session.job_requirement?.department}</Text>

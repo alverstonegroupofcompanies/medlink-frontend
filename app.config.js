@@ -65,6 +65,9 @@ module.exports = {
       EXPO_PUBLIC_API_PORT: process.env.EXPO_PUBLIC_API_PORT,
       EXPO_PUBLIC_BACKEND_URL: process.env.EXPO_PUBLIC_BACKEND_URL,
       APP_ENV: process.env.APP_ENV || 'development',
+      eas: {
+        projectId: "f054b741-c4cc-496b-b8c0-bcf5103ce78b"
+      }
     }
   }
 };

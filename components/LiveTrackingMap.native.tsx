@@ -1,6 +1,39 @@
+interface DoctorLocation {
+  doctor_id: number;
+  doctor_name: string;
+  latitude: number;
+  longitude: number;
+  department?: string;
+  check_in_verified?: boolean;
+  profile_photo?: string;
+}
+
+interface LiveTrackingMapProps {
+  hospital: {
+    latitude: number;
+    longitude: number;
+    name: string;
+    logo?: string;
+  };
+  doctors: DoctorLocation[];
+  height?: number;
+  initialRegion?: any;
+}
+
+// ... (keep decodePolyline and fetchDirections as is, so I'll skip them in replacement if possible, but I need to replace the component body)
+// I will replace the whole file content from line 7 to 291 to apply changes cleanly including imports.
+// Wait, I need to verify imports. `Image` is used. I'll need `Building2` and `User` from lucide.
+
+// Actually, I can target specific blocks. 
+
+// Block 1: Interfaces
+// Block 2: Component Body (Marker rendering)
+
+// Let's do it in one go for the whole file to be safe with imports.
+
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Text, Image } from 'react-native';
-import { MapPin } from 'lucide-react-native';
+import { MapPin, Building2, User } from 'lucide-react-native';
 import { HospitalPrimaryColors as PrimaryColors } from '@/constants/hospital-theme';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 
@@ -11,6 +44,7 @@ interface DoctorLocation {
   longitude: number;
   department?: string;
   check_in_verified?: boolean;
+  profile_photo?: string;
 }
 
 interface LiveTrackingMapProps {
@@ -18,11 +52,14 @@ interface LiveTrackingMapProps {
     latitude: number;
     longitude: number;
     name: string;
+    logo?: string;
   };
   doctors: DoctorLocation[];
   height?: number;
   initialRegion?: any;
 }
+
+// ... helper functions ... (I will include them to match original)
 
 // Decode Google Maps polyline
 const decodePolyline = (encoded: string): { latitude: number; longitude: number }[] => {
@@ -198,7 +235,11 @@ export function LiveTrackingMap({ hospital, doctors, height = 400, initialRegion
             description="Hospital Location"
           >
             <View style={styles.hospitalMarker}>
-              <Text style={styles.hospitalMarkerIcon}>🏥</Text>
+              {hospital.logo ? (
+                 <Image source={{ uri: hospital.logo }} style={styles.hospitalLogo} resizeMode="cover" />
+              ) : (
+                 <Building2 size={22} color="#fff" />
+              )}
             </View>
           </Marker>
         )}
@@ -237,11 +278,14 @@ export function LiveTrackingMap({ hospital, doctors, height = 400, initialRegion
                 description={`${doctor.department || 'Doctor'} - On the way`}
               >
                 <View style={styles.doctorMarkerContainer}>
-                  <Image
-                    source={require('../assets/images/doctor-marker.png')}
-                    style={styles.doctorMarkerImage}
-                    resizeMode="contain"
-                  />
+                   <View style={styles.doctorMarker}>
+                       {doctor.profile_photo ? (
+                           <Image source={{ uri: doctor.profile_photo }} style={styles.doctorImage} />
+                       ) : (
+                           <User size={24} color="#fff" />
+                       )}
+                   </View>
+                   <View style={styles.markerArrow} />
                 </View>
               </Marker>
             </React.Fragment>
@@ -263,14 +307,49 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   doctorMarkerContainer: {
-    width: 50,
-    height: 50,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
+    width: 50,
+    height: 60,
   },
-  doctorMarkerImage: {
-    width: 48,
-    height: 48,
+  doctorMarker: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#2563EB',
+    borderWidth: 2,
+    borderColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 5,
+  },
+  doctorImage: {
+    width: '100%',
+    height: '100%',
+  },
+  markerArrow: {
+    width: 0,
+    height: 0,
+    backgroundColor: 'transparent',
+    borderStyle: 'solid',
+    borderLeftWidth: 6,
+    borderRightWidth: 6,
+    borderBottomWidth: 0,
+    borderTopWidth: 8,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: '#fff', // White border of the marker
+    marginTop: -2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2, // Weaker shadow for arrow
+    shadowRadius: 1,
+    elevation: 1,
   },
   hospitalMarker: {
     backgroundColor: '#10B981',
@@ -284,6 +363,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 6,
+    borderWidth: 2,
+    borderColor: '#fff',
+    overflow: 'hidden',
+  },
+  hospitalLogo: {
+    width: '100%',
+    height: '100%',
   },
   hospitalMarkerIcon: {
     fontSize: 22,

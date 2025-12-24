@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ArrowLeft, ArrowRight, Star, Clock, Calendar, CheckCircle } from 'lucide-react-native';
+import { ArrowLeft, ArrowRight, Star, Clock, Calendar, CheckCircle, User } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import API from '../../api';
 import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors } from '@/constants/hospital-theme';
@@ -47,27 +47,7 @@ export default function ReviewSessionScreen() {
     }
   };
 // ... (lines 46-123 skipped)
-        {/* Work Summary */}
-        <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Work Summary & Doctor Rating</Text>
-            <View style={styles.statsGrid}>
-                <View style={styles.statItem}>
-                    <Text style={styles.statLabel}>Check In</Text>
-                    <Text style={styles.statValue}>{checkIn.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
-                </View>
-                 <View style={styles.statItem}>
-                    <Text style={styles.statLabel}>Check Out</Text>
-                    <Text style={styles.statValue}>{session.check_out_time ? checkOut.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--'}</Text>
-                </View>
-                 <View style={styles.statItem}>
-                    <Text style={styles.statLabel}>Avg Rating</Text>
-                    <View style={{flexDirection:'row', alignItems:'center', justifyContent:'center'}}>
-                        <Star size={14} color="#F59E0B" fill="#F59E0B" style={{marginRight: 4}} />
-                        <Text style={styles.statValue}>{session.doctor?.average_rating || 'N/A'}</Text>
-                    </View>
-                </View>
-            </View>
-        </View>
+
 
   const handleApprove = async () => {
     if (rating === 0) {
@@ -135,10 +115,13 @@ export default function ReviewSessionScreen() {
         {/* Doctor Card */}
         <View style={styles.card}>
             <View style={styles.doctorRow}>
-                <Image 
-                  source={session.doctor?.profile_photo ? { uri: session.doctor.profile_photo } : require('@/assets/images/placeholder-doctor.png')} 
-                  style={styles.avatar} 
-                />
+                {session.doctor?.profile_photo ? (
+                    <Image source={{ uri: session.doctor.profile_photo }} style={styles.avatar} />
+                ) : (
+                    <View style={[styles.avatar, {backgroundColor: '#F1F5F9', alignItems:'center', justifyContent:'center'}]}>
+                        <User size={24} color="#64748B" />
+                    </View>
+                )}
                 <View>
                     <Text style={styles.doctorName}>Dr. {session.doctor?.name}</Text>
                     <Text style={styles.dept}>{session.job_requirement?.department || 'General Department'}</Text>

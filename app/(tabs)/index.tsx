@@ -34,7 +34,7 @@ export default function DoctorHome() {
   const [loadingSessions, setLoadingSessions] = useState(false);
   
   // Loading states
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const hasLoaded = React.useRef(false);
   const [refreshing, setRefreshing] = useState(false);
 
 
@@ -61,7 +61,7 @@ export default function DoctorHome() {
             await saveDoctorAuth(token, response.data.doctor);
           }
           setDoctor(response.data.doctor);
-          if (response.data.doctor.average_rating) {``
+          if (response.data.doctor.average_rating) {
             setRating(response.data.doctor.average_rating);
           }
           if (response.data.doctor.completed_jobs_count !== undefined) {
@@ -91,8 +91,8 @@ export default function DoctorHome() {
     }
   };
 
-  const loadJobRequirements = async () => {
-    setLoadingRequirements(true);
+  const loadJobRequirements = async (silent = false) => {
+    if (!silent && !hasLoaded.current) setLoadingRequirements(true);
     try {
       const response = await API.get('/doctor/job-requirements');
       console.log('Job requirements response:', response.data);
@@ -102,12 +102,12 @@ export default function DoctorHome() {
       console.error("Error details:", error.response?.data || error.message);
       setJobRequirements([]);
     } finally {
-      setLoadingRequirements(false);
+      if (!silent) setLoadingRequirements(false);
     }
   };
 
-  const loadMyApplications = async () => {
-    setLoadingApplications(true);
+  const loadMyApplications = async (silent = false) => {
+    if (!silent && !hasLoaded.current) setLoadingApplications(true);
     try {
       const response = await API.get('/doctor/applications');
       const applications = response.data.applications || [];
@@ -120,7 +120,7 @@ export default function DoctorHome() {
     } catch (error) {
       console.error("Error loading applications:", error);
     } finally {
-      setLoadingApplications(false);
+      if (!silent) setLoadingApplications(false);
     }
   };
 
@@ -134,8 +134,8 @@ export default function DoctorHome() {
     }
   };
 
-  const loadJobSessions = async () => {
-    setLoadingSessions(true);
+  const loadJobSessions = async (silent = false) => {
+    if (!silent && !hasLoaded.current) setLoadingSessions(true);
     try {
       const response = await API.get('/doctor/sessions');
       console.log('📋 Job Sessions Response:', response.data);
@@ -152,7 +152,7 @@ export default function DoctorHome() {
       console.error("Error loading job sessions:", error);
       setJobSessions([]);
     } finally {
-      setLoadingSessions(false);
+      if (!silent) setLoadingSessions(false);
     }
   };
 
@@ -214,11 +214,22 @@ export default function DoctorHome() {
 
   useFocusEffect(
     React.useCallback(() => {
-      loadDoctor();
-      loadJobRequirements();
-      loadMyApplications();
-      loadNotifications();
-      loadJobSessions();
+      const refreshData = async () => {
+        // First load (silent=false), subsequent loads (silent=true)
+        const silent = hasLoaded.current;
+        
+        await Promise.all([
+          loadDoctor(),
+          loadJobRequirements(silent),
+          loadMyApplications(silent),
+          loadNotifications(),
+          loadJobSessions(silent)
+        ]);
+        
+        hasLoaded.current = true;
+      };
+
+      refreshData();
     }, [])
   );
 

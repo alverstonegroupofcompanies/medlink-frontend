@@ -52,7 +52,8 @@ export default function LiveTrackingScreen() {
   const fetchTrackingData = async () => {
     try {
       // Don't set loading on subsequent polls to avoid flicker
-      if (!doctors.length) setLoading(true);
+      // only rely on initial state or explicit loading calls
+      // if (!doctors.length) setLoading(true); <-- REMOVED causing flicker loop
       
       const response = await API.get('/hospital/live-doctor-locations');
       if (response.data) {

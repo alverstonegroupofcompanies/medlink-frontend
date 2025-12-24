@@ -232,9 +232,8 @@ export default function JobDetailScreen() {
       });
 
       if (response.data.check_in_verified) {
-         Alert.alert('Success', 'Checked in successfully!', [
-             { text: 'OK', onPress: () => loadApplication() }
-         ]);
+         loadApplication(); // Reload immediately to show timer
+         Alert.alert('Success', 'Checked in successfully!');
       } else {
            Alert.alert('Check-In Failed', response.data.message || 'Could not verify location.');
       }
@@ -367,7 +366,7 @@ export default function JobDetailScreen() {
         {/* Status Banner (if checked in) */}
         {isCheckedIn && (
             <View style={styles.timerCard}>
-                 {(session?.status === 'completed' || session?.check_out_time || session?.end_time) ? (() => {
+                 {(session?.status === 'completed' || session?.check_out_time) ? (() => {
                     const checkInTime = new Date(session.check_in_time);
                     const checkOutTime = new Date(session.check_out_time || session.end_time);
                     let durationMins = session.work_duration_minutes;
