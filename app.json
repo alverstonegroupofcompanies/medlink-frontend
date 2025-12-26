@@ -4,7 +4,7 @@
     "slug": "AlverstoneMedLink",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/app-icon.png",
+    "icon": "./assets/images/icon.png",
     "scheme": "alverstonemedlink",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -63,8 +63,7 @@
             "backgroundColor": "#000000"
           }
         }
-      ],
-      "expo-build-properties"
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

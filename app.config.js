@@ -7,7 +7,7 @@ module.exports = {
     slug: "AlverstoneMedLink",
     version: "1.0.0",
     orientation: "portrait",
-    icon: "./assets/images/app-icon.png",
+    icon: "./assets/images/icon.png",
     scheme: "alverstonemedlink",
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
@@ -18,7 +18,7 @@ module.exports = {
     android: {
       adaptiveIcon: {
         backgroundColor: "#E6F4FE",
-        foregroundImage: "./assets/images/app-icon.png",
+        foregroundImage: "./assets/images/android-icon-foreground.png",
         backgroundImage: "./assets/images/android-icon-background.png",
         monochromeImage: "./assets/images/android-icon-monochrome.png"
       },
@@ -75,7 +75,6 @@ module.exports = {
           }
         }
       ],
-      "expo-build-properties"
     ],
     experiments: {
       typedRoutes: true,
