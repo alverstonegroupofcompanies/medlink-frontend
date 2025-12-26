@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, Animated, SafeAreaView, Platform, StatusBar } from 'react-native';
-import { ThemedText } from './themed-text';
+import { StyleSheet, Animated, SafeAreaView, Platform, StatusBar, Image } from 'react-native';
 import { ThemedView } from './themed-view';
-import { DoctorPrimaryColors } from '@/constants/doctor-theme';
 
 export function AppSplashScreen() {
   const [fadeAnim] = useState(new Animated.Value(0));
@@ -27,7 +25,7 @@ export function AppSplashScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ThemedView style={styles.container} lightColor="#ffffff" darkColor="#151718">
+      <ThemedView style={styles.container} lightColor="#ffffff" darkColor="#ffffff">
         <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
         <Animated.View
           style={[
@@ -38,12 +36,11 @@ export function AppSplashScreen() {
             },
           ]}
         >
-          <ThemedText style={styles.title} lightColor={DoctorPrimaryColors.darkText} darkColor="#4fc3f7">
-            Alverstone
-          </ThemedText>
-          <ThemedText style={styles.subtitle} lightColor={DoctorPrimaryColors.darkText} darkColor="#4fc3f7">
-            MedLink
-          </ThemedText>
+          <Image 
+            source={require('../assets/images/splash-logo.png')} 
+            style={styles.logo}
+            resizeMode="contain"
+          />
         </Animated.View>
       </ThemedView>
     </SafeAreaView>
@@ -60,29 +57,18 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 40,
-    paddingHorizontal: 20,
+    backgroundColor: '#ffffff',
   },
   content: {
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
+    height: '100%',
   },
-  title: {
-    fontSize: 42,
-    fontWeight: '700',
-    letterSpacing: 2,
-    marginBottom: 8,
-    lineHeight: 52,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 28,
-    fontWeight: '600',
-    letterSpacing: 3,
-    opacity: 0.9,
-    lineHeight: 36,
-    textAlign: 'center',
+  logo: {
+    width: '80%',
+    height: '60%',
+    maxWidth: 400,
   },
 });
 

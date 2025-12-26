@@ -133,7 +133,7 @@ API.interceptors.response.use(
         console.warn('   4. Allow port 8000 in Windows Firewall (Run as Administrator)');
         console.warn('   5. Test connection from phone browser: http://YOUR_IP:8000/api/test');
         console.warn('═══════════════════════════════════════');
-        error.message = `Cannot connect to server at ${fullUrl}. Please check: 1) Backend is running on 0.0.0.0:8000, 2) IP address in .env matches your network, 3) Firewall allows port 8000, 4) Phone and laptop are on same network.`;
+        error.message = `Cannot connect to server at ${fullUrl}. Please check your internet connection.`;
       } else {
         console.warn('❌ Request Error:', error.message);
       }

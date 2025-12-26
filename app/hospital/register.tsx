@@ -15,6 +15,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { ScreenSafeArea } from '@/components/screen-safe-area';
 
 import { LocationPickerMap } from '@/components/LocationPickerMap';
+import { PermissionGuard } from '@/components/PermissionGuard';
 
 const HOSPITAL_TOKEN_KEY = 'hospitalToken';
 const HOSPITAL_INFO_KEY = 'hospitalInfo';
@@ -98,8 +99,17 @@ export default function HospitalRegisterScreen() {
         const filename = logoUri.split('/').pop() || 'logo.jpg';
         const match = /\.(\w+)$/.exec(filename);
         const type = match ? `image/${match[1]}` : 'image/jpeg';
+        
         // Fix file URI for Android/iOS compatibility
-        const fileUri = Platform.OS === 'ios' ? logoUri.replace('file://', '') : logoUri;
+        let fileUri = logoUri;
+        if (Platform.OS === 'android') {
+            if (!fileUri.startsWith('file://')) {
+                fileUri = `file://${fileUri}`;
+            }
+        } else if (Platform.OS === 'ios') {
+            fileUri = fileUri.replace('file://', '');
+        }
+
         data.append('logo_path', {
           uri: fileUri,
           name: filename,
@@ -219,16 +229,18 @@ export default function HospitalRegisterScreen() {
             <View style={styles.inputGroup}>
               <ThemedText style={styles.label}>Hospital Location</ThemedText>
               <ThemedText style={styles.subLabel}>Drag map to pin exact location</ThemedText>
-              <LocationPickerMap
-                onLocationSelect={(lat, lng) => {
-                  setFormData(prev => ({
-                    ...prev,
-                    latitude: lat.toString(),
-                    longitude: lng.toString()
-                  }));
-                }}
-                height={250}
-              />
+              <PermissionGuard permissionType="location" autoRequest={false}>
+                <LocationPickerMap
+                  onLocationSelect={(lat, lng) => {
+                    setFormData(prev => ({
+                      ...prev,
+                      latitude: lat.toString(),
+                      longitude: lng.toString()
+                    }));
+                  }}
+                  height={250}
+                />
+              </PermissionGuard>
             </View>
 
             <TouchableOpacity style={styles.logoButton} onPress={handlePickLogo}>

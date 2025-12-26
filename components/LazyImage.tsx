@@ -11,11 +11,26 @@ interface Props {
   fallback?: React.ReactNode;
 }
 
+import { API_BASE_URL } from '@/config/api';
+
 export const LazyImage: React.FC<Props> = ({ uri, width, height, borderRadius = 16, fallback }) => {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
 
-  if (!uri || error) {
+  const getFullUri = (path?: string | null) => {
+    if (!path) return null;
+    if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('file://')) {
+      return path;
+    }
+    // Handle relative paths (e.g. /storage/...)
+    const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+    const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL : `${API_BASE_URL}/`;
+    return `${baseUrl}${cleanPath}`;
+  };
+
+  const fullUri = getFullUri(uri);
+
+  if (!fullUri || error) {
     return (
       <View style={[styles.placeholder, { width, height, borderRadius }]}>
         {fallback}
@@ -31,7 +46,7 @@ export const LazyImage: React.FC<Props> = ({ uri, width, height, borderRadius = 
         </View>
       )}
       <Image
-        source={{ uri }}
+        source={{ uri: fullUri }}
         style={{ width, height, borderRadius }}
         contentFit="cover"
         cachePolicy="memory-disk"

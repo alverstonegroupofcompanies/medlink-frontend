@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Text, ActivityIndicator } from 'react-native';
-import MapView, { Marker, Region } from 'react-native-maps';
+import MapView, { Marker, Region, UrlTile } from 'react-native-maps';
 import { MapPin } from 'lucide-react-native';
 import { HospitalPrimaryColors as PrimaryColors } from '@/constants/hospital-theme';
 import * as Location from 'expo-location';
@@ -28,7 +28,6 @@ export function LocationPickerMap({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // If initial coordinates provided and valid, use them
     if (initialLatitude && initialLongitude) {
       const lat = typeof initialLatitude === 'number' ? initialLatitude : parseFloat(initialLatitude as string);
       const lng = typeof initialLongitude === 'number' ? initialLongitude : parseFloat(initialLongitude as string);
@@ -39,19 +38,15 @@ export function LocationPickerMap({
           latitude: lat,
           longitude: lng,
         }));
-        // Don't set loading to false here, it might cause flashing if we are just updating
         if (loading) setLoading(false);
         return;
       }
     }
-
-    // Only stop loading if we haven't found valid coordinates initially
     if (loading) setLoading(false);
   }, [initialLatitude, initialLongitude]);
 
   const onRegionChangeComplete = (newRegion: Region) => {
     setRegion(newRegion);
-    // Update parent with center coordinates
     onLocationSelect(newRegion.latitude, newRegion.longitude);
   };
 
@@ -69,11 +64,17 @@ export function LocationPickerMap({
       <MapView
         style={styles.map}
         initialRegion={region}
+        mapType="none" // Hide default map (Google/Apple) to use OSM tiles
         onRegionChangeComplete={onRegionChangeComplete}
         showsUserLocation={true}
         showsMyLocationButton={true}
       >
-        {/* We don't need a marker because we use a fixed center overlay */}
+        <UrlTile
+          urlTemplate="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          maximumZ={19}
+          flipY={false}
+          zIndex={-1}
+        />
       </MapView>
       
       {/* Center Pin Overlay */}

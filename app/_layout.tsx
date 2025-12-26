@@ -47,7 +47,7 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
+    let timeoutId: any;
     
     async function prepare() {
       try {
@@ -56,7 +56,7 @@ export default function RootLayout() {
           console.warn('Font loading timeout - proceeding with system fonts');
           setAppIsReady(true);
           SplashScreen.hideAsync();
-        }, 8000); // 8 second timeout
+        }, 3000); // 3 second timeout
 
         // Wait for fonts to load or error
         if (fontsLoaded || fontError) {

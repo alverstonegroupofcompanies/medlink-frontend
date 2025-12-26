@@ -36,6 +36,17 @@ import { View, StyleSheet, Text, Image } from 'react-native';
 import { MapPin, Building2, User } from 'lucide-react-native';
 import { HospitalPrimaryColors as PrimaryColors } from '@/constants/hospital-theme';
 import MapView, { Marker, Polyline } from 'react-native-maps';
+import { API_BASE_URL } from '@/config/api';
+
+const getFullUri = (path?: string | null) => {
+    if (!path) return null;
+    if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('file://')) {
+      return path;
+    }
+    const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+    const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL : `${API_BASE_URL}/`;
+    return `${baseUrl}${cleanPath}`;
+};
 
 interface DoctorLocation {
   doctor_id: number;
@@ -236,7 +247,11 @@ export function LiveTrackingMap({ hospital, doctors, height = 400, initialRegion
           >
             <View style={styles.hospitalMarker}>
               {hospital.logo ? (
-                 <Image source={{ uri: hospital.logo }} style={styles.hospitalLogo} resizeMode="cover" />
+                 <Image 
+                    source={{ uri: getFullUri(hospital.logo) || '' }} 
+                    style={styles.hospitalLogo} 
+                    resizeMode="cover"
+                 />
               ) : (
                  <Building2 size={22} color="#fff" />
               )}
@@ -280,7 +295,10 @@ export function LiveTrackingMap({ hospital, doctors, height = 400, initialRegion
                 <View style={styles.doctorMarkerContainer}>
                    <View style={styles.doctorMarker}>
                        {doctor.profile_photo ? (
-                           <Image source={{ uri: doctor.profile_photo }} style={styles.doctorImage} />
+                           <Image 
+                                source={{ uri: getFullUri(doctor.profile_photo) || '' }} 
+                                style={styles.doctorImage} 
+                           />
                        ) : (
                            <User size={24} color="#fff" />
                        )}

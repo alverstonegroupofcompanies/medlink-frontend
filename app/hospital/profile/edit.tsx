@@ -192,12 +192,7 @@ export default function HospitalProfileEditScreen() {
 
       // Add logo if selected - handle file URI properly for React Native
       if (selectedLogo) {
-        // Handle iOS file:// prefix properly
         let uri = selectedLogo;
-        if (Platform.OS === 'ios' && uri.startsWith('file://')) {
-          uri = uri.replace('file://', '');
-        }
-        
         const filename = uri.split('/').pop() || 'logo.jpg';
         const match = /\.(\w+)$/i.exec(filename);
         const extension = match ? match[1].toLowerCase() : 'jpg';
@@ -210,6 +205,15 @@ export default function HospitalProfileEditScreen() {
         };
         const type = mimeTypes[extension] || 'image/jpeg';
 
+        // Fix URI for Android/iOS
+        if (Platform.OS === 'android') {
+           if (!uri.startsWith('file://')) {
+             uri = `file://${uri}`;
+           }
+        } else if (Platform.OS === 'ios') {
+           uri = uri.replace('file://', '');
+        }
+
         data.append('logo_path', {
           uri: uri,
           name: filename,
@@ -219,10 +223,15 @@ export default function HospitalProfileEditScreen() {
 
       // Add license document if selected - handle file URI properly
       if (licenseDocument) {
-        // Handle iOS file:// prefix properly
         let uri = licenseDocument.uri;
-        if (Platform.OS === 'ios' && uri.startsWith('file://')) {
-          uri = uri.replace('file://', '');
+        
+        // Fix URI for Android/iOS
+        if (Platform.OS === 'android') {
+           if (!uri.startsWith('file://')) {
+             uri = `file://${uri}`;
+           }
+        } else if (Platform.OS === 'ios') {
+           uri = uri.replace('file://', '');
         }
         
         data.append('license_document', {

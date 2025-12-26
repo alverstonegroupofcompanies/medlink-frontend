@@ -1,4 +1,5 @@
 import { FileUploadButton } from '@/components/file-upload-button';
+import { DepartmentPicker } from '@/components/department-picker';
 import { ThemedButton } from '@/components/themed-button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedTextInput } from '@/components/themed-text-input';
@@ -8,7 +9,33 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import API from '../api';
+
+// ... (existing imports)
+
+// ... (inside component)
+
+            {Object.entries(formData)
+              .filter(([key]) => key !== 'department_id') // Hide the raw input
+              .map(([key, value]) => (
+                <ThemedTextInput
+                  key={key}
+                  placeholder={key.replace(/([A-Z])/g, ' $1')}
+                  value={value}
+                  onChangeText={(v) => handleInputChange(key, v)}
+                  multiline={key === 'professionalAchievements'}
+                  keyboardType={key === 'experience' ? 'numeric' : 'default'}
+                />
+              ))}
+
+            <View style={styles.inputGroup}>
+              <ThemedText style={styles.label}>Department</ThemedText>
+              <DepartmentPicker
+                value={formData.department_id ? parseInt(formData.department_id) : null}
+                onValueChange={(id) => handleInputChange('department_id', id ? id.toString() : '')}
+                required={true}
+                placeholder="Select Specialization/Department"
+              />
+            </View>
 import { API_BASE_URL } from '../../config/api';
 import { calculateProfileCompletion } from '@/utils/profileCompletion';
 import { DoctorPrimaryColors as PrimaryColors, DoctorNeutralColors as NeutralColors } from '@/constants/doctor-theme';
@@ -77,21 +104,41 @@ export default function ProfessionalDetailsScreen() {
 
       // Files - Fix file URI for Android/iOS compatibility
       if (params.profilePhoto) {
-        const profilePhotoUri = Platform.OS === 'ios' ? (params.profilePhoto as string).replace('file://', '') : params.profilePhoto;
-        data.append('profile_photo', {
-          uri: profilePhotoUri,
-          name: 'profile.jpg',
-          type: 'image/jpeg',
-        } as any);
+        let profilePhotoUri = params.profilePhoto as string;
+        if (typeof profilePhotoUri === 'string') {
+            if (Platform.OS === 'android') {
+                if (!profilePhotoUri.startsWith('file://')) {
+                    profilePhotoUri = `file://${profilePhotoUri}`;
+                }
+            } else if (Platform.OS === 'ios') {
+                profilePhotoUri = profilePhotoUri.replace('file://', '');
+            }
+            
+            data.append('profile_photo', {
+            uri: profilePhotoUri,
+            name: 'profile.jpg',
+            type: 'image/jpeg',
+            } as any);
+        }
       }
 
       Object.entries(files).forEach(([key, file]) => {
-        const fileUri = Platform.OS === 'ios' ? file.uri.replace('file://', '') : file.uri;
-        data.append(key, {
-          uri: fileUri,
-          name: file.name,
-          type: file.type,
-        } as any);
+        if (file && file.uri) {
+            let fileUri = file.uri;
+            if (Platform.OS === 'android') {
+                if (!fileUri.startsWith('file://')) {
+                    fileUri = `file://${fileUri}`;
+                }
+            } else if (Platform.OS === 'ios') {
+                fileUri = fileUri.replace('file://', '');
+            }
+
+            data.append(key, {
+            uri: fileUri,
+            name: file.name,
+            type: file.type,
+            } as any);
+        }
       });
 
       const res = await API.post('/doctor/register', data, {
@@ -208,7 +255,14 @@ export default function ProfessionalDetailsScreen() {
             </View>
 
             
+import { DepartmentPicker } from '@/components/department-picker';
+
+// ... imports remain ... 
+
+// ... inside render ...
+
             {Object.entries(formData)
+              .filter(([key]) => key !== 'department_id')
               .map(([key, value]) => (
                 <ThemedTextInput
                   key={key}
@@ -219,6 +273,16 @@ export default function ProfessionalDetailsScreen() {
                   keyboardType={key === 'experience' ? 'numeric' : 'default'}
                 />
               ))}
+            
+            <View style={{ marginBottom: 20 }}>
+              <ThemedText style={styles.label}>Department / Specialization</ThemedText>
+              <DepartmentPicker
+                value={formData.department_id ? parseInt(formData.department_id.toString()) : null}
+                onValueChange={(id) => handleInputChange('department_id', id ? id.toString() : '')}
+                required={true}
+                placeholder="Select your Department"
+              />
+            </View>
 
             <FileUploadButton label="Upload Degree Certificates" onFileSelected={(uri, name, type) => handleFileUpload('degree_certificate', uri, name, type)} type="document" />
             <FileUploadButton label="ID Proof" onFileSelected={(uri, name, type) => handleFileUpload('id_proof', uri, name, type)} type="both" />

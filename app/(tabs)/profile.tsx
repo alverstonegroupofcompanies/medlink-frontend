@@ -33,6 +33,7 @@ import {
   CheckCircle,
   Upload,
   Eye,
+  AlertCircle,
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -438,6 +439,25 @@ export default function ProfileScreen() {
                 <Text style={styles.profileName}>
                   {doctor?.name || 'Doctor Name'}
                 </Text>
+                
+                {/* Verification Badge */}
+                <View style={[
+                  styles.verificationBadge, 
+                  { backgroundColor: doctor?.is_verified ? '#DCFCE7' : '#FEF3C7' } // Green vs Amber bg
+                ]}>
+                  {doctor?.is_verified ? (
+                     <CheckCircle size={14} color="#16A34A" />
+                  ) : (
+                     <AlertCircle size={14} color="#D97706" />
+                  )}
+                  <Text style={[
+                    styles.verificationText,
+                    { color: doctor?.is_verified ? '#16A34A' : '#D97706' }
+                  ]}>
+                    {doctor?.is_verified ? 'Verified' : 'Unverified'}
+                  </Text>
+                </View>
+
                 {doctor?.current_location && (
                   <View style={styles.locationRow}>
                     <MapPin size={14} color={ModernColors.text.secondary} />
@@ -503,13 +523,30 @@ export default function ProfileScreen() {
                   <Text style={styles.sectionTitle}>Professional Details</Text>
                 </View>
 
-                {doctor?.department && (
-                  <View style={styles.detailRow}>
-                    <Briefcase size={18} color={ModernColors.text.secondary} />
-                    <Text style={styles.detailLabel}>Department</Text>
-                    <Text style={styles.detailValue}>{doctor.department.name || doctor.department}</Text>
+                {/* Departments Section */}
+                <View style={styles.detailRow}>
+                  <Briefcase size={18} color={ModernColors.text.secondary} />
+                  <Text style={styles.detailLabel}>Departments</Text>
+                  <View style={{ flex: 1, alignItems: 'flex-end', gap: 4 }}>
+                    {/* Primary Department */}
+                    {doctor?.department && (
+                      <Text style={[styles.detailValue, { fontWeight: '700', color: ModernColors.primary.main }]}>
+                        {doctor.department.name || doctor.department} (Primary)
+                      </Text>
+                    )}
+                    
+                    {/* Additional Departments */}
+                    {doctor?.departments && Array.isArray(doctor.departments) && doctor.departments.map((dept: any) => {
+                       // Skip if same as primary
+                       if (doctor.department && (dept.id === doctor.department.id || dept.name === doctor.department.name)) return null;
+                       return (
+                         <Text key={dept.id || dept.name} style={styles.detailValue}>
+                           {dept.name}
+                         </Text>
+                       );
+                    })}
                   </View>
-                )}
+                </View>
 
                 {doctor?.qualifications && (
                   <View style={styles.detailRow}>
@@ -1289,5 +1326,19 @@ const styles = StyleSheet.create({
   saveButtonText: {
     ...Typography.bodyBold,
     color: '#fff',
+  },
+  verificationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    marginBottom: 6,
+    gap: 4,
+  },
+  verificationText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
