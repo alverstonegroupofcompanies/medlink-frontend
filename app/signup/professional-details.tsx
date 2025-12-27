@@ -277,7 +277,7 @@ import { DepartmentPicker } from '@/components/department-picker';
             <View style={{ marginBottom: 20 }}>
               <ThemedText style={styles.label}>Department / Specialization</ThemedText>
               <DepartmentPicker
-                value={formData.department_id ? parseInt(formData.department_id.toString()) : null}
+                value={formData.department_id && !isNaN(parseInt(formData.department_id)) ? parseInt(formData.department_id) : null}
                 onValueChange={(id) => handleInputChange('department_id', id ? id.toString() : '')}
                 required={true}
                 placeholder="Select your Department"

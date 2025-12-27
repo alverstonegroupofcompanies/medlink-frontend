@@ -101,7 +101,7 @@ export default function VerifyOtpScreen() {
             phoneNumber,
             emailId: email,
             password,
-            profilePhoto: profilePhoto || '',
+            profilePhoto: profilePhoto ? (profilePhoto.length > 50000 ? '' : profilePhoto) : '', // Safeguard against large URIs/base64
             otp: otpString, // Include OTP for registration
           },
         });

@@ -35,7 +35,7 @@ export function DepartmentPicker({
   }, []);
 
   useEffect(() => {
-    if (value && departments.length > 0) {
+    if (value !== null && value !== undefined && !isNaN(value) && departments.length > 0) {
       const dept = departments.find(d => d.id === value);
       setSelectedDepartment(dept || null);
     } else {
