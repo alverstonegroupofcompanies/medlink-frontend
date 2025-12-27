@@ -443,18 +443,26 @@ export default function ProfileScreen() {
                 {/* Verification Badge */}
                 <View style={[
                   styles.verificationBadge, 
-                  { backgroundColor: doctor?.is_verified ? '#DCFCE7' : '#FEF3C7' } // Green vs Amber bg
+                  { 
+                    backgroundColor: doctor?.verification_status === 'approved' 
+                      ? '#DCFCE7' // Green
+                      : '#FEF3C7' // Amber
+                  } 
                 ]}>
-                  {doctor?.is_verified ? (
+                  {doctor?.verification_status === 'approved' ? (
                      <CheckCircle size={14} color="#16A34A" />
                   ) : (
                      <AlertCircle size={14} color="#D97706" />
                   )}
                   <Text style={[
                     styles.verificationText,
-                    { color: doctor?.is_verified ? '#16A34A' : '#D97706' }
+                    { 
+                      color: doctor?.verification_status === 'approved' 
+                        ? '#16A34A' 
+                        : '#D97706' 
+                    }
                   ]}>
-                    {doctor?.is_verified ? 'Verified' : 'Unverified'}
+                    {doctor?.verification_status === 'approved' ? 'Verified' : 'Unverified'}
                   </Text>
                 </View>
 

@@ -12,7 +12,7 @@ import {
   Dimensions,
   Platform,
 } from "react-native";
-import { Star, Bell, MapPin, Clock, TrendingUp, Award, Building2, CheckCircle, ArrowRight, Calendar, AlertCircle, Phone, Navigation } from "lucide-react-native";
+import { Star, Bell, MapPin, Clock, TrendingUp, Award, Building2, CheckCircle, ArrowRight, Calendar, AlertCircle, Phone, Navigation, LogOut } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
 import { ModernColors, Spacing, BorderRadius, Shadows, Typography } from "@/constants/modern-theme";
@@ -183,6 +183,24 @@ export default function DoctorHome() {
       const message = error.response?.data?.message || 'Failed to submit application';
       Alert.alert('Error', message);
     }
+  };
+
+  const handleLogout = async () => {
+    Alert.alert(
+      "Logout",
+      "Are you sure you want to logout?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Logout", 
+          style: "destructive", 
+          onPress: async () => {
+            await logoutDoctor();
+            router.replace('/login');
+          }
+        }
+      ]
+    );
   };
 
   useEffect(() => {
@@ -422,6 +440,12 @@ export default function DoctorHome() {
                   </Text>
                 </View>
               )}
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.notificationButton, { marginLeft: 12, backgroundColor: 'rgba(255,255,255,0.2)' }]}
+              onPress={handleLogout}
+            >
+              <LogOut size={20} color="#fff" />
             </TouchableOpacity>
           </View>
         </LinearGradient>
@@ -719,8 +743,17 @@ export default function DoctorHome() {
                       </View>
 
                       {hasApplied ? (
-                        <View style={[styles.applyButton, styles.appliedButton]}>
-                          <Text style={styles.appliedButtonText}>
+                        <View style={[
+                          styles.applyButton, 
+                          styles.appliedButton,
+                          applicationStatus === 'rejected' && { backgroundColor: ModernColors.error.light }, // Red background for rejected
+                          applicationStatus === 'selected' && { backgroundColor: ModernColors.success.light } // Green background for approved
+                        ]}>
+                          <Text style={[
+                            styles.appliedButtonText,
+                            applicationStatus === 'rejected' && { color: ModernColors.error.main }, // Red text for rejected
+                            applicationStatus === 'selected' && { color: ModernColors.success.main } // Green text for approved
+                          ]}>
                             {applicationStatus === 'pending' ? 'Waiting for Approval' : 
                              applicationStatus === 'selected' ? 'Approved' :
                              applicationStatus === 'rejected' ? 'Rejected' : 'Applied'}
@@ -776,9 +809,18 @@ export default function DoctorHome() {
                   return (
                     <ModernCard key={app.id} variant="elevated" padding="md" style={styles.taskCard}>
                       <View style={styles.taskHeader}>
-                        <View style={[styles.taskIconContainer, { backgroundColor: ModernColors.secondary.light }]}>
-                          <Building2 size={20} color={ModernColors.secondary.main} />
-                        </View>
+                        {app.job_requirement?.hospital?.logo_url ? (
+                           <View style={styles.taskIconContainer}>
+                             <Image 
+                               source={{ uri: app.job_requirement.hospital.logo_url }} 
+                               style={styles.hospitalLogo} // Reuse same style as opportunities
+                             />
+                           </View>
+                        ) : (
+                          <View style={[styles.taskIconContainer, { backgroundColor: ModernColors.secondary.light }]}>
+                            <Building2 size={20} color={ModernColors.secondary.main} />
+                          </View>
+                        )}
                         <View style={styles.taskInfo}>
                           <Text style={styles.taskHospital} numberOfLines={1}>
                             {app.job_requirement?.hospital?.name || 'Hospital'}

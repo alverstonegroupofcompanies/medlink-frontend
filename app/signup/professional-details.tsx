@@ -44,7 +44,8 @@ import { useEffect, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 
 export default function ProfessionalDetailsScreen() {
-  const params = useLocalSearchParams();
+  const navParams = useLocalSearchParams();
+  const [params, setParams] = useState<any>(navParams);
   const colorScheme = useColorScheme();
   const [formData, setFormData] = useState({
     professionalAchievements: '',
@@ -60,10 +61,37 @@ export default function ProfessionalDetailsScreen() {
   });
   const [files, setFiles] = useState<Record<string, { uri: string; name: string; type: string }>>({});
   const [loading, setLoading] = useState(false);
+  const [initializing, setInitializing] = useState(true);
 
   useEffect(() => {
-    if (!params.fullName) router.replace('/signup/basic-details');
+    loadRegistrationData();
   }, []);
+
+  const loadRegistrationData = async () => {
+    try {
+      // If we have data in nav params (legacy flow), use it
+      if (navParams.fullName && navParams.emailId) {
+        setParams(navParams);
+        setInitializing(false);
+        return;
+      }
+
+      // Otherwise try loading from storage
+      const stored = await AsyncStorage.getItem('doctorRegistrationData');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setParams({ ...navParams, ...parsed });
+      } else {
+         // No data found anywhere
+         Alert.alert('Error', 'Registration session missing. Please start over.');
+         router.replace('/signup/basic-details');
+      }
+    } catch (e) {
+      console.error('Failed to load registration data', e);
+    } finally {
+      setInitializing(false);
+    }
+  };
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));

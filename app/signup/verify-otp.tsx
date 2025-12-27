@@ -93,17 +93,21 @@ export default function VerifyOtpScreen() {
       });
 
       if (response.data.status) {
-        // OTP verified, proceed to professional details
+        // OTP verified, save data to storage and proceed
+        const registrationData = {
+          fullName,
+          phoneNumber,
+          emailId: email,
+          password,
+          profilePhoto: profilePhoto ? (profilePhoto.length > 50000 ? '' : profilePhoto) : '',
+          otp: otpString,
+        };
+        
+        await AsyncStorage.setItem('doctorRegistrationData', JSON.stringify(registrationData));
+
         router.push({
           pathname: '/signup/professional-details',
-          params: {
-            fullName,
-            phoneNumber,
-            emailId: email,
-            password,
-            profilePhoto: profilePhoto ? (profilePhoto.length > 50000 ? '' : profilePhoto) : '', // Safeguard against large URIs/base64
-            otp: otpString, // Include OTP for registration
-          },
+          params: { mode: 'registration' } // Minimal param to signal source
         });
       } else {
         Alert.alert('Error', response.data.message || 'Invalid OTP');

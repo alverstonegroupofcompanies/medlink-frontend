@@ -19,8 +19,7 @@ import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as Neutra
 import API from '../api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect } from 'expo-router';
-import { Plus, MapPin, Building2, Clock, X, Navigation, Bell, Menu } from 'lucide-react-native';
-import HospitalSidebar from '@/components/HospitalSidebar';
+import { Plus, MapPin, Building2, Clock, X, Navigation, Bell, LogOut } from 'lucide-react-native';
 import { ScreenSafeArea } from '@/components/screen-safe-area';
 import * as Location from 'expo-location';
 import { DepartmentPicker } from '@/components/department-picker';
@@ -76,7 +75,6 @@ export default function HospitalDashboard() {
   const [loading, setLoading] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
-  const [showSidebar, setShowSidebar] = useState(false);
   const [formData, setFormData] = useState({
     department: '',
     department_id: null as number | null,
@@ -581,12 +579,6 @@ export default function HospitalDashboard() {
         {/* Minimal Header */}
         <Surface style={styles.headerSurface} elevation={0}>
           <View style={styles.headerContent}>
-            <TouchableOpacity 
-              onPress={() => setShowSidebar(true)}
-              style={styles.menuIcon}
-            >
-              <Menu size={20} color="#2563EB" />
-            </TouchableOpacity>
             <View style={styles.headerText}>
               <Text style={styles.welcomeText}>Welcome back</Text>
               <Text style={styles.hospitalName} numberOfLines={1}>
@@ -605,6 +597,12 @@ export default function HospitalDashboard() {
                   </Text>
                 </View>
               )}
+            </TouchableOpacity>
+            <TouchableOpacity 
+              onPress={handleLogout}
+              style={[styles.bellIcon, { marginLeft: 8 }]}
+            >
+              <LogOut size={20} color="#DC2626" />
             </TouchableOpacity>
           </View>
         </Surface>
@@ -1342,14 +1340,15 @@ const styles = StyleSheet.create({
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center', // Changed from flex-start to center for better alignment
     marginBottom: 12,
   },
   deptChip: {
-    height: 28,
+    // height: 28, // Removed fixed height
   },
   expiredChip: {
-    height: 26,
+    // height: 26, // Removed fixed height
+    marginLeft: 8,
   },
   deleteIcon: {
     padding: 4,
@@ -1361,7 +1360,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   metaChip: {
-    height: 26,
+    // height: 26, // Removed fixed height
   },
   metaChipText: {
     fontSize: 12,
@@ -1415,7 +1414,8 @@ const styles = StyleSheet.create({
     fontWeight: '400',
   },
   viewButton: {
-    marginTop: 4,
+    marginTop: 12,
+    alignSelf: 'flex-end',
   },
   viewButtonLabel: {
     fontSize: 14,
