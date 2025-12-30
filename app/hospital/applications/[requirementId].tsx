@@ -19,6 +19,7 @@ import API from '../../api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ScreenSafeArea } from '@/components/screen-safe-area';
 import { formatISTDateTime, formatISTDateTimeLong } from '@/utils/timezone';
+import { getFullImageUrl } from '@/utils/url-helper';
 
 const HOSPITAL_TOKEN_KEY = 'hospitalToken';
 const HOSPITAL_INFO_KEY = 'hospitalInfo';
@@ -399,9 +400,9 @@ export default function ApplicationsScreen() {
                   }}
                   activeOpacity={0.7}
                 >
-                  <Image
+                    <Image
                     source={{
-                      uri: application.doctor?.profile_photo || 'https://i.pravatar.cc/150?img=1',
+                      uri: getFullImageUrl(application.doctor?.profile_photo),
                     }}
                     style={styles.doctorImage}
                   />
@@ -546,7 +547,7 @@ export default function ApplicationsScreen() {
                   <View style={styles.modalDoctorCard}>
                     <Image
                       source={{
-                        uri: selectedApplication.doctor?.profile_photo || 'https://i.pravatar.cc/150?img=1',
+                        uri: getFullImageUrl(selectedApplication.doctor?.profile_photo),
                       }}
                       style={styles.modalDoctorImage}
                     />

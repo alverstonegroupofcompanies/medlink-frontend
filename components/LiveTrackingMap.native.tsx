@@ -35,18 +35,8 @@ import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Text, Image } from 'react-native';
 import { MapPin, Building2, User } from 'lucide-react-native';
 import { HospitalPrimaryColors as PrimaryColors } from '@/constants/hospital-theme';
-import MapView, { Marker, Polyline } from 'react-native-maps';
-import { API_BASE_URL } from '@/config/api';
-
-const getFullUri = (path?: string | null) => {
-    if (!path) return null;
-    if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('file://')) {
-      return path;
-    }
-    const cleanPath = path.startsWith('/') ? path.substring(1) : path;
-    const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL : `${API_BASE_URL}/`;
-    return `${baseUrl}${cleanPath}`;
-};
+import MapView, { Marker, Polyline, UrlTile } from 'react-native-maps';
+import { getFullImageUrl } from '@/utils/url-helper';
 
 interface DoctorLocation {
   doctor_id: number;
@@ -56,6 +46,9 @@ interface DoctorLocation {
   department?: string;
   check_in_verified?: boolean;
   profile_photo?: string;
+  job_latitude?: number | string;
+  job_longitude?: number | string;
+  job_name?: string;
 }
 
 interface LiveTrackingMapProps {
@@ -134,6 +127,8 @@ const fetchDirections = async (
   return [start, end];
 };
 
+// ... (imports remain)
+
 export function LiveTrackingMap({ hospital, doctors, height = 400, initialRegion }: LiveTrackingMapProps) {
   // Ensure hospital coordinates are numbers
   const hospitalLat = typeof hospital.latitude === 'number' ? hospital.latitude : parseFloat(hospital.latitude || '0');
@@ -157,22 +152,33 @@ export function LiveTrackingMap({ hospital, doctors, height = 400, initialRegion
       return;
     }
 
-    // Calculate region to show all doctors and hospital
+    // Calculate region to show all doctors and hospital (and job sites)
     if (doctors.length > 0) {
       // Ensure all coordinates are numbers
       const validDoctors = doctors.filter(d => 
         !isNaN(parseFloat(d.latitude as any)) && !isNaN(parseFloat(d.longitude as any))
       );
 
-      const allLats = [hospitalLat, ...validDoctors.map(d => parseFloat(d.latitude as any))].filter(l => !isNaN(l));
-      const allLngs = [hospitalLng, ...validDoctors.map(d => parseFloat(d.longitude as any))].filter(l => !isNaN(l));
+      const allLats = [hospitalLat, ...validDoctors.map(d => parseFloat(d.latitude as any))];
+      const allLngs = [hospitalLng, ...validDoctors.map(d => parseFloat(d.longitude as any))];
       
-      if (allLats.length === 0 || allLngs.length === 0) return;
+      // Add job locations to bounds if they exist
+      validDoctors.forEach(d => {
+          if (d.job_latitude && d.job_longitude) {
+              allLats.push(typeof d.job_latitude === 'number' ? d.job_latitude : parseFloat(d.job_latitude));
+              allLngs.push(typeof d.job_longitude === 'number' ? d.job_longitude : parseFloat(d.job_longitude));
+          }
+      });
 
-      const minLat = Math.min(...allLats);
-      const maxLat = Math.max(...allLats);
-      const minLng = Math.min(...allLngs);
-      const maxLng = Math.max(...allLngs);
+      const validLats = allLats.filter(l => !isNaN(l));
+      const validLngs = allLngs.filter(l => !isNaN(l));
+      
+      if (validLats.length === 0 || validLngs.length === 0) return;
+
+      const minLat = Math.min(...validLats);
+      const maxLat = Math.max(...validLats);
+      const minLng = Math.min(...validLngs);
+      const maxLng = Math.max(...validLngs);
       
       const centerLat = (minLat + maxLat) / 2;
       const centerLng = (minLng + maxLng) / 2;
@@ -198,15 +204,26 @@ export function LiveTrackingMap({ hospital, doctors, height = 400, initialRegion
         const doctorLat = typeof doctor.latitude === 'number' ? doctor.latitude : parseFloat(doctor.latitude || '0');
         const doctorLng = typeof doctor.longitude === 'number' ? doctor.longitude : parseFloat(doctor.longitude || '0');
         
-        if (!isNaN(doctorLat) && !isNaN(doctorLng) && !isNaN(hospitalLat) && !isNaN(hospitalLng)) {
+        // Determine destination: Job Site if available, otherwise Hospital
+        let destLat = hospitalLat;
+        let destLng = hospitalLng;
+        
+        if (doctor.job_latitude && doctor.job_longitude) {
+             const jobLat = typeof doctor.job_latitude === 'number' ? doctor.job_latitude : parseFloat(doctor.job_latitude);
+             const jobLng = typeof doctor.job_longitude === 'number' ? doctor.job_longitude : parseFloat(doctor.job_longitude);
+             if (!isNaN(jobLat) && !isNaN(jobLng)) {
+                 destLat = jobLat;
+                 destLng = jobLng;
+             }
+        }
+        
+        if (!isNaN(doctorLat) && !isNaN(doctorLng) && !isNaN(destLat) && !isNaN(destLng)) {
           const routeCoords = await fetchDirections(
             { latitude: doctorLat, longitude: doctorLng },
-            { latitude: hospitalLat, longitude: hospitalLng }
+            { latitude: destLat, longitude: destLng }
           );
           newRoutes.set(doctor.doctor_id, routeCoords);
           
-          // Use the first point of the route as the snapped position (on the road)
-          // Ensure coordinates are numbers, not strings
           if (routeCoords.length > 0) {
             const firstPoint = routeCoords[0];
             newSnappedPositions.set(doctor.doctor_id, {
@@ -233,8 +250,15 @@ export function LiveTrackingMap({ hospital, doctors, height = 400, initialRegion
         region={region}
         showsUserLocation={false}
         showsMyLocationButton={false}
-        mapType="standard"
+        mapType="none" // Use "none" to hide Google Maps and use OSM tiles
       >
+        <UrlTile
+          urlTemplate="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          maximumZ={19}
+          flipY={false}
+          zIndex={-1}
+        />
+
         {/* Hospital Marker */}
         {!isNaN(hospitalLat) && !isNaN(hospitalLng) && (
           <Marker
@@ -248,7 +272,7 @@ export function LiveTrackingMap({ hospital, doctors, height = 400, initialRegion
             <View style={styles.hospitalMarker}>
               {hospital.logo ? (
                  <Image 
-                    source={{ uri: getFullUri(hospital.logo) || '' }} 
+                    source={{ uri: getFullImageUrl(hospital.logo) }} 
                     style={styles.hospitalLogo} 
                     resizeMode="cover"
                  />
@@ -259,23 +283,45 @@ export function LiveTrackingMap({ hospital, doctors, height = 400, initialRegion
           </Marker>
         )}
 
-        {/* Doctor Markers and Routes */}
+        {/* Doctor Markers, Routes, and Job Sites */}
         {doctors.map((doctor) => {
-          // Ensure coordinates are numbers
           const doctorLat = typeof doctor.latitude === 'number' ? doctor.latitude : parseFloat(doctor.latitude || '0');
           const doctorLng = typeof doctor.longitude === 'number' ? doctor.longitude : parseFloat(doctor.longitude || '0');
           
-          // Only render marker if coordinates are valid
-          if (isNaN(doctorLat) || isNaN(doctorLng)) {
-            return null;
-          }
+          if (isNaN(doctorLat) || isNaN(doctorLng)) return null;
 
           const routeCoords = routes.get(doctor.doctor_id) || [];
-          // Use snapped position (on the road) if available, otherwise use raw GPS
           const markerPosition = snappedPositions.get(doctor.doctor_id) || { latitude: doctorLat, longitude: doctorLng };
           
+          // Determine if we should show a specific Job Marker
+          let showJobMarker = false;
+          let jobLat = 0, jobLng = 0;
+          if (doctor.job_latitude && doctor.job_longitude) {
+              jobLat = typeof doctor.job_latitude === 'number' ? doctor.job_latitude : parseFloat(doctor.job_latitude);
+              jobLng = typeof doctor.job_longitude === 'number' ? doctor.job_longitude : parseFloat(doctor.job_longitude);
+              
+              // Show job marker if it exists and is valid
+              if (!isNaN(jobLat) && !isNaN(jobLng)) {
+                   // Always show job marker if it's defined, to be safe and clear for the user
+                   showJobMarker = true;
+              }
+          }
+
           return (
             <React.Fragment key={`doctor-${doctor.doctor_id}`}>
+              {/* Job Location Marker */}
+              {showJobMarker && (
+                  <Marker
+                    coordinate={{ latitude: jobLat, longitude: jobLng }}
+                    title={doctor.job_name || "Job Location"}
+                    description={`Job Site for ${doctor.doctor_name}`}
+                  >
+                    <View style={[styles.hospitalMarker, { backgroundColor: '#F59E0B' }]}>
+                        <Building2 size={18} color="#fff" />
+                    </View>
+                  </Marker>
+              )}
+            
               {/* Road Route */}
               {routeCoords.length > 0 && (
                 <Polyline
@@ -290,14 +336,15 @@ export function LiveTrackingMap({ hospital, doctors, height = 400, initialRegion
               <Marker
                 coordinate={markerPosition}
                 title={doctor.doctor_name}
-                description={`${doctor.department || 'Doctor'} - On the way`}
+                description={`${doctor.department || 'Doctor'} - ${showJobMarker ? 'En route to Job Site' : 'Active'}`}
               >
                 <View style={styles.doctorMarkerContainer}>
                    <View style={styles.doctorMarker}>
                        {doctor.profile_photo ? (
                            <Image 
-                                source={{ uri: getFullUri(doctor.profile_photo) || '' }} 
-                                style={styles.doctorImage} 
+                                source={{ uri: getFullImageUrl(doctor.profile_photo) }} 
+                                style={styles.doctorImage}
+                                resizeMode="cover"
                            />
                        ) : (
                            <User size={24} color="#fff" />
@@ -314,83 +361,68 @@ export function LiveTrackingMap({ hospital, doctors, height = 400, initialRegion
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    borderRadius: 0,
-    overflow: 'hidden',
-    backgroundColor: '#fff',
-  },
-  map: {
-    flex: 1,
-    width: '100%',
-  },
-  doctorMarkerContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 50,
-    height: 60,
-  },
-  doctorMarker: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#2563EB',
-    borderWidth: 2,
-    borderColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3,
-    elevation: 5,
-  },
-  doctorImage: {
-    width: '100%',
-    height: '100%',
-  },
-  markerArrow: {
-    width: 0,
-    height: 0,
-    backgroundColor: 'transparent',
-    borderStyle: 'solid',
-    borderLeftWidth: 6,
-    borderRightWidth: 6,
-    borderBottomWidth: 0,
-    borderTopWidth: 8,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: '#fff', // White border of the marker
-    marginTop: -2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2, // Weaker shadow for arrow
-    shadowRadius: 1,
-    elevation: 1,
-  },
-  hospitalMarker: {
-    backgroundColor: '#10B981',
-    borderRadius: 20,
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 6,
-    borderWidth: 2,
-    borderColor: '#fff',
-    overflow: 'hidden',
-  },
-  hospitalLogo: {
-    width: '100%',
-    height: '100%',
-  },
-  hospitalMarkerIcon: {
-    fontSize: 22,
-  },
-});
+  const styles = StyleSheet.create({
+    container: {
+      borderRadius: 0,
+      overflow: 'hidden',
+      backgroundColor: '#fff',
+    },
+    map: {
+      flex: 1,
+      width: '100%',
+    },
+    doctorMarkerContainer: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: 60,
+      height: 60,
+    },
+    doctorMarker: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: '#2563EB',
+      borderWidth: 3,
+      borderColor: '#fff',
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 5,
+      elevation: 8,
+    },
+    doctorImage: {
+      width: '100%',
+      height: '100%',
+    },
+    // No arrow for "Uber-like", just a clean circle floating
+    markerArrow: {
+        display: 'none', 
+    },
+    hospitalMarker: {
+      backgroundColor: '#10B981',
+      borderRadius: 24,
+      width: 48,
+      height: 48,
+      justifyContent: 'center',
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.3,
+      shadowRadius: 4,
+      elevation: 6,
+      borderWidth: 3,
+      borderColor: '#fff',
+      overflow: 'hidden',
+    },
+    hospitalLogo: {
+      width: '100%',
+      height: '100%',
+    },
+    hospitalMarkerIcon: {
+      fontSize: 22,
+    },
+  });
 

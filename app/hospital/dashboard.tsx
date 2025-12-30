@@ -44,7 +44,6 @@ export default function HospitalDashboard() {
 
   const loadSessions = async (silent = false) => {
       try {
-          // Only show spinner if we haven't loaded before and it's not a silent request
           if (!silent && !hasLoadedSessions.current) {
              setLoadingSessions(true);
           }
@@ -54,17 +53,39 @@ export default function HospitalDashboard() {
           const sorted = allSessions.sort((a: any, b: any) => {
               const scoreA = (a.status === 'completed' && !a.hospital_confirmed) ? 3 : (a.status === 'in_progress' ? 2 : 1);
               const scoreB = (b.status === 'completed' && !b.hospital_confirmed) ? 3 : (b.status === 'in_progress' ? 2 : 1);
-              return scoreB - scoreA;
+              
+              if (scoreA !== scoreB) return scoreB - scoreA;
+              
+              // Secondary sort: Most recently updated first
+              if (a.updated_at !== b.updated_at) {
+                  return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+              }
+              
+              // Tertiary sort: ID desc as tie-breaker
+              return b.id - a.id;
           });
           
           setSessions(prev => {
-             const isDifferent = JSON.stringify(prev) !== JSON.stringify(sorted);
+             if (prev.length !== sorted.length) return sorted;
+             
+             // Optimized comparison: Check IDs, status, and updated_at
+             const isDifferent = sorted.some((item: any, index: number) => {
+                 const prevItem = prev[index];
+                 return item.id !== prevItem.id || 
+                        item.status !== prevItem.status || 
+                        item.updated_at !== prevItem.updated_at ||
+                        item.hospital_confirmed !== prevItem.hospital_confirmed;
+             });
+             
              return isDifferent ? sorted : prev;
           });
           
           hasLoadedSessions.current = true;
-      } catch (error) {
-          console.log('Error loading sessions', error);
+      } catch (error: any) {
+// console.log('Error loading sessions', error);
+          if (error.response?.status === 401) {
+            router.replace('/hospital/login');
+          }
       } finally {
           if (!silent) setLoadingSessions(false);
       }
@@ -115,7 +136,7 @@ export default function HospitalDashboard() {
       try {
         const token = await AsyncStorage.getItem(HOSPITAL_TOKEN_KEY);
         if (!token) {
-          console.log('⚠️ Hospital not authenticated, redirecting to login...');
+          // console.log('⚠️ Hospital not authenticated, redirecting to login...');
           router.replace('/hospital/login');
           return;
         }
@@ -123,7 +144,7 @@ export default function HospitalDashboard() {
         loadHospital();
         loadSessions(); // Load sessions initially
         loadRequirements();
-        loadNotifications();
+        // loadNotifications(); // Temporarily disabled to prevent crash
       } catch (error) {
         console.error('Error checking auth:', error);
         router.replace('/hospital/login');
@@ -142,9 +163,9 @@ export default function HospitalDashboard() {
             if (!isActive) return;
             // Silent refresh to avoid flickering
             await Promise.all([
-                loadSessions(true),
-                loadRequirements(true),
-                loadNotifications(true)
+                isActive && loadSessions(true),
+                isActive && loadRequirements(true),
+                // isActive && loadNotifications(true) // Temporarily disabled
             ]);
         };
 
@@ -164,14 +185,28 @@ export default function HospitalDashboard() {
   const loadRequirements = async (silent = false) => {
     try {
       const response = await API.get('/hospital/my-requirements');
-      const newData = response.data.requirements || [];
+      const rawData = response.data.requirements || [];
+      // Ensure deterministic order (newest first primarily by ID)
+      const newData = rawData.sort((a: any, b: any) => b.id - a.id);
       
       setRequirements(prev => {
-        const isDifferent = JSON.stringify(prev) !== JSON.stringify(newData);
+        if (prev.length !== newData.length) return newData;
+        
+        // Optimized comparison for requirements
+        const isDifferent = newData.some((item: any, index: number) => {
+             const prevItem = prev[index];
+             return item.id !== prevItem.id || 
+                    item.updated_at !== prevItem.updated_at ||
+                    item.applications?.length !== prevItem.applications?.length; // Check if applications count changed
+        });
+        
         return isDifferent ? newData : prev;
       });
     } catch (error: any) {
       console.error('Error loading requirements:', error);
+      if (error.response?.status === 401) {
+        router.replace('/hospital/login');
+      }
     }
   };
 
@@ -253,30 +288,46 @@ export default function HospitalDashboard() {
 
   const reverseGeocode = async (latitude: number, longitude: number) => {
     try {
-      const result = await Location.reverseGeocodeAsync({ latitude, longitude });
-      if (result.length > 0) {
-        const addr = result[0];
+      // Use OpenStreetMap Nominatim API (No Key Required)
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`,
+        {
+          headers: {
+            'User-Agent': 'AlverstoneMedLink/1.0', // Required by Nominatim
+          },
+        }
+      );
+      
+      const data = await response.json();
+      
+      if (data && data.address) {
+        const addr = data.address;
         const addressParts = [
-          addr.name,
-          addr.street,
-          addr.district,
-          addr.city,
-          addr.subregion,
-          addr.region,
-          addr.postalCode,
-          addr.country
+          addr.road || addr.pedestrian || addr.street,
+          addr.suburb || addr.neighborhood || addr.district,
+          addr.city || addr.town || addr.village,
+          addr.state || addr.province,
+          addr.postcode
         ].filter(part => part && part !== null);
         
-        const formattedAddress = [...new Set(addressParts)].join(', '); // Remove duplicates
+        const formattedAddress = [...new Set(addressParts)].join(', ');
         
+        // Construct a location name (e.g., "City, Suburb")
+        const locName = [
+            addr.city || addr.town || addr.village,
+            addr.suburb || addr.neighborhood,
+            addr.state
+        ].filter(Boolean).join(', ');
+
         setFormData(prev => ({
           ...prev,
-          address: formattedAddress,
-          location_name: addr.city || addr.subregion || addr.region || ''
+          address: formattedAddress || data.display_name, // Fallback to full display name
+          location_name: locName || ''
         }));
       }
     } catch (error) {
-      console.log('Reverse geocoding failed:', error);
+      // console.log('Reverse geocoding failed:', error);
+      // Fallback: If network fails, at least keep coordinates
     }
   };
 
@@ -349,14 +400,24 @@ export default function HospitalDashboard() {
 
     setLoading(true);
     try {
+      const safeParseFloat = (val: string) => {
+        const parsed = parseFloat(val);
+        return isNaN(parsed) ? 0 : parsed;
+      };
+
+      const safeParseInt = (val: string) => {
+        const parsed = parseInt(val, 10);
+        return isNaN(parsed) ? 1 : parsed;
+      };
+
       const data: any = {
         department_id: formData.department_id,
         work_type: formData.work_type,
-        required_sessions: parseInt(formData.required_sessions),
+        required_sessions: safeParseInt(formData.required_sessions),
         work_required_date: formData.work_required_date, // Already in YYYY-MM-DD format
         start_time: formData.start_time, // Already in HH:MM format
         end_time: formData.end_time, // Already in HH:MM format
-        duration_hours: parseFloat(formData.duration_hours),
+        duration_hours: safeParseFloat(formData.duration_hours) > 0 ? safeParseFloat(formData.duration_hours) : 1,
         description: formData.description?.trim() || null,
         location_name: formData.location_name?.trim() || null,
         address: formData.address?.trim() || null,
@@ -368,8 +429,8 @@ export default function HospitalDashboard() {
       }
 
       if (formData.salary_range_min && formData.salary_range_min.trim()) {
-        const minSalary = parseFloat(formData.salary_range_min);
-        if (!isNaN(minSalary) && minSalary >= 0) {
+        const minSalary = safeParseFloat(formData.salary_range_min);
+        if (minSalary >= 0) {
           data.salary_range_min = minSalary;
         }
       }
@@ -454,15 +515,15 @@ export default function HospitalDashboard() {
   };
 
   const performHospitalLogout = async () => {
-    console.log('✅ Hospital logout confirmed, starting process...');
+    // console.log('✅ Hospital logout confirmed, starting process...');
     try {
       // Try to call backend logout API
-      console.log('📞 Calling backend logout API...');
+      // console.log('📞 Calling backend logout API...');
       const response = await API.post('/hospital/logout');
-      console.log('✅ Backend logout successful');
-      console.log('📊 Backend response:', response.data);
+      // console.log('✅ Backend logout successful');
+      // console.log('📊 Backend response:', response.data);
       if (response.data?.tokens_deleted) {
-        console.log(`🗑️ Deleted ${response.data.tokens_deleted} token(s) from backend`);
+        // console.log(`🗑️ Deleted ${response.data.tokens_deleted} token(s) from backend`);
       }
     } catch (error: any) {
       // Continue with logout even if backend call fails
@@ -473,7 +534,7 @@ export default function HospitalDashboard() {
     
     // Clear all hospital auth data
     try {
-      console.log('🧹 Clearing hospital auth data...');
+      // console.log('🧹 Clearing hospital auth data...');
       await AsyncStorage.multiRemove([HOSPITAL_TOKEN_KEY, HOSPITAL_INFO_KEY]);
       // Also try individual removal to ensure it's cleared
       await AsyncStorage.removeItem(HOSPITAL_TOKEN_KEY);
@@ -487,7 +548,7 @@ export default function HospitalDashboard() {
       if (remainingToken || remainingInfo) {
         console.warn('⚠️ Hospital auth data still exists after cleanup');
       } else {
-        console.log('✅ Hospital auth data cleared successfully');
+        // console.log('✅ Hospital auth data cleared successfully');
       }
     } catch (clearError) {
       console.error('❌ Error clearing hospital auth:', clearError);
@@ -495,10 +556,10 @@ export default function HospitalDashboard() {
     }
     
     // Navigate directly to login page
-    console.log('🔄 Navigating to login page...');
+    // console.log('🔄 Navigating to login page...');
     try {
       router.replace('/hospital/login');
-      console.log('✅ Hospital logout navigation completed');
+      // console.log('✅ Hospital logout navigation completed');
     } catch (navError) {
       console.error('❌ Hospital logout navigation error:', navError);
       // Try alternative
@@ -511,14 +572,14 @@ export default function HospitalDashboard() {
   };
 
   const handleLogout = () => {
-    console.log('🔘 Hospital logout button pressed');
+    // console.log('🔘 Hospital logout button pressed');
     Keyboard.dismiss();
     // Show custom modal instead of Alert
     setShowLogoutModal(true);
   };
 
   const confirmLogout = () => {
-    console.log('✅ User confirmed hospital logout - starting logout process');
+    // console.log('✅ User confirmed hospital logout - starting logout process');
     setShowLogoutModal(false);
     performHospitalLogout().catch((error) => {
       console.error('❌ Error in performHospitalLogout:', error);
@@ -526,7 +587,7 @@ export default function HospitalDashboard() {
   };
 
   const cancelLogout = () => {
-    console.log('❌ Hospital logout cancelled by user');
+    // console.log('❌ Hospital logout cancelled by user');
     setShowLogoutModal(false);
   };
 
@@ -868,20 +929,14 @@ export default function HospitalDashboard() {
                             }}
                           >
                              <View style={styles.workHeader}>
-                                {(() => {
-                                    if (session.doctor?.profile_photo) {
-                                        console.log(`Doctor ${session.doctor.id} photo:`, session.doctor.profile_photo);
-                                    }
-                                    return session.doctor?.profile_photo ? (
-                                        <Avatar.Image 
-                                            size={40} 
-                                            source={{ uri: session.doctor.profile_photo }} 
-                                            onError={(e) => console.log(`Image load error for ${session.doctor?.name}:`, e.nativeEvent.error)}
-                                        />
-                                    ) : (
-                                        <Avatar.Icon size={40} icon="account" style={{backgroundColor: '#F1F5F9'}} color="#64748B" />
-                                    );
-                                })()}
+                                {session.doctor?.profile_photo ? (
+                                    <Avatar.Image 
+                                        size={40} 
+                                        source={{ uri: session.doctor.profile_photo }} 
+                                    />
+                                ) : (
+                                    <Avatar.Icon size={40} icon="account" style={{backgroundColor: '#F1F5F9'}} color="#64748B" />
+                                )}
                                 <View style={{marginLeft: 10, flex: 1}}>
                                     <Text style={styles.workDoctorName} numberOfLines={1}>{session.doctor?.name}</Text>
                                     <Text style={styles.workDept} numberOfLines={1}>{session.job_requirement?.department}</Text>
@@ -1163,8 +1218,6 @@ export default function HospitalDashboard() {
       </ScrollView>
     </KeyboardAvoidingView>
     
-    {/* Sidebar Menu */}
-    <HospitalSidebar visible={showSidebar} onClose={() => setShowSidebar(false)} />
     </ScreenSafeArea>
   );
 }

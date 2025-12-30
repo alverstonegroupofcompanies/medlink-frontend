@@ -177,6 +177,18 @@ export default function HospitalTabLayout() {
           href: null,
         }}
       />
+      <Tabs.Screen
+        name="review-session"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="profile/edit"
+        options={{
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }

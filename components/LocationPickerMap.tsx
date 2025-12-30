@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, Text, ActivityIndicator } from 'react-native';
-import MapView, { Marker, Region, UrlTile } from 'react-native-maps';
+import MapView, { Marker, Region, UrlTile, PROVIDER_GOOGLE } from 'react-native-maps';
 import { MapPin } from 'lucide-react-native';
 import { HospitalPrimaryColors as PrimaryColors } from '@/constants/hospital-theme';
 import * as Location from 'expo-location';
@@ -18,6 +18,7 @@ export function LocationPickerMap({
   onLocationSelect, 
   height = 300 
 }: LocationPickerMapProps) {
+  const mapRef = useRef<MapView>(null);
   const [region, setRegion] = useState<Region>({
     latitude: typeof initialLatitude === 'number' ? initialLatitude : parseFloat(initialLatitude as string) || 20.5937,
     longitude: typeof initialLongitude === 'number' ? initialLongitude : parseFloat(initialLongitude as string) || 78.9629,
@@ -33,11 +34,18 @@ export function LocationPickerMap({
       const lng = typeof initialLongitude === 'number' ? initialLongitude : parseFloat(initialLongitude as string);
       
       if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
-        setRegion(prev => ({
-          ...prev,
+        const newRegion = {
           latitude: lat,
           longitude: lng,
-        }));
+          latitudeDelta: 0.005, // Zoom in closer when selecting specific location
+          longitudeDelta: 0.005,
+        };
+        
+        setRegion(newRegion);
+        
+        // Animate map to new region
+        mapRef.current?.animateToRegion(newRegion, 1000);
+        
         if (loading) setLoading(false);
         return;
       }
@@ -62,19 +70,14 @@ export function LocationPickerMap({
   return (
     <View style={[styles.container, { height }]}>
       <MapView
+        ref={mapRef}
+        provider={PROVIDER_GOOGLE}
         style={styles.map}
         initialRegion={region}
-        mapType="none" // Hide default map (Google/Apple) to use OSM tiles
         onRegionChangeComplete={onRegionChangeComplete}
         showsUserLocation={true}
         showsMyLocationButton={true}
       >
-        <UrlTile
-          urlTemplate="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          maximumZ={19}
-          flipY={false}
-          zIndex={-1}
-        />
       </MapView>
       
       {/* Center Pin Overlay */}

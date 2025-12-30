@@ -8,22 +8,25 @@ import {
   Dimensions,
   ActivityIndicator,
   Alert,
+  Image,
 } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
-import { MapPin, User, CheckCircle, Clock, Navigation } from 'lucide-react-native';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { MapPin, User, CheckCircle, Clock, Navigation, Timer } from 'lucide-react-native';
 import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors, HospitalStatusColors as StatusColors } from '@/constants/hospital-theme';
 import { ScreenSafeArea } from '@/components/screen-safe-area';
 import API from '../api';
 import { LiveTrackingMap } from '@/components/LiveTrackingMap';
 import * as Location from 'expo-location';
+import { getFullImageUrl } from '@/utils/url-helper';
 
 const { width, height } = Dimensions.get('window');
 
 export default function LiveTrackingScreen() {
+  const { sessionId, doctorId } = useLocalSearchParams<{ sessionId: string, doctorId: string }>();
   const [loading, setLoading] = useState(true);
   const [doctors, setDoctors] = useState<any[]>([]);
   const [hospital, setHospital] = useState<any>(null);
-  const [selectedDoctor, setSelectedDoctor] = useState<string | null>(null);
+  const [selectedDoctor, setSelectedDoctor] = useState<string | null>(doctorId || null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useFocusEffect(
@@ -36,6 +39,13 @@ export default function LiveTrackingScreen() {
       };
     }, [])
   );
+  
+  // Update selected doctor when params change
+  React.useEffect(() => {
+    if (doctorId) {
+      setSelectedDoctor(doctorId);
+    }
+  }, [doctorId]);
 
   const startPolling = () => {
     stopPolling();
@@ -51,10 +61,6 @@ export default function LiveTrackingScreen() {
 
   const fetchTrackingData = async () => {
     try {
-      // Don't set loading on subsequent polls to avoid flicker
-      // only rely on initial state or explicit loading calls
-      // if (!doctors.length) setLoading(true); <-- REMOVED causing flicker loop
-      
       const response = await API.get('/hospital/live-doctor-locations');
       if (response.data) {
         setDoctors(response.data.doctors || []);
@@ -67,21 +73,32 @@ export default function LiveTrackingScreen() {
     }
   };
 
-  // Filter unique doctors (if a doctor has multiple active sessions, show them once)
-  const uniqueDoctors = doctors.reduce((acc: any[], current) => {
+  // Filter unique doctors logic
+  const uniqueDoctors = doctors
+    .filter(d => {
+      // 1. Basic status filter
+      if (d.status === 'completed' || d.status === 'cancelled' || d.status === 'rejected') return false;
+      
+      // 2. Focused tracking filter: if doctorId param exists, ONLY show that doctor
+      if (doctorId && String(d.doctor_id) !== String(doctorId)) return false;
+      
+      return true;
+    })
+    .sort((a, b) => {
+        // Prioritize actively checking in
+        if (a.check_in_time && !b.check_in_time) return -1;
+        if (!a.check_in_time && b.check_in_time) return 1;
+        
+        // Then by latest updated location
+        const timeA = a.location_updated_at ? new Date(a.location_updated_at).getTime() : 0;
+        const timeB = b.location_updated_at ? new Date(b.location_updated_at).getTime() : 0;
+        return timeB - timeA;
+    })
+    .reduce((acc: any[], current) => {
     const x = acc.find(item => item.doctor_id === current.doctor_id);
     if (!x) {
       return acc.concat([current]);
-    } else {
-      // If duplicate, keep the one with more recent update or valid location
-      const currentHasLoc = current.latitude && current.longitude;
-      const xHasLoc = x.latitude && x.longitude;
-      
-      if (currentHasLoc && !xHasLoc) {
-        return acc.map(item => item.doctor_id === current.doctor_id ? current : item);
-      }
-      return acc;
-    }
+    } 
     return acc;
   }, []);
 
@@ -138,8 +155,21 @@ export default function LiveTrackingScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.headerLeft} />
-        <Text style={styles.headerTitle}>Live Doctor Tracking</Text>
+        {doctorId ? (
+          <TouchableOpacity onPress={() => router.back()} style={styles.headerLeft}>
+             <Navigation size={24} color="#fff" style={{ transform: [{ rotate: '180deg' }] }} /> 
+             {/* Using Navigation icon as back arrow counterpart or just use ArrowLeft if imported. 
+                 But file only imports Navigation. Let's stick to what we have or add ArrowLeft import if needed.
+                 Wait, ArrowLeft is NOT imported. Let's just use empty view if no doctorId, or 'Back' text.
+                 Actually, let's keep it simple: If doctorId, show "Tracking Doctor".
+             */}
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.headerLeft} />
+        )}
+        <Text style={styles.headerTitle}>
+            {doctorId ? 'Tracking Doctor' : 'Live Doctor Tracking'}
+        </Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -159,6 +189,10 @@ export default function LiveTrackingScreen() {
               ...d,
               latitude: typeof d.latitude === 'number' ? d.latitude : parseFloat(d.latitude),
               longitude: typeof d.longitude === 'number' ? d.longitude : parseFloat(d.longitude),
+              // Attempt to find job location from nested job_requirement or direct fields
+              job_latitude: d.job_latitude || d.job_requirement?.latitude,
+              job_longitude: d.job_longitude || d.job_requirement?.longitude,
+              job_name: d.job_name || d.job_requirement?.location_name || d.job_requirement?.department || 'Job Site'
             }))}
             height={height * 0.40}
             initialRegion={selectedDoctor && uniqueDoctors.find(d => d.doctor_id === selectedDoctor) ? {
@@ -207,7 +241,7 @@ export default function LiveTrackingScreen() {
               const hospitalLat = hospital?.latitude ? (typeof hospital.latitude === 'number' ? hospital.latitude : parseFloat(hospital.latitude)) : null;
               const hospitalLng = hospital?.longitude ? (typeof hospital.longitude === 'number' ? hospital.longitude : parseFloat(hospital.longitude)) : null;
               
-              const distance = hospitalLat && hospitalLng && doctorLat && doctorLng && !isNaN(doctorLat) && !isNaN(doctorLng)
+              const distance = (hospitalLat !== null && hospitalLng !== null && !isNaN(doctorLat) && !isNaN(doctorLng))
                 ? calculateDistance(
                     doctorLat,
                     doctorLng,
@@ -224,6 +258,8 @@ export default function LiveTrackingScreen() {
                 ? !doctor.is_online 
                 : (locationUpdatedAt ? (Date.now() - locationUpdatedAt.getTime()) > 120000 : true);
 
+              const etaMinutes = distance ? Math.round((distance / 30) * 60) : null; // Assume 30km/h avg speed
+
               return (
                 <TouchableOpacity
                   key={`unique-doctor-${doctor.doctor_id}`}
@@ -235,74 +271,82 @@ export default function LiveTrackingScreen() {
                   onPress={() => setSelectedDoctor(
                     selectedDoctor === doctor.doctor_id ? null : doctor.doctor_id
                   )}
+                  activeOpacity={0.8}
                 >
                   <View style={styles.doctorHeader}>
-                    <View style={styles.doctorIcon}>
-                      <User size={24} color={PrimaryColors.main} />
-                    </View>
-                    <View style={styles.doctorInfo}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        {/* Live Status Indicator */}
-                        {!isOffline ? (
-                          <View style={styles.onlineIndicatorContainer}>
-                            <View style={styles.onlinePulse} />
-                            <View style={styles.onlineDot} />
-                          </View>
-                        ) : (
-                          <View style={styles.offlineDot} />
+                    <View style={styles.doctorIconContainer}>
+                        <Image 
+                            source={{ uri: getFullImageUrl(doctor.profile_photo) }}
+                            style={styles.doctorListImage}
+                        />
+                        {!isOffline && (
+                            <View style={styles.onlineBadge} />
                         )}
-                        <Text style={styles.doctorName}>{doctor.doctor_name}</Text>
+                    </View>
+                    
+                    <View style={styles.doctorInfo}>
+                      <View style={styles.nameRow}>
+                        <Text style={styles.doctorName} numberOfLines={1}>{doctor.doctor_name}</Text>
                         {isOffline && (
-                          <View style={styles.offlineBadge}>
-                            <Text style={styles.offlineBadgeText}>OFFLINE</Text>
+                          <View style={styles.offlineTag}>
+                            <Text style={styles.offlineTagText}>OFFLINE</Text>
                           </View>
                         )}
                       </View>
-                      <Text style={styles.doctorDepartment}>{doctor.department}</Text>
+                      <Text style={styles.doctorDepartment} numberOfLines={1}>{doctor.department}</Text>
+                      
+                      {/* Quick Status Line */}
+                      <View style={styles.quickStatusRow}>
+                         {distance !== null ? (
+                             <Text style={styles.distanceText}>
+                                <Navigation size={12} color={PrimaryColors.main} /> {distance < 1 ? `${Math.round(distance*1000)}m` : `${distance.toFixed(1)}km`} away
+                             </Text>
+                         ) : (
+                             <Text style={styles.distanceText}>Location unavailable</Text>
+                         )}
+                         {etaMinutes !== null && !isOffline && (
+                             <Text style={styles.etaText}>
+                                • ~{etaMinutes} min
+                             </Text>
+                         )}
+                      </View>
                     </View>
-                    <View style={styles.statusIndicator}>
-                      {doctor.check_in_verified ? (
-                        <CheckCircle size={20} color={StatusColors.success} />
-                      ) : (
-                        <Clock size={20} color={StatusColors.warning} />
-                      )}
+                    
+                    <View style={styles.statusIconData}>
+                        {doctor.check_in_verified ? (
+                             <View style={styles.verifiedContainer}>
+                                <CheckCircle size={16} color="#fff" />
+                             </View>
+                        ) : (
+                            <Clock size={20} color={StatusColors.warning} />
+                        )}
                     </View>
                   </View>
 
+                  {/* Expanded Details */}
                   {selectedDoctor === doctor.doctor_id && (
                     <View style={styles.doctorDetails}>
-                      <View style={styles.detailRow}>
-                        <MapPin size={16} color={NeutralColors.textSecondary} />
-                        <Text style={styles.detailText}>
-                          {doctorLat && doctorLng && !isNaN(doctorLat) && !isNaN(doctorLng)
-                            ? `${doctorLat.toFixed(6)}, ${doctorLng.toFixed(6)}`
-                            : 'Location not available'}
-                        </Text>
+                      <View style={styles.detailGrid}>
+                          <View style={styles.detailItem}>
+                             <Text style={styles.detailLabel}>Last Updated</Text>
+                             <Text style={styles.detailValue}>{getTimeAgo(doctor.location_updated_at)}</Text>
+                          </View>
+                          <View style={styles.detailItem}>
+                             <Text style={styles.detailLabel}>Checked In</Text>
+                             <Text style={styles.detailValue}>
+                                {doctor.check_in_time ? new Date(doctor.check_in_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Not yet'}
+                             </Text>
+                          </View>
                       </View>
-                      {distance !== null && (
-                        <View style={styles.detailRow}>
-                          <Navigation size={16} color={PrimaryColors.main} />
-                          <Text style={styles.detailText}>
-                            {distance < 1 
-                              ? `${Math.round(distance * 1000)}m from hospital` 
-                              : `${distance.toFixed(2)} km from hospital`}
-                          </Text>
-                        </View>
-                      )}
-                      <View style={styles.detailRow}>
-                        <Clock size={16} color={NeutralColors.textSecondary} />
-                        <Text style={styles.detailText}>
-                          Updated {getTimeAgo(doctor.location_updated_at)}
-                        </Text>
-                      </View>
-                      {doctor.check_in_time && (
-                        <View style={styles.detailRow}>
-                          <CheckCircle size={16} color={StatusColors.success} />
-                          <Text style={styles.detailText}>
-                            Checked in: {new Date(doctor.check_in_time).toLocaleTimeString()}
-                          </Text>
-                        </View>
-                      )}
+                      
+                      {doctorLat && doctorLng && !isNaN(doctorLat) ? (
+                          <View style={styles.locationContainer}>
+                             <MapPin size={14} color={NeutralColors.textSecondary} />
+                             <Text style={styles.locationTextAddress}>
+                                {`${doctorLat.toFixed(5)}, ${doctorLng.toFixed(5)}`}
+                             </Text>
+                          </View>
+                      ) : null}
                     </View>
                   )}
                 </TouchableOpacity>
@@ -428,89 +472,132 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  doctorIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: PrimaryColors.lightest,
-    justifyContent: 'center',
-    alignItems: 'center',
+  doctorIconContainer: {
+    position: 'relative',
     marginRight: 12,
+  },
+  doctorName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: NeutralColors.textPrimary,
+  },
+  doctorDepartment: {
+    fontSize: 13,
+    color: NeutralColors.textSecondary,
+    marginTop: 2,
+  },
+  doctorCardOffline: {
+    opacity: 0.7,
+    backgroundColor: '#F9FAFB',
   },
   doctorInfo: {
     flex: 1,
-  },
-  doctorName: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: NeutralColors.textPrimary,
-    marginBottom: 4,
-  },
-  doctorDepartment: {
-    fontSize: 14,
-    color: NeutralColors.textSecondary,
-  },
-  statusIndicator: {
-    marginLeft: 12,
   },
   doctorDetails: {
     marginTop: 16,
     paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: NeutralColors.divider,
+    borderTopColor: '#E5E7EB',
     gap: 12,
   },
-  detailRow: {
+  doctorListImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: NeutralColors.border,
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  onlineBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#10B981',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    marginBottom: 4,
   },
-  detailText: {
-    fontSize: 14,
-    color: NeutralColors.textSecondary,
-    flex: 1,
-  },
-  doctorCardOffline: {
-    opacity: 0.6,
-    backgroundColor: '#F9FAFB',
-  },
-  offlineBadge: {
-    backgroundColor: '#6B7280',
-    paddingHorizontal: 8,
+  offlineTag: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
-  offlineBadgeText: {
+  offlineTagText: {
     fontSize: 10,
-    fontWeight: '700',
-    color: '#fff',
-    letterSpacing: 0.5,
+    color: '#6B7280',
+    fontWeight: '600',
   },
-  onlineIndicatorContainer: {
-    width: 12,
-    height: 12,
-    position: 'relative',
-    justifyContent: 'center',
+  quickStatusRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 4,
   },
-  onlinePulse: {
-    position: 'absolute',
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#10B981',
-    opacity: 0.4,
+  distanceText: {
+    fontSize: 13,
+    color: PrimaryColors.main,
+    fontWeight: '600',
   },
-  onlineDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#10B981',
+  etaText: {
+    fontSize: 13,
+    color: NeutralColors.textSecondary,
+    marginLeft: 4,
   },
-  offlineDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#EF4444',
+  statusIconData: {
+      marginLeft: 'auto',
+  },
+  verifiedContainer: {
+      backgroundColor: StatusColors.success,
+      borderRadius: 12,
+      width: 24,
+      height: 24,
+      justifyContent: 'center',
+      alignItems: 'center',
+  },
+  detailGrid: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: 12,
+      backgroundColor: '#F9FAFB',
+      padding: 12,
+      borderRadius: 8,
+  },
+  detailItem: {
+      flex: 1,
+  },
+  detailLabel: {
+      fontSize: 11,
+      color: NeutralColors.textSecondary,
+      marginBottom: 4,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+  },
+  detailValue: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: NeutralColors.textPrimary,
+  },
+  locationContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingTop: 8,
+      borderTopWidth: 1,
+      borderTopColor: '#F3F4F6',
+  },
+  locationTextAddress: {
+      fontSize: 12,
+      color: NeutralColors.textSecondary,
+      fontFamily: 'monospace',
   },
 });

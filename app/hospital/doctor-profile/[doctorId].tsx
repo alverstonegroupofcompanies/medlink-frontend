@@ -23,6 +23,7 @@ import {
 import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors, HospitalStatusColors as StatusColors } from '@/constants/hospital-theme';
 import API from '../../api';
 import { ScreenSafeArea } from '@/components/screen-safe-area';
+import { getFullImageUrl } from '@/utils/url-helper';
 
 export default function DoctorProfileScreen() {
   const { doctorId } = useLocalSearchParams<{ doctorId: string }>();
@@ -115,7 +116,7 @@ export default function DoctorProfileScreen() {
         <View style={styles.profileSection}>
           <Image
             source={{
-              uri: doctor.profile_photo || 'https://i.pravatar.cc/150?img=1',
+              uri: getFullImageUrl(doctor.profile_photo),
             }}
             style={styles.profileImage}
           />

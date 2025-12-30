@@ -25,6 +25,7 @@ import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as Neutra
 import API from '../../api';
 import { ScreenSafeArea } from '@/components/screen-safe-area';
 import { formatISTDateTime, formatISTDateWithWeekday } from '@/utils/timezone';
+import { getFullImageUrl } from '@/utils/url-helper';
 
 export default function HospitalJobSessionScreen() {
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
@@ -47,10 +48,15 @@ export default function HospitalJobSessionScreen() {
   useEffect(() => {
     if (session?.check_in_time && !session?.end_time) {
       // Calculate elapsed time since check-in
+      // Ensure we parse the date correctly. valid ISO strings usually parse correctly in UTC or local 
+      // depending on the string. Safe bet: treat as new Date(str) but if it's from Laravel it might lack 'Z'.
       const checkInTime = new Date(session.check_in_time);
+      
       const updateElapsed = () => {
-        const elapsed = Date.now() - checkInTime.getTime();
-        setTimeElapsed(elapsed);
+        // Simple elapsed calculation
+        const now = new Date();
+        const elapsed = now.getTime() - checkInTime.getTime();
+        setTimeElapsed(Math.max(0, elapsed));
       };
       
       updateElapsed(); // Initial calculation
@@ -150,7 +156,7 @@ export default function HospitalJobSessionScreen() {
           <View style={styles.doctorInfoRow}>
             {doctor?.profile_photo && (
               <Image
-                source={{ uri: doctor.profile_photo }}
+                source={{ uri: getFullImageUrl(doctor.profile_photo) }}
                 style={styles.doctorImage}
               />
             )}
@@ -172,6 +178,17 @@ export default function HospitalJobSessionScreen() {
               {isCompleted ? 'Completed' : isInProgress ? 'In Progress' : 'Scheduled'}
             </Text>
           </View>
+          
+          {(isInProgress || session.status === 'scheduled') && (
+            <TouchableOpacity 
+              style={styles.trackButton}
+              onPress={() => router.push(`/hospital/live-tracking?sessionId=${session.id}&doctorId=${doctor?.id}`)}
+              activeOpacity={0.8}
+            >
+              <MapPin size={16} color="#fff" />
+              <Text style={styles.trackButtonText}>Track Live Location</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Check-In Information */}
@@ -251,7 +268,17 @@ export default function HospitalJobSessionScreen() {
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Start Time:</Text>
               <Text style={styles.infoValue}>
-                {new Date(`2000-01-01 ${session.start_time}`).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                {(() => {
+                  try {
+                    // Try parsing as ISO first if full date, else append date
+                    const timeStr = session.start_time.includes('T') || session.start_time.includes('-') 
+                      ? session.start_time 
+                      : `2000-01-01 ${session.start_time}`;
+                    return new Date(timeStr).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+                  } catch (e) {
+                    return session.start_time;
+                  }
+                })()}
               </Text>
             </View>
           )}
@@ -259,7 +286,16 @@ export default function HospitalJobSessionScreen() {
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Scheduled End Time:</Text>
               <Text style={styles.infoValue}>
-                {new Date(`2000-01-01 ${session.schedule_end_time}`).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                 {(() => {
+                  try {
+                    const timeStr = session.schedule_end_time.includes('T') || session.schedule_end_time.includes('-') 
+                      ? session.schedule_end_time 
+                      : `2000-01-01 ${session.schedule_end_time}`;
+                    return new Date(timeStr).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+                  } catch (e) {
+                    return session.schedule_end_time;
+                  }
+                })()}
               </Text>
             </View>
           )}
@@ -389,6 +425,22 @@ const styles = StyleSheet.create({
   department: {
     fontSize: 14,
     color: NeutralColors.textSecondary,
+  },
+  trackButton: {
+    backgroundColor: PrimaryColors.main,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginTop: 16,
+    gap: 8,
+  },
+  trackButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   statusBadge: {
     backgroundColor: `${PrimaryColors.main}15`,

@@ -241,10 +241,13 @@ export default function HospitalProfileEditScreen() {
         } as any);
       }
 
+      // Add method spoofing for Laravel to handle multipart/form-data with PUT
+      data.append('_method', 'PUT');
+
       // Debug: Log FormData contents (development only)
       if (__DEV__) {
         console.log('📤 Sending hospital profile update:', {
-          method: 'PUT',
+          method: 'POST (spoofed PUT)',
           url: '/hospital/profile',
           hasLogo: !!selectedLogo,
           hasLicenseDoc: !!licenseDocument,
@@ -260,18 +263,17 @@ export default function HospitalProfileEditScreen() {
         });
       }
 
-      // Use PUT method for profile update
-      // Note: Using API.request to ensure method is preserved
+      // Use POST method with _method=PUT for file uploads in Laravel
       const response = await API.request({
-        method: 'PUT',
+        method: 'POST',
         url: '/hospital/profile',
         data: data,
         timeout: 120000,
         headers: {
           'Accept': 'application/json',
+          'Content-Type': 'multipart/form-data',
         },
         transformRequest: (data, headers) => {
-          // For FormData, let axios handle headers automatically
           return data;
         },
       });

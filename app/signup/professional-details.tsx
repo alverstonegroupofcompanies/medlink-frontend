@@ -1,5 +1,5 @@
 import { FileUploadButton } from '@/components/file-upload-button';
-import { DepartmentPicker } from '@/components/department-picker';
+import { MultiDepartmentPicker } from '@/components/multi-department-picker'; // Changed from DepartmentPicker
 import { ThemedButton } from '@/components/themed-button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedTextInput } from '@/components/themed-text-input';
@@ -9,39 +9,19 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import API from '../api';
 
-// ... (existing imports)
 
-// ... (inside component)
 
-            {Object.entries(formData)
-              .filter(([key]) => key !== 'department_id') // Hide the raw input
-              .map(([key, value]) => (
-                <ThemedTextInput
-                  key={key}
-                  placeholder={key.replace(/([A-Z])/g, ' $1')}
-                  value={value}
-                  onChangeText={(v) => handleInputChange(key, v)}
-                  multiline={key === 'professionalAchievements'}
-                  keyboardType={key === 'experience' ? 'numeric' : 'default'}
-                />
-              ))}
 
-            <View style={styles.inputGroup}>
-              <ThemedText style={styles.label}>Department</ThemedText>
-              <DepartmentPicker
-                value={formData.department_id ? parseInt(formData.department_id) : null}
-                onValueChange={(id) => handleInputChange('department_id', id ? id.toString() : '')}
-                required={true}
-                placeholder="Select Specialization/Department"
-              />
-            </View>
+
+
 import { API_BASE_URL } from '../../config/api';
 import { calculateProfileCompletion } from '@/utils/profileCompletion';
 import { DoctorPrimaryColors as PrimaryColors, DoctorNeutralColors as NeutralColors } from '@/constants/doctor-theme';
 import { saveDoctorAuth } from '@/utils/auth';
 import { useEffect, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TouchableOpacity, View, Modal } from 'react-native';
 
 export default function ProfessionalDetailsScreen() {
   const navParams = useLocalSearchParams();
@@ -51,8 +31,8 @@ export default function ProfessionalDetailsScreen() {
     professionalAchievements: '',
     medicalCouncilRegNo: '',
     qualifications: '',
-    specialization: '',
-    department_id: '',
+    // specialization: '', // Removed
+    department_ids: [] as number[], // Changed to array
     experience: '',
     currentHospital: '',
     currentLocation: '',
@@ -62,6 +42,10 @@ export default function ProfessionalDetailsScreen() {
   const [files, setFiles] = useState<Record<string, { uri: string; name: string; type: string }>>({});
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
+  
+  // Work Type Modal State
+  const [workTypeModalVisible, setWorkTypeModalVisible] = useState(false);
+  const workTypeOptions = ['Full Time', 'Part Time', 'Session'];
 
   useEffect(() => {
     loadRegistrationData();
@@ -93,7 +77,7 @@ export default function ProfessionalDetailsScreen() {
     }
   };
 
-  const handleInputChange = (field: string, value: string) => {
+  const handleInputChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
@@ -112,6 +96,11 @@ export default function ProfessionalDetailsScreen() {
       return;
     }
 
+    if (!formData.department_ids || formData.department_ids.length === 0) {
+        Alert.alert('Validation Error', 'Please select at least one department.');
+        return;
+    }
+
     setLoading(true);
     try {
       const data = new FormData();
@@ -125,8 +114,17 @@ export default function ProfessionalDetailsScreen() {
 
       // Professional Details
       Object.entries(formData).forEach(([key, value]) => {
-        if (value !== null && value !== '') {
-          data.append(key, value);
+        if (key === 'department_ids') {
+             // Handle array properly for FormData
+             (value as number[]).forEach((id, index) => {
+                 data.append(`department_ids[${index}]`, id.toString());
+             });
+             // Also send primary department_id for backward compatibility
+             if ((value as number[]).length > 0) {
+                 data.append('department_id', (value as number[])[0].toString());
+             }
+        } else if (value !== null && value !== '') {
+          data.append(key, value as string);
         }
       });
 
@@ -278,40 +276,49 @@ export default function ProfessionalDetailsScreen() {
             <View style={styles.formHeader}>
               <ThemedText style={styles.formTitle}>Professional Information</ThemedText>
               <ThemedText style={styles.formSubheading}>
-                Add your qualifications and experience (optional fields are allowed)
+                Add your qualifications and experience
               </ThemedText>
             </View>
 
-            
-import { DepartmentPicker } from '@/components/department-picker';
+            {/* Department Selection (Replaces Specialization) */}
+            <View style={{ marginBottom: 20 }}>
+              <ThemedText style={styles.label}>Departments (Select all that apply)</ThemedText>
+              <MultiDepartmentPicker
+                selectedIds={formData.department_ids}
+                onValuesChange={(ids) => handleInputChange('department_ids', ids)}
+                required={true}
+                placeholder="Select Departments"
+              />
+            </View>
 
-// ... imports remain ... 
-
-// ... inside render ...
-
+            {/* Dynamic Fields */}
             {Object.entries(formData)
-              .filter(([key]) => key !== 'department_id')
+              .filter(([key]) => !['department_ids', 'preferredWorkType'].includes(key))
               .map(([key, value]) => (
                 <ThemedTextInput
                   key={key}
-                  placeholder={key.replace(/([A-Z])/g, ' $1')}
-                  value={value}
+                  placeholder={key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
+                  value={value as string}
                   onChangeText={(v) => handleInputChange(key, v)}
                   multiline={key === 'professionalAchievements'}
                   keyboardType={key === 'experience' ? 'numeric' : 'default'}
                 />
               ))}
-            
-            <View style={{ marginBottom: 20 }}>
-              <ThemedText style={styles.label}>Department / Specialization</ThemedText>
-              <DepartmentPicker
-                value={formData.department_id && !isNaN(parseInt(formData.department_id)) ? parseInt(formData.department_id) : null}
-                onValueChange={(id) => handleInputChange('department_id', id ? id.toString() : '')}
-                required={true}
-                placeholder="Select your Department"
-              />
-            </View>
 
+             {/* Work Type Dropdown */}
+            <View style={{ marginBottom: 20 }}>
+              <ThemedText style={styles.label}>Preferred Work Type</ThemedText>
+              <TouchableOpacity
+                style={styles.dropdownInput}
+                onPress={() => setWorkTypeModalVisible(true)}
+              >
+                 <ThemedText style={formData.preferredWorkType ? styles.dropdownText : styles.dropdownPlaceholder}>
+                    {formData.preferredWorkType || 'Select Work Type'}
+                 </ThemedText>
+                 <MaterialIcons name="arrow-drop-down" size={24} color={NeutralColors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            
             <FileUploadButton label="Upload Degree Certificates" onFileSelected={(uri, name, type) => handleFileUpload('degree_certificate', uri, name, type)} type="document" />
             <FileUploadButton label="ID Proof" onFileSelected={(uri, name, type) => handleFileUpload('id_proof', uri, name, type)} type="both" />
             <FileUploadButton label="Medical Registration Certificate" onFileSelected={(uri, name, type) => handleFileUpload('medical_registration_certificate', uri, name, type)} type="document" />
@@ -320,6 +327,46 @@ import { DepartmentPicker } from '@/components/department-picker';
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Work Type Modal */}
+      <Modal
+        visible={workTypeModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setWorkTypeModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+             <View style={styles.modalHeader}>
+                <ThemedText style={styles.modalTitle}>Select Work Type</ThemedText>
+                <TouchableOpacity onPress={() => setWorkTypeModalVisible(false)}>
+                   <MaterialIcons name="close" size={24} color={PrimaryColors.main} />
+                </TouchableOpacity>
+             </View>
+             {workTypeOptions.map((option) => (
+                <TouchableOpacity
+                   key={option}
+                   style={styles.modalOption}
+                   onPress={() => {
+                      handleInputChange('preferredWorkType', option);
+                      setWorkTypeModalVisible(false);
+                   }}
+                >
+                   <ThemedText style={[
+                       styles.modalOptionText,
+                       formData.preferredWorkType === option && styles.modalOptionTextSelected
+                   ]}>
+                       {option}
+                   </ThemedText>
+                   {formData.preferredWorkType === option && (
+                       <MaterialIcons name="check" size={20} color={PrimaryColors.main} />
+                   )}
+                </TouchableOpacity>
+             ))}
+          </View>
+        </View>
+      </Modal>
+
     </ThemedView>
   );
 }
@@ -407,5 +454,66 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 6,
+  },
+  dropdownInput: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dropdownPlaceholder: {
+    color: '#9E9E9E',
+    fontSize: 16,
+  },
+  dropdownText: {
+    color: '#333333',
+    fontSize: 16,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 40,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEEEEE',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333',
+  },
+  modalOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F5F5F5',
+  },
+  modalOptionText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  modalOptionTextSelected: {
+    color: PrimaryColors.main,
+    fontWeight: '600',
   },
 });

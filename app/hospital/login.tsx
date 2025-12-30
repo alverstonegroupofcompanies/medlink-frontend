@@ -65,6 +65,7 @@ export default function HospitalLoginScreen() {
       await AsyncStorage.setItem(HOSPITAL_INFO_KEY, JSON.stringify(hospital));
 
       // Register for push notifications after successful login
+      /*
       try {
         const { registerForPushNotifications } = require('@/utils/notifications');
         await registerForPushNotifications('hospital');
@@ -72,6 +73,7 @@ export default function HospitalLoginScreen() {
         console.warn('⚠️ Failed to register for push notifications:', error);
         // Don't block login if push notification registration fails
       }
+      */
 
       setLoading(false);
       

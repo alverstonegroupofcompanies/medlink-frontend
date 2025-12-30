@@ -173,9 +173,7 @@ export default function DoctorHome() {
 
   const handleApply = async (requirementId: number) => {
     try {
-      await API.post('/doctor/apply', {
-        job_requirement_id: requirementId,
-      });
+      await API.post(`/jobs/${requirementId}/apply`);
       Alert.alert('Success', 'Application submitted successfully!');
       loadJobRequirements();
       loadMyApplications();
@@ -183,6 +181,56 @@ export default function DoctorHome() {
       const message = error.response?.data?.message || 'Failed to submit application';
       Alert.alert('Error', message);
     }
+  };
+
+  const handleWithdraw = async (applicationId: number) => {
+    Alert.alert(
+      "Withdraw Application",
+      "Are you sure you want to withdraw your application?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Withdraw", 
+          style: "destructive", 
+          onPress: async () => {
+            try {
+              await API.post(`/jobs/${applicationId}/withdraw`);
+              Alert.alert('Success', 'Application withdrawn successfully.');
+              loadJobRequirements();
+              loadMyApplications();
+            } catch (error: any) {
+              const message = error.response?.data?.message || 'Failed to withdraw application';
+              Alert.alert('Error', message);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleReject = async (requirementId: number) => {
+    Alert.alert(
+      "Reject Appointment",
+      "Are you sure you want to reject this appointment? This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Reject", 
+          style: "destructive", 
+          onPress: async () => {
+            try {
+              await API.post(`/jobs/${requirementId}/reject`);
+              Alert.alert('Success', 'Appointment rejected successfully.');
+              loadJobRequirements();
+              loadMyApplications();
+            } catch (error: any) {
+              const message = error.response?.data?.message || 'Failed to reject appointment';
+              Alert.alert('Error', message);
+            }
+          }
+        }
+      ]
+    );
   };
 
   const handleLogout = async () => {
@@ -743,21 +791,62 @@ export default function DoctorHome() {
                       </View>
 
                       {hasApplied ? (
-                        <View style={[
-                          styles.applyButton, 
-                          styles.appliedButton,
-                          applicationStatus === 'rejected' && { backgroundColor: ModernColors.error.light }, // Red background for rejected
-                          applicationStatus === 'selected' && { backgroundColor: ModernColors.success.light } // Green background for approved
-                        ]}>
-                          <Text style={[
-                            styles.appliedButtonText,
-                            applicationStatus === 'rejected' && { color: ModernColors.error.main }, // Red text for rejected
-                            applicationStatus === 'selected' && { color: ModernColors.success.main } // Green text for approved
+                        <View style={{ gap: 8 }}>
+                          <View style={[
+                            styles.applyButton, 
+                            styles.appliedButton,
+                            applicationStatus === 'rejected' && { backgroundColor: ModernColors.error.light }, // Red background for rejected
+                            applicationStatus === 'selected' && { backgroundColor: ModernColors.success.light } // Green background for approved
                           ]}>
-                            {applicationStatus === 'pending' ? 'Waiting for Approval' : 
-                             applicationStatus === 'selected' ? 'Approved' :
-                             applicationStatus === 'rejected' ? 'Rejected' : 'Applied'}
-                          </Text>
+                            <Text style={[
+                              styles.appliedButtonText,
+                              applicationStatus === 'rejected' && { color: ModernColors.error.main }, // Red text for rejected
+                              applicationStatus === 'selected' && { color: ModernColors.success.main } // Green text for approved
+                            ]}>
+                              {applicationStatus === 'pending' ? 'Waiting for Approval' : 
+                               applicationStatus === 'selected' ? 'Approved' :
+                               applicationStatus === 'rejected' ? 'Rejected' : 
+                               applicationStatus === 'withdrawn' ? 'Withdrawn' : 'Applied'}
+                            </Text>
+                          </View>
+                          
+                          {applicationStatus === 'selected' && (
+                            <View style={{ gap: 4 }}>
+                              <TouchableOpacity
+                                style={[styles.applyButton, { backgroundColor: ModernColors.primary.main }]}
+                                onPress={() => router.push(`/(tabs)/job-detail/${application.id}`)}
+                                activeOpacity={0.8}
+                              >
+                                <Text style={styles.applyButtonText}>View Details</Text>
+                                <ArrowRight size={16} color="#fff" />
+                              </TouchableOpacity>
+
+                              <TouchableOpacity
+                                style={[styles.applyButton, { backgroundColor: ModernColors.error.light }]}
+                                onPress={() => handleReject(requirement.id)}
+                                activeOpacity={0.8}
+                              >
+                                <Text style={[styles.applyButtonText, { color: ModernColors.error.main }]}>Reject Appointment</Text>
+                              </TouchableOpacity>
+                            </View>
+                          )}
+
+                          {applicationStatus === 'pending' && (
+                            <TouchableOpacity
+                              style={[styles.applyButton, { backgroundColor: ModernColors.neutral.gray200, marginTop: 4 }]}
+                              onPress={() => {
+                                const app = myApplications.find(a => a.job_requirement_id === requirement.id);
+                                if (app) handleWithdraw(app.id);
+                              }}
+                              activeOpacity={0.8}
+                            >
+                              <Text style={[styles.applyButtonText, { color: ModernColors.text.primary }]}>Withdraw</Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      ) : requirement.is_filled ? (
+                        <View style={[styles.applyButton, { backgroundColor: ModernColors.neutral.gray200 }]}>
+                          <Text style={[styles.expiredButtonText, { color: ModernColors.text.secondary }]}>Spot Filled</Text>
                         </View>
                       ) : isExpired ? (
                         <View style={[styles.applyButton, styles.expiredButton]}>

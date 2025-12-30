@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, FlatList, Platform, TextInput } from 'react-native';
-import { ChevronDown, X, Plus } from 'lucide-react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, FlatList, Platform, ScrollView } from 'react-native';
+import { ChevronDown, X, Check } from 'lucide-react-native';
 import API from '../app/api';
 import { ModernColors, Spacing, BorderRadius, Typography } from '@/constants/modern-theme';
 
@@ -10,22 +10,17 @@ interface Department {
   description?: string;
 }
 
-interface SelectedDepartment {
-  department_id: number;
-  experience?: string;
-}
-
 interface MultiDepartmentPickerProps {
-  value: SelectedDepartment[];
-  onValueChange: (departments: SelectedDepartment[]) => void;
+  selectedIds: number[];
+  onValuesChange: (departmentIds: number[]) => void;
   placeholder?: string;
   error?: string;
   required?: boolean;
 }
 
 export function MultiDepartmentPicker({
-  value = [],
-  onValueChange,
+  selectedIds,
+  onValuesChange,
   placeholder = 'Select Departments',
   error,
   required = false,
@@ -33,15 +28,10 @@ export function MultiDepartmentPicker({
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
-  const [selectedDepartments, setSelectedDepartments] = useState<SelectedDepartment[]>(value || []);
-
+  
   useEffect(() => {
     loadDepartments();
   }, []);
-
-  useEffect(() => {
-    setSelectedDepartments(value || []);
-  }, [value]);
 
   const loadDepartments = async () => {
     try {
@@ -54,55 +44,47 @@ export function MultiDepartmentPicker({
     }
   };
 
-  const handleAddDepartment = (department: Department) => {
-    const isAlreadySelected = selectedDepartments.some(
-      (dept) => dept.department_id === department.id
-    );
-
-    if (!isAlreadySelected) {
-      const newSelection = [
-        ...selectedDepartments,
-        { department_id: department.id, experience: '' },
-      ];
-      setSelectedDepartments(newSelection);
-      onValueChange(newSelection);
+  const toggleSelection = (departmentId: number) => {
+    if (selectedIds.includes(departmentId)) {
+      onValuesChange(selectedIds.filter(id => id !== departmentId));
+    } else {
+      onValuesChange([...selectedIds, departmentId]);
     }
-    setModalVisible(false);
   };
 
-  const handleRemoveDepartment = (departmentId: number) => {
-    const newSelection = selectedDepartments.filter(
-      (dept) => dept.department_id !== departmentId
-    );
-    setSelectedDepartments(newSelection);
-    onValueChange(newSelection);
+  const removeDepartment = (departmentId: number) => {
+    onValuesChange(selectedIds.filter(id => id !== departmentId));
   };
 
-  const handleExperienceChange = (departmentId: number, experience: string) => {
-    const newSelection = selectedDepartments.map((dept) =>
-      dept.department_id === departmentId
-        ? { ...dept, experience }
-        : dept
-    );
-    setSelectedDepartments(newSelection);
-    onValueChange(newSelection);
+  const getSelectedDepartmentNames = () => {
+    return departments
+      .filter(d => selectedIds.includes(d.id))
+      .map(d => d.name);
   };
-
-  const getDepartmentName = (departmentId: number) => {
-    return departments.find((d) => d.id === departmentId)?.name || 'Unknown';
-  };
-
-  const availableDepartments = departments.filter(
-    (dept) => !selectedDepartments.some((selected) => selected.department_id === dept.id)
-  );
 
   return (
     <View style={styles.container}>
+      {/* Selected Tags Display */}
+      {selectedIds.length > 0 && (
+        <View style={styles.tagsContainer}>
+          {departments
+            .filter(d => selectedIds.includes(d.id))
+            .map(department => (
+              <View key={department.id} style={styles.tag}>
+                <Text style={styles.tagText}>{department.name}</Text>
+                <TouchableOpacity onPress={() => removeDepartment(department.id)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <X size={14} color={ModernColors.primary.main} />
+                </TouchableOpacity>
+              </View>
+            ))}
+        </View>
+      )}
+
       <TouchableOpacity
         style={[
           styles.picker,
           error && styles.pickerError,
-          selectedDepartments.length === 0 && styles.pickerPlaceholder,
+          selectedIds.length === 0 && styles.pickerPlaceholder,
         ]}
         onPress={() => setModalVisible(true)}
         activeOpacity={0.7}
@@ -110,45 +92,17 @@ export function MultiDepartmentPicker({
         <Text
           style={[
             styles.pickerText,
-            selectedDepartments.length === 0 && styles.pickerTextPlaceholder,
+            selectedIds.length === 0 && styles.pickerTextPlaceholder,
           ]}
         >
-          {selectedDepartments.length > 0
-            ? `${selectedDepartments.length} department${selectedDepartments.length > 1 ? 's' : ''} selected`
+          {selectedIds.length > 0 
+            ? `${selectedIds.length} Department${selectedIds.length > 1 ? 's' : ''} Selected` 
             : placeholder}
-          {required && selectedDepartments.length === 0 && ' *'}
+          {required && selectedIds.length === 0 && ' *'}
         </Text>
         <ChevronDown size={20} color={ModernColors.text.secondary} />
       </TouchableOpacity>
       {error && <Text style={styles.errorText}>{error}</Text>}
-
-      {/* Selected Departments List */}
-      {selectedDepartments.length > 0 && (
-        <View style={styles.selectedContainer}>
-          {selectedDepartments.map((dept) => (
-            <View key={dept.department_id} style={styles.selectedItem}>
-              <View style={styles.selectedItemContent}>
-                <Text style={styles.selectedItemName}>
-                  {getDepartmentName(dept.department_id)}
-                </Text>
-                <TextInput
-                  style={styles.experienceInput}
-                  value={dept.experience || ''}
-                  onChangeText={(text) => handleExperienceChange(dept.department_id, text)}
-                  placeholder="Experience (optional)"
-                  placeholderTextColor={ModernColors.text.tertiary}
-                />
-              </View>
-              <TouchableOpacity
-                onPress={() => handleRemoveDepartment(dept.department_id)}
-                style={styles.removeButton}
-              >
-                <X size={16} color={ModernColors.error.main} />
-              </TouchableOpacity>
-            </View>
-          ))}
-        </View>
-      )}
 
       <Modal
         visible={modalVisible}
@@ -164,35 +118,46 @@ export function MultiDepartmentPicker({
                 onPress={() => setModalVisible(false)}
                 style={styles.closeButton}
               >
-                <Text style={styles.closeButtonText}>Close</Text>
+                <Text style={styles.closeButtonText}>Done</Text>
               </TouchableOpacity>
             </View>
             {loading ? (
               <View style={styles.loadingContainer}>
                 <Text style={styles.loadingText}>Loading departments...</Text>
               </View>
-            ) : availableDepartments.length === 0 ? (
-              <View style={styles.loadingContainer}>
-                <Text style={styles.loadingText}>All departments selected</Text>
-              </View>
             ) : (
               <FlatList
-                data={availableDepartments}
+                data={departments}
                 keyExtractor={(item) => item.id.toString()}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={styles.departmentItem}
-                    onPress={() => handleAddDepartment(item)}
-                  >
-                    <View style={styles.departmentItemContent}>
-                      <Text style={styles.departmentName}>{item.name}</Text>
-                      {item.description && (
-                        <Text style={styles.departmentDescription}>{item.description}</Text>
-                      )}
-                    </View>
-                    <Plus size={20} color={ModernColors.primary.main} />
-                  </TouchableOpacity>
-                )}
+                renderItem={({ item }) => {
+                    const isSelected = selectedIds.includes(item.id);
+                    return (
+                      <TouchableOpacity
+                        style={[
+                          styles.departmentItem,
+                          isSelected && styles.departmentItemSelected,
+                        ]}
+                        onPress={() => toggleSelection(item.id)}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={[
+                              styles.departmentName,
+                              isSelected && styles.departmentNameSelected,
+                            ]}
+                          >
+                            {item.name}
+                          </Text>
+                          {item.description && (
+                            <Text style={styles.departmentDescription}>{item.description}</Text>
+                          )}
+                        </View>
+                        {isSelected && (
+                          <Check size={20} color={ModernColors.primary.main} />
+                        )}
+                      </TouchableOpacity>
+                    );
+                }}
                 style={styles.list}
               />
             )}
@@ -206,6 +171,25 @@ export function MultiDepartmentPicker({
 const styles = StyleSheet.create({
   container: {
     marginBottom: Spacing.md,
+  },
+  tagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: Spacing.sm,
+  },
+  tag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: ModernColors.primary.light,
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    gap: 6,
+  },
+  tagText: {
+    ...Typography.captionBold,
+    color: ModernColors.primary.main,
   },
   picker: {
     flexDirection: 'row',
@@ -237,42 +221,6 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     color: ModernColors.error.main,
     marginTop: Spacing.xs,
-  },
-  selectedContainer: {
-    marginTop: Spacing.sm,
-  },
-  selectedItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: ModernColors.background.secondary,
-    borderWidth: 1,
-    borderColor: ModernColors.border.light,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    marginBottom: Spacing.sm,
-  },
-  selectedItemContent: {
-    flex: 1,
-  },
-  selectedItemName: {
-    ...Typography.bodyBold,
-    color: ModernColors.text.primary,
-    marginBottom: Spacing.xs,
-  },
-  experienceInput: {
-    ...Typography.body,
-    backgroundColor: ModernColors.background.primary,
-    borderWidth: 1,
-    borderColor: ModernColors.border.light,
-    borderRadius: BorderRadius.sm,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
-    color: ModernColors.text.primary,
-  },
-  removeButton: {
-    padding: Spacing.xs,
-    marginLeft: Spacing.sm,
   },
   modalOverlay: {
     flex: 1,
@@ -326,17 +274,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: ModernColors.border.light,
   },
-  departmentItemContent: {
-    flex: 1,
+  departmentItemSelected: {
+    backgroundColor: ModernColors.primary.light,
   },
   departmentName: {
     ...Typography.bodyBold,
     color: ModernColors.text.primary,
     marginBottom: Spacing.xs,
   },
+  departmentNameSelected: {
+    color: ModernColors.primary.main,
+  },
   departmentDescription: {
     ...Typography.caption,
     color: ModernColors.text.secondary,
   },
 });
-

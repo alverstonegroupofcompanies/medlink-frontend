@@ -115,7 +115,7 @@ export default function AllOpeningsScreen() {
     }
 
     try {
-      await API.post('/doctor/apply', {
+      await API.post(`/jobs/${requirementId}/apply`, {
         job_requirement_id: requirementId,
       });
       const { Alert } = require('react-native');
@@ -128,9 +128,59 @@ export default function AllOpeningsScreen() {
     }
   };
 
+  const handleReject = async (requirementId: number) => {
+    const { Alert } = require('react-native');
+    Alert.alert(
+      "Reject Appointment",
+      "Are you sure you want to reject this appointment? This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Reject", 
+          style: "destructive", 
+          onPress: async () => {
+            try {
+              await API.post(`/jobs/${requirementId}/reject`);
+              Alert.alert('Success', 'Appointment rejected successfully.');
+              loadData();
+            } catch (error: any) {
+              const message = error.response?.data?.message || 'Failed to reject appointment';
+              Alert.alert('Error', message);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleWithdraw = async (applicationId: number) => {
+    const { Alert } = require('react-native');
+    Alert.alert(
+      "Withdraw Application",
+      "Are you sure you want to withdraw your application?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Withdraw", 
+          style: "destructive", 
+          onPress: async () => {
+            try {
+              await API.post(`/jobs/${applicationId}/withdraw`);
+              Alert.alert('Success', 'Application withdrawn successfully.');
+              loadData();
+            } catch (error: any) {
+              const message = error.response?.data?.message || 'Failed to withdraw application';
+              Alert.alert('Error', message);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   if (loading) {
     return (
-      <ScreenSafeArea backgroundColor={ModernColors.neutral.background}>
+      <ScreenSafeArea backgroundColor={ModernColors.background.secondary}>
         <View style={styles.container}>
           <View style={styles.header}>
             <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -152,7 +202,7 @@ export default function AllOpeningsScreen() {
   const isPendingVerification = doctor?.verification_status === 'pending';
 
   return (
-    <ScreenSafeArea backgroundColor={ModernColors.neutral.background}>
+    <ScreenSafeArea backgroundColor={ModernColors.background.secondary}>
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
@@ -227,12 +277,71 @@ export default function AllOpeningsScreen() {
                   </View>
 
                   {hasApplied ? (
-                    <View style={[styles.applyButton, styles.appliedButton]}>
-                      <Text style={styles.appliedButtonText}>
-                        {applicationStatus === 'pending' ? 'Waiting for Approval' : 
-                         applicationStatus === 'selected' ? 'Approved' :
-                         applicationStatus === 'rejected' ? 'Rejected' : 'Applied'}
-                      </Text>
+                    <View style={{ gap: 8 }}>
+                      <View style={[
+                        styles.applyButton, 
+                        styles.appliedButton,
+                        applicationStatus === 'rejected' && { backgroundColor: ModernColors.error.light },
+                        applicationStatus === 'selected' && { backgroundColor: ModernColors.success.light }
+                      ]}>
+                        <Text style={[
+                          styles.appliedButtonText,
+                          applicationStatus === 'rejected' && { color: ModernColors.error.main },
+                          applicationStatus === 'selected' && { color: ModernColors.success.main }
+                        ]}>
+                          {applicationStatus === 'pending' ? 'Waiting for Approval' : 
+                           applicationStatus === 'selected' ? 'Approved' :
+                           applicationStatus === 'rejected' ? 'Rejected' : 
+                           applicationStatus === 'withdrawn' ? 'Withdrawn' : 'Applied'}
+                        </Text>
+                      </View>
+
+                      {applicationStatus === 'selected' && (
+                        <View style={{ gap: 4 }}>
+                          <TouchableOpacity
+                            style={[styles.applyButton, { backgroundColor: ModernColors.primary.main }]}
+                            onPress={() => router.push(`/(tabs)/job-detail/${application.id}`)}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.applyButtonText}>View Details</Text>
+                            <ArrowRight size={16} color="#fff" />
+                          </TouchableOpacity>
+                          
+                          <TouchableOpacity
+                            style={[styles.applyButton, { backgroundColor: ModernColors.error.light }]}
+                            onPress={() => handleReject(requirement.id)}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={[styles.applyButtonText, { color: ModernColors.error.main }]}>Reject Appointment</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+
+                      {applicationStatus === 'pending' && application && (
+                        <TouchableOpacity
+                          style={[styles.applyButton, { backgroundColor: ModernColors.neutral.gray200 }]}
+                          onPress={() => handleWithdraw(application.id)}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={[styles.applyButtonText, { color: ModernColors.text.primary }]}>Withdraw</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  ) : requirement.is_filled ? (
+                    <View style={[styles.applyButton, { backgroundColor: ModernColors.neutral.gray200 }]}>
+                      <Text style={[styles.applyButtonText, { color: ModernColors.text.secondary }]}>Spot Filled</Text>
+                    </View>
+                  ) : (requirement.is_expired) ? (
+                    <View style={[styles.applyButton, { backgroundColor: ModernColors.neutral.gray200 }]}>
+                      <Text style={[styles.applyButtonText, { color: ModernColors.text.secondary }]}>Expired</Text>
+                    </View>
+                  ) : !isVerified ? (
+                    <View style={[styles.applyButton, { backgroundColor: ModernColors.neutral.gray200 }]}>
+                      <Text style={[styles.applyButtonText, { color: ModernColors.text.secondary }]}>Spot Filled</Text>
+                    </View>
+                  ) : (requirement.is_expired) ? (
+                    <View style={[styles.applyButton, { backgroundColor: ModernColors.neutral.gray200 }]}>
+                      <Text style={[styles.applyButtonText, { color: ModernColors.text.secondary }]}>Expired</Text>
                     </View>
                   ) : !isVerified ? (
                     <TouchableOpacity
@@ -268,7 +377,7 @@ export default function AllOpeningsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: ModernColors.neutral.background,
+    backgroundColor: ModernColors.background.secondary,
   },
   header: {
     backgroundColor: ModernColors.primary.main,

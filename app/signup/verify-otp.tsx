@@ -11,6 +11,7 @@ import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Touchabl
 import { DoctorPrimaryColors as PrimaryColors, DoctorNeutralColors as NeutralColors } from '@/constants/doctor-theme';
 import { API_BASE_URL } from '@/config/api';
 import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function VerifyOtpScreen() {
   const params = useLocalSearchParams();
@@ -29,6 +30,10 @@ export default function VerifyOtpScreen() {
   const profilePhoto = params.profilePhoto as string;
 
   useEffect(() => {
+    if (!email) {
+      Alert.alert('Error', 'Email address is missing. Please go back and try again.');
+    }
+    
     if (timer > 0) {
       const interval = setInterval(() => {
         setTimer((prev) => {
@@ -41,7 +46,7 @@ export default function VerifyOtpScreen() {
       }, 1000);
       return () => clearInterval(interval);
     }
-  }, [timer]);
+  }, [timer, email]);
 
   const handleOtpChange = (value: string, index: number) => {
     if (value.length > 1) {
