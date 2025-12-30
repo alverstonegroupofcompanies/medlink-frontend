@@ -12,10 +12,11 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ArrowLeft, ArrowRight, Star, Clock, Calendar, CheckCircle, User } from 'lucide-react-native';
+import { ArrowLeft, ArrowRight, Star, Clock, Calendar, CheckCircle, User, Check } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import API from '../../api';
 import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors } from '@/constants/hospital-theme';
+import { ScreenSafeArea } from '@/components/screen-safe-area';
 
 export default function ReviewSessionScreen() {
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
@@ -24,10 +25,10 @@ export default function ReviewSessionScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [rating, setRating] = useState(0);
   const [review, setReview] = useState('');
+  const [processingPayment, setProcessingPayment] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   useEffect(() => {
-    setRating(0); // Reset rating for new session
-    setReview(''); //  useEffect(() => {
     setRating(0); // Reset rating for new session
     setReview(''); // Reset review
     loadSession();
@@ -46,8 +47,6 @@ export default function ReviewSessionScreen() {
       setLoading(false);
     }
   };
-// ... (lines 46-123 skipped)
-
 
   const handleApprove = async () => {
     if (rating === 0) {
@@ -65,18 +64,41 @@ export default function ReviewSessionScreen() {
         review: review
       });
 
-      // 2. Confirm & Release Payment
+      // 2. Confirm Only (Payment will be separate)
       await API.post(`/hospital/sessions/${sessionId}/confirm`);
 
-      Alert.alert('Success', 'Session approved and payment released!', [
-        { text: 'OK', onPress: () => router.replace('/hospital/dashboard') }
-      ]);
+      Alert.alert('Success', 'Work approved successfully! Please proceed to payment release.');
+      loadSession(); // Reload to show payment button
     } catch (error: any) {
       console.error('Approval failed:', error);
       Alert.alert('Error', error.response?.data?.message || 'Failed to approve session');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handlePayment = async () => {
+      setShowPaymentModal(true);
+      setProcessingPayment(true);
+
+      // Simulate bank processing delay for "dummy payment"
+      setTimeout(async () => {
+          try {
+              // Call backend to release payment
+              await API.post(`/hospital/sessions/${sessionId}/release-payment`);
+              
+              setProcessingPayment(false);
+              setTimeout(() => {
+                  setShowPaymentModal(false);
+                  Alert.alert('Payment Successful', 'Payment has been released to the doctor.');
+                  loadSession();
+              }, 500);
+          } catch (error: any) {
+              setProcessingPayment(false);
+              setShowPaymentModal(false);
+              Alert.alert('Payment Failed', error.response?.data?.message || 'Failed to release payment');
+          }
+      }, 2000); // 2 second dummy delay
   };
 
   if (loading) {
@@ -98,8 +120,32 @@ export default function ReviewSessionScreen() {
   const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
 
   return (
-    <View style={styles.container}>
+    <ScreenSafeArea style={styles.container}>
       <StatusBar style="dark" backgroundColor="#fff" />
+      
+      {/* Payment Processing Modal */}
+      {showPaymentModal && (
+        <View style={StyleSheet.absoluteFillObject}>
+             <View style={{flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', zIndex: 9999}}>
+                <View style={{backgroundColor: 'white', padding: 30, borderRadius: 24, alignItems: 'center', width: '80%', elevation: 10}}>
+                     {processingPayment ? (
+                         <>
+                            <ActivityIndicator size="large" color="#16A34A" />
+                            <Text style={{marginTop: 20, fontSize: 18, fontWeight: '700', color: '#0F172A'}}>Processing Payment...</Text>
+                            <Text style={{marginTop: 8, color: '#64748B', textAlign: 'center'}}>Releasing funds safely via Escrow...</Text>
+                         </>
+                     ) : (
+                         <>
+                            <View style={{width: 60, height: 60, borderRadius: 30, backgroundColor: '#DCFCE7', justifyContent: 'center', alignItems: 'center', marginBottom: 20}}>
+                                <Check size={32} color="#16A34A" />
+                            </View>
+                            <Text style={{fontSize: 20, fontWeight: '700', color: '#16A34A'}}>Payment Sent!</Text>
+                         </>
+                     )}
+                </View>
+            </View>
+        </View>
+      )}
       
       {/* Header */}
       <View style={styles.header}>
@@ -177,26 +223,50 @@ export default function ReviewSessionScreen() {
              <Text style={styles.payNote}>Includes platform fees and taxes</Text>
         </View>
 
-      </ScrollView>
+        {/* Action Button (Inline) */}
+        <View style={styles.inlineFooter}>
+            {!session.hospital_confirmed ? (
+                <TouchableOpacity 
+                    style={[styles.payBtn, (submitting || rating === 0) && styles.disabledBtn]} 
+                    onPress={handleApprove}
+                    disabled={submitting || rating === 0}
+                >
+                    {submitting ? (
+                        <ActivityIndicator color="#fff" />
+                    ) : (
+                        <>
+                            <Text style={styles.payBtnText}>Approve (Verified Work)</Text>
+                            <CheckCircle size={20} color="#fff" />
+                        </>
+                    )}
+                </TouchableOpacity>
+            ) : session.payment_status !== 'paid' ? (
+                <View>
+                    <View style={{backgroundColor: '#EFF6FF', padding: 12, borderRadius: 12, marginBottom: 16, flexDirection: 'row', gap: 12, alignItems: 'center'}}>
+                         <CheckCircle size={20} color="#2563EB" />
+                         <View>
+                             <Text style={{color: '#1E40AF', fontWeight: '700'}}>Work Approved</Text>
+                             <Text style={{color: '#1E40AF', fontSize: 12}}>Payment pending release</Text>
+                         </View>
+                    </View>
+                    <TouchableOpacity 
+                        style={[styles.payBtn, { backgroundColor: '#16A34A' }]}
+                        onPress={handlePayment}
+                    >
+                        <Text style={styles.payBtnText}>Release Payment Now</Text>
+                        <ArrowRight size={20} color="#fff" />
+                    </TouchableOpacity>
+                </View>
+            ) : (
+                <View style={[styles.payBtn, { backgroundColor: '#DCFCE7' }]}>
+                    <Text style={[styles.payBtnText, { color: '#15803D' }]}>Payment Completed</Text>
+                    <Check size={24} color="#15803D" />
+                </View>
+            )}
+        </View>
 
-      {/* Footer Action */}
-      <View style={styles.footer}>
-          <TouchableOpacity 
-            style={[styles.payBtn, (submitting || rating === 0) && styles.disabledBtn]} 
-            onPress={handleApprove}
-            disabled={submitting || rating === 0}
-          >
-              {submitting ? (
-                  <ActivityIndicator color="#fff" />
-              ) : (
-                  <>
-                    <Text style={styles.payBtnText}>Approve & Release Payment</Text>
-                    <ArrowRight size={20} color="#fff" />
-                  </>
-              )}
-          </TouchableOpacity>
-      </View>
-    </View>
+      </ScrollView>
+    </ScreenSafeArea>
   );
 }
 
@@ -231,6 +301,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
       padding: 20,
+      paddingBottom: 50, // Extra padding for scrolling
   },
   card: {
       backgroundColor: '#fff',
@@ -307,10 +378,10 @@ const styles = StyleSheet.create({
       fontSize: 14,
   },
   paymentCard: {
-      backgroundColor: '#FEF3C7', // Light yellow
+      backgroundColor: '#FEF3C7', 
       borderRadius: 16,
       padding: 20,
-      marginBottom: 20,
+      marginBottom: 30, // More space before button
       borderWidth: 1,
       borderColor: '#FDE68A',
   },
@@ -334,11 +405,8 @@ const styles = StyleSheet.create({
       fontSize: 12,
       color: '#B45309',
   },
-  footer: {
-      padding: 20,
-      backgroundColor: '#fff',
-      borderTopWidth: 1,
-      borderTopColor: '#E2E8F0',
+  inlineFooter: {
+      marginBottom: 20,
   },
   payBtn: {
       backgroundColor: '#16A34A',

@@ -745,6 +745,7 @@ export default function DoctorHome() {
                   );
                   const hasApplied = !!application;
                   const applicationStatus = application?.status || null;
+                  const isJobCompleted = application?.job_session?.status === 'completed';
                   const isExpired = requirement.is_expired || false;
                   
                   return (
@@ -791,57 +792,78 @@ export default function DoctorHome() {
                       </View>
 
                       {hasApplied ? (
-                        <View style={{ gap: 8 }}>
+                        <View style={{ marginTop: 8 }}>
+                          {/* Status Badge */}
                           <View style={[
-                            styles.applyButton, 
-                            styles.appliedButton,
-                            applicationStatus === 'rejected' && { backgroundColor: ModernColors.error.light }, // Red background for rejected
-                            applicationStatus === 'selected' && { backgroundColor: ModernColors.success.light } // Green background for approved
+                            styles.statusBadge,
+                            isJobCompleted ? { backgroundColor: ModernColors.primary.light } :
+                            applicationStatus === 'rejected' ? { backgroundColor: ModernColors.error.light } :
+                            applicationStatus === 'selected' ? { backgroundColor: ModernColors.success.light } :
+                            { backgroundColor: ModernColors.neutral.gray200 }
                           ]}>
                             <Text style={[
-                              styles.appliedButtonText,
-                              applicationStatus === 'rejected' && { color: ModernColors.error.main }, // Red text for rejected
-                              applicationStatus === 'selected' && { color: ModernColors.success.main } // Green text for approved
+                              styles.statusBadgeText,
+                              isJobCompleted && { color: ModernColors.primary.main },
+                              !isJobCompleted && applicationStatus === 'rejected' && { color: ModernColors.error.main },
+                              !isJobCompleted && applicationStatus === 'selected' && { color: ModernColors.success.main },
+                              applicationStatus === 'pending' && { color: ModernColors.text.secondary }
                             ]}>
-                              {applicationStatus === 'pending' ? 'Waiting for Approval' : 
-                               applicationStatus === 'selected' ? 'Approved' :
-                               applicationStatus === 'rejected' ? 'Rejected' : 
+                              {isJobCompleted ? 'Job Completed' :
+                               applicationStatus === 'pending' ? 'Waiting for Approval' : 
+                               applicationStatus === 'selected' ? 'Application Approved' :
+                               applicationStatus === 'rejected' ? 'Application Rejected' : 
                                applicationStatus === 'withdrawn' ? 'Withdrawn' : 'Applied'}
                             </Text>
                           </View>
                           
-                          {applicationStatus === 'selected' && (
-                            <View style={{ gap: 4 }}>
+                          {/* Action Buttons Row */}
+                          {applicationStatus === 'selected' && !isJobCompleted && (
+                            <View style={styles.actionRow}>
                               <TouchableOpacity
-                                style={[styles.applyButton, { backgroundColor: ModernColors.primary.main }]}
+                                style={[styles.actionButton, { backgroundColor: ModernColors.primary.main, flex: 2 }]}
                                 onPress={() => router.push(`/(tabs)/job-detail/${application.id}`)}
                                 activeOpacity={0.8}
                               >
-                                <Text style={styles.applyButtonText}>View Details</Text>
-                                <ArrowRight size={16} color="#fff" />
+                                <Text style={styles.actionButtonText}>View Details</Text>
+                                <ArrowRight size={14} color="#fff" />
                               </TouchableOpacity>
 
                               <TouchableOpacity
-                                style={[styles.applyButton, { backgroundColor: ModernColors.error.light }]}
+                                style={[styles.actionButton, { backgroundColor: ModernColors.error.light, flex: 1 }]}
                                 onPress={() => handleReject(requirement.id)}
                                 activeOpacity={0.8}
                               >
-                                <Text style={[styles.applyButtonText, { color: ModernColors.error.main }]}>Reject Appointment</Text>
+                                <Text style={[styles.actionButtonText, { color: ModernColors.error.main }]}>Reject</Text>
+                              </TouchableOpacity>
+                            </View>
+                          )}
+
+                          {isJobCompleted && (
+                            <View style={styles.actionRow}>
+                              <TouchableOpacity
+                                style={[styles.actionButton, { backgroundColor: ModernColors.primary.main, flex: 1 }]}
+                                onPress={() => router.push(`/(tabs)/job-detail/${application.id}`)}
+                                activeOpacity={0.8}
+                              >
+                                <Text style={styles.actionButtonText}>View Details</Text>
+                                <ArrowRight size={14} color="#fff" />
                               </TouchableOpacity>
                             </View>
                           )}
 
                           {applicationStatus === 'pending' && (
-                            <TouchableOpacity
-                              style={[styles.applyButton, { backgroundColor: ModernColors.neutral.gray200, marginTop: 4 }]}
-                              onPress={() => {
-                                const app = myApplications.find(a => a.job_requirement_id === requirement.id);
-                                if (app) handleWithdraw(app.id);
-                              }}
-                              activeOpacity={0.8}
-                            >
-                              <Text style={[styles.applyButtonText, { color: ModernColors.text.primary }]}>Withdraw</Text>
-                            </TouchableOpacity>
+                            <View style={styles.actionRow}>
+                                <TouchableOpacity
+                                  style={[styles.actionButton, { backgroundColor: ModernColors.neutral.gray200, flex: 1 }]}
+                                  onPress={() => {
+                                    const app = myApplications.find(a => a.job_requirement_id === requirement.id);
+                                    if (app) handleWithdraw(app.id);
+                                  }}
+                                  activeOpacity={0.8}
+                                >
+                                  <Text style={[styles.actionButtonText, { color: ModernColors.text.primary }]}>Withdraw</Text>
+                                </TouchableOpacity>
+                            </View>
                           )}
                         </View>
                       ) : requirement.is_filled ? (
@@ -1483,5 +1505,33 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     color: ModernColors.text.secondary,
     flex: 1,
+  },
+  statusBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.sm,
+    marginBottom: 8,
+  },
+  statusBadgeText: {
+    ...Typography.captionBold,
+    fontSize: 12,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    borderRadius: BorderRadius.md,
+    gap: 6,
+  },
+  actionButtonText: {
+    ...Typography.captionBold,
+    color: '#fff',
+    fontSize: 12,
   },
 });

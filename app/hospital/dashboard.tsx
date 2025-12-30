@@ -19,16 +19,223 @@ import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as Neutra
 import API from '../api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect } from 'expo-router';
-import { Plus, MapPin, Building2, Clock, X, Navigation, Bell, LogOut } from 'lucide-react-native';
+import { Plus, MapPin, Building2, Clock, X, Navigation, Bell, LogOut, CreditCard } from 'lucide-react-native';
 import { ScreenSafeArea } from '@/components/screen-safe-area';
 import * as Location from 'expo-location';
 import { DepartmentPicker } from '@/components/department-picker';
 import { DatePicker } from '@/components/date-picker';
 import { TimePicker } from '@/components/time-picker';
 import { formatISTDateTime, formatISTDateOnly } from '@/utils/timezone';
+import { getFullImageUrl } from '@/utils/url-helper';
 
 // Import MapView - Metro will automatically resolve .web or .native based on platform
 import { LocationPickerMap } from '@/components/LocationPickerMap';
+
+// --- Memoized Components to Prevent Flickering ---
+
+const RequirementItem = React.memo(({ req, onDelete }: { req: any, onDelete: (id: number) => void }) => {
+  return (
+    <Card style={styles.requirementCard} mode="outlined">
+        <Card.Content>
+            <View style={styles.cardHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                <Chip 
+                style={[styles.deptChip, { backgroundColor: '#EFF6FF' }]}
+                textStyle={{ color: '#2563EB', fontSize: 13, fontWeight: '500' }}
+                >
+                {req.department}
+                </Chip>
+                {req.is_expired && (
+                <Chip 
+                    style={[styles.expiredChip, { backgroundColor: '#FEE2E2' }]}
+                    textStyle={{ color: '#DC2626', fontSize: 11, fontWeight: '700' }}
+                >
+                    EXPIRED
+                </Chip>
+                )}
+            </View>
+            <TouchableOpacity 
+                onPress={() => onDelete(req.id)}
+                style={styles.deleteIcon}
+            >
+                <X size={16} color="#9CA3AF" />
+            </TouchableOpacity>
+            </View>
+            
+            <View style={styles.cardMeta}>
+            <Chip 
+                style={styles.metaChip}
+                textStyle={styles.metaChipText}
+                mode="outlined"
+            >
+                {req.work_type.replace('-', ' ')}
+            </Chip>
+            <Chip 
+                style={styles.metaChip}
+                textStyle={styles.metaChipText}
+                mode="outlined"
+            >
+                {req.required_sessions} session{req.required_sessions !== 1 ? 's' : ''}
+            </Chip>
+            </View>
+            
+            {req.description && (
+            <Text style={styles.cardDescription} numberOfLines={2}>
+                {req.description}
+            </Text>
+            )}
+            
+            {req.address && (
+            <View style={styles.cardInfoRow}>
+                <MapPin size={14} color="#6B7280" />
+                <Text style={styles.cardInfoText} numberOfLines={1}>
+                {req.address}
+                </Text>
+            </View>
+            )}
+
+            {req.created_at && (
+            <View style={styles.cardInfoRow}>
+                <Clock size={14} color="#6B7280" />
+                <Text style={styles.cardInfoText}>
+                Posted: {formatISTDateTime(req.created_at)}
+                </Text>
+            </View>
+            )}
+
+            {req.work_required_date && (
+            <View style={styles.cardInfoRow}>
+                <Clock size={14} color="#6B7280" />
+                <Text style={styles.cardInfoText}>
+                Work Date: {formatISTDateOnly(req.work_required_date)}
+                {req.start_time && ` at ${new Date(`2000-01-01 ${req.start_time}`).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}`}
+                </Text>
+            </View>
+            )}
+
+            {/* Applicants Preview */}
+            <View style={styles.applicantsRow}>
+            {req.applications && req.applications.length > 0 ? (
+                <>
+                <View style={styles.avatarsContainer}>
+                    {req.applications.slice(0, 5).map((application: any, index: number) => {
+                    const doctor = application.doctor;
+                    const profilePhoto = doctor?.profile_photo_url || doctor?.profile_photo;
+                    return profilePhoto ? (
+                        <Avatar.Image
+                        key={`avatar-${application.id}-${index}`}
+                        size={32}
+                        source={{ uri: profilePhoto }}
+                        style={[styles.avatar, { marginLeft: index > 0 ? -8 : 0 }]}
+                        />
+                    ) : (
+                        <Avatar.Text
+                        key={`avatar-text-${application.id}-${index}`}
+                        size={32}
+                        label={doctor?.name?.charAt(0)?.toUpperCase() || '?'}
+                        style={[styles.avatar, { marginLeft: index > 0 ? -8 : 0 }]}
+                        />
+                    );
+                    })}
+                    {req.applications.length > 5 && (
+                    <Avatar.Text
+                        key={`avatar-more-${req.id}`}
+                        size={32}
+                        label={`+${req.applications.length - 5}`}
+                        style={[styles.avatar, { marginLeft: -8, backgroundColor: '#E5E7EB' }]}
+                        labelStyle={{ color: '#6B7280', fontSize: 11, fontWeight: '500' }}
+                    />
+                    )}
+                </View>
+                <Text style={styles.applicantsCount}>
+                    {req.applications.length} {req.applications.length === 1 ? 'applicant' : 'applicants'}
+                </Text>
+                </>
+            ) : (
+                <Text style={[styles.applicantsCount, { color: '#9CA3AF' }]}>No applicants yet</Text>
+            )}
+            </View>
+
+            <Button
+            mode="text"
+            onPress={() => router.push({
+                pathname: '/hospital/applications/[requirementId]',
+                params: { requirementId: req.id.toString() }
+            })}
+            style={styles.viewButton}
+            labelStyle={styles.viewButtonLabel}
+            textColor="#2563EB"
+            icon={() => <Text style={styles.viewButtonIcon}>→</Text>}
+            >
+            View Applications
+            </Button>
+        </Card.Content>
+    </Card>
+  );
+}, (prev, next) => {
+    // Custom comparison to prevent re-renders
+    return (
+        prev.req.id === next.req.id &&
+        prev.req.updated_at === next.req.updated_at &&
+        prev.req.applications?.length === next.req.applications?.length &&
+        prev.req.status === next.req.status
+    );
+});
+
+const SessionItem = React.memo(({ session }: { session: any }) => {
+    return (
+        <TouchableOpacity 
+        style={styles.workCard}
+        onPress={() => {
+            if (session.status === 'completed' && !session.hospital_confirmed) {
+                router.push(`/hospital/review-session/${session.id}` as any);
+            } else {
+                router.push(`/hospital/job-session/${session.id}` as any);
+            }
+        }}
+        >
+            <View style={styles.workHeader}>
+            {session.doctor?.profile_photo ? (
+                <Avatar.Image 
+                    size={40} 
+                    source={{ uri: session.doctor.profile_photo }} 
+                />
+            ) : (
+                <Avatar.Icon size={40} icon="account" style={{backgroundColor: '#F1F5F9'}} color="#64748B" />
+            )}
+            <View style={{marginLeft: 10, flex: 1}}>
+                <Text style={styles.workDoctorName} numberOfLines={1}>{session.doctor?.name}</Text>
+                <Text style={styles.workDept} numberOfLines={1}>{session.job_requirement?.department}</Text>
+            </View>
+            </View>
+            
+            <View style={styles.workStatusRow}>
+            <View style={[
+                styles.workStatusBadge, 
+                { backgroundColor: session.status === 'completed' ? '#DCFCE7' : '#DBEAFE' }
+            ]}>
+                <Text style={{
+                    color: session.status === 'completed' ? '#166534' : '#1E40AF',
+                    fontSize: 10, fontWeight: '700'
+                }}>
+                    {session.status === 'completed' ? (session.hospital_confirmed ? 'APPROVED' : 'REVIEW NEEDED') : 'IN PROGRESS'}
+                </Text>
+            </View>
+            </View>
+            
+            <Text style={styles.workDate}>
+            {new Date(session.session_date).toLocaleDateString()}
+            </Text>
+        </TouchableOpacity>
+    );
+}, (prev, next) => {
+    return (
+        prev.session.id === next.session.id &&
+        prev.session.status === next.session.status &&
+        prev.session.updated_at === next.session.updated_at &&
+        prev.session.hospital_confirmed === next.session.hospital_confirmed
+    );
+});
 
 const HOSPITAL_TOKEN_KEY = 'hospitalToken';
 const HOSPITAL_INFO_KEY = 'hospitalInfo';
@@ -44,7 +251,7 @@ export default function HospitalDashboard() {
 
   const loadSessions = async (silent = false) => {
       try {
-          if (!silent && !hasLoadedSessions.current) {
+          if (!silent && !hasLoadedSessions.current && sessions.length === 0) {
              setLoadingSessions(true);
           }
           
@@ -55,26 +262,23 @@ export default function HospitalDashboard() {
               const scoreB = (b.status === 'completed' && !b.hospital_confirmed) ? 3 : (b.status === 'in_progress' ? 2 : 1);
               
               if (scoreA !== scoreB) return scoreB - scoreA;
-              
-              // Secondary sort: Most recently updated first
               if (a.updated_at !== b.updated_at) {
                   return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
               }
-              
-              // Tertiary sort: ID desc as tie-breaker
               return b.id - a.id;
           });
           
+          // STRICT ANTI-FLICKER: Only update if meaningfully different
           setSessions(prev => {
              if (prev.length !== sorted.length) return sorted;
              
-             // Optimized comparison: Check IDs, status, and updated_at
              const isDifferent = sorted.some((item: any, index: number) => {
                  const prevItem = prev[index];
-                 return item.id !== prevItem.id || 
-                        item.status !== prevItem.status || 
-                        item.updated_at !== prevItem.updated_at ||
-                        item.hospital_confirmed !== prevItem.hospital_confirmed;
+                 if (item.id !== prevItem.id) return true;
+                 if (item.status !== prevItem.status) return true;
+                 if (item.hospital_confirmed !== prevItem.hospital_confirmed) return true;
+                 if (item.payment_status !== prevItem.payment_status) return true;
+                 return false;
              });
              
              return isDifferent ? sorted : prev;
@@ -82,12 +286,14 @@ export default function HospitalDashboard() {
           
           hasLoadedSessions.current = true;
       } catch (error: any) {
-// console.log('Error loading sessions', error);
           if (error.response?.status === 401) {
             router.replace('/hospital/login');
           }
       } finally {
-          if (!silent) setLoadingSessions(false);
+          // Only turn off loading if we turned it on
+          if (!silent && loadingSessions) setLoadingSessions(false);
+          // Force false if we are done with initial load
+          if (!hasLoadedSessions.current) setLoadingSessions(false); 
       }
   };
 
@@ -182,6 +388,10 @@ export default function HospitalDashboard() {
     }, [])
   );
 
+
+
+  const hasLoadedRequirements = React.useRef(false);
+
   const loadRequirements = async (silent = false) => {
     try {
       const response = await API.get('/hospital/my-requirements');
@@ -195,13 +405,17 @@ export default function HospitalDashboard() {
         // Optimized comparison for requirements
         const isDifferent = newData.some((item: any, index: number) => {
              const prevItem = prev[index];
-             return item.id !== prevItem.id || 
-                    item.updated_at !== prevItem.updated_at ||
-                    item.applications?.length !== prevItem.applications?.length; // Check if applications count changed
+             // Compare essential fields
+             if (item.id !== prevItem.id) return true;
+             if (item.updated_at !== prevItem.updated_at) return true;
+             if (item.status !== prevItem.status) return true; 
+             if ((item.applications?.length || 0) !== (prevItem.applications?.length || 0)) return true;
+             return false;
         });
         
         return isDifferent ? newData : prev;
       });
+      hasLoadedRequirements.current = true;
     } catch (error: any) {
       console.error('Error loading requirements:', error);
       if (error.response?.status === 401) {
@@ -640,10 +854,27 @@ export default function HospitalDashboard() {
         {/* Minimal Header */}
         <Surface style={styles.headerSurface} elevation={0}>
           <View style={styles.headerContent}>
+            <TouchableOpacity onPress={() => router.push('/hospital/profile' as any)}>
+               {hospital?.profile_photo || hospital?.logo ? (
+                  <Avatar.Image 
+                    size={50} 
+                    source={{ uri: getFullImageUrl(hospital.profile_photo || hospital.logo) }}
+                    style={{ backgroundColor: '#fff', marginRight: 12 }} 
+                  />
+               ) : (
+                  <Avatar.Text 
+                    size={50} 
+                    label={hospital?.name?.charAt(0)?.toUpperCase() || 'H'} 
+                    style={{ backgroundColor: '#EFF6FF', marginRight: 12 }}
+                    labelStyle={{ color: '#2563EB', fontWeight: '700' }}
+                  />
+               )}
+            </TouchableOpacity>
+            
             <View style={styles.headerText}>
               <Text style={styles.welcomeText}>Welcome back</Text>
-              <Text style={styles.hospitalName} numberOfLines={1}>
-                {hospital?.name || 'Hospital'}
+              <Text style={styles.hospitalName} numberOfLines={2}>
+                {hospital?.name || 'Hospital Name'}
               </Text>
             </View>
             <TouchableOpacity 
@@ -723,6 +954,20 @@ export default function HospitalDashboard() {
               </Button>
             </View>
 
+            <View style={styles.actionsRow}>
+              <Button
+                mode="outlined"
+                onPress={() => router.push('/hospital/payments')}
+                style={styles.actionButton}
+                contentStyle={styles.actionButtonContent}
+                labelStyle={styles.actionButtonLabel}
+                textColor="#2563EB"
+                icon={() => <CreditCard size={18} color="#2563EB" />}
+              >
+                Payment History
+              </Button>
+            </View>
+
             {/* Requirements Section */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
@@ -752,142 +997,7 @@ export default function HospitalDashboard() {
                 </Card>
               ) : (
                 requirements.map((req) => (
-                  <Card key={req.id} style={styles.requirementCard} mode="outlined">
-                    <Card.Content>
-                      <View style={styles.cardHeader}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                          <Chip 
-                            style={[styles.deptChip, { backgroundColor: '#EFF6FF' }]}
-                            textStyle={{ color: '#2563EB', fontSize: 13, fontWeight: '500' }}
-                          >
-                            {req.department}
-                          </Chip>
-                          {req.is_expired && (
-                            <Chip 
-                              style={[styles.expiredChip, { backgroundColor: '#FEE2E2' }]}
-                              textStyle={{ color: '#DC2626', fontSize: 11, fontWeight: '700' }}
-                            >
-                              EXPIRED
-                            </Chip>
-                          )}
-                        </View>
-                        <TouchableOpacity 
-                          onPress={() => handleDelete(req.id)}
-                          style={styles.deleteIcon}
-                        >
-                          <X size={16} color="#9CA3AF" />
-                        </TouchableOpacity>
-                      </View>
-                      
-                      <View style={styles.cardMeta}>
-                        <Chip 
-                          style={styles.metaChip}
-                          textStyle={styles.metaChipText}
-                          mode="outlined"
-                        >
-                          {req.work_type.replace('-', ' ')}
-                        </Chip>
-                        <Chip 
-                          style={styles.metaChip}
-                          textStyle={styles.metaChipText}
-                          mode="outlined"
-                        >
-                          {req.required_sessions} session{req.required_sessions !== 1 ? 's' : ''}
-                        </Chip>
-                      </View>
-                      
-                      {req.description && (
-                        <Text style={styles.cardDescription} numberOfLines={2}>
-                          {req.description}
-                        </Text>
-                      )}
-                      
-                      {req.address && (
-                        <View style={styles.cardInfoRow}>
-                          <MapPin size={14} color="#6B7280" />
-                          <Text style={styles.cardInfoText} numberOfLines={1}>
-                            {req.address}
-                          </Text>
-                        </View>
-                      )}
-
-                      {req.created_at && (
-                        <View style={styles.cardInfoRow}>
-                          <Clock size={14} color="#6B7280" />
-                          <Text style={styles.cardInfoText}>
-                            Posted: {formatISTDateTime(req.created_at)}
-                          </Text>
-                        </View>
-                      )}
-
-                      {req.work_required_date && (
-                        <View style={styles.cardInfoRow}>
-                          <Clock size={14} color="#6B7280" />
-                          <Text style={styles.cardInfoText}>
-                            Work Date: {formatISTDateOnly(req.work_required_date)}
-                            {req.start_time && ` at ${new Date(`2000-01-01 ${req.start_time}`).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}`}
-                          </Text>
-                        </View>
-                      )}
-
-                      {/* Applicants Preview */}
-                      <View style={styles.applicantsRow}>
-                        {req.applications && req.applications.length > 0 ? (
-                          <>
-                            <View style={styles.avatarsContainer}>
-                              {req.applications.slice(0, 5).map((application: any, index: number) => {
-                                const doctor = application.doctor;
-                                const profilePhoto = doctor?.profile_photo_url || doctor?.profile_photo;
-                                return profilePhoto ? (
-                                  <Avatar.Image
-                                    key={`avatar-${application.id}-${index}`}
-                                    size={32}
-                                    source={{ uri: profilePhoto }}
-                                    style={[styles.avatar, { marginLeft: index > 0 ? -8 : 0 }]}
-                                  />
-                                ) : (
-                                  <Avatar.Text
-                                    key={`avatar-text-${application.id}-${index}`}
-                                    size={32}
-                                    label={doctor?.name?.charAt(0)?.toUpperCase() || '?'}
-                                    style={[styles.avatar, { marginLeft: index > 0 ? -8 : 0 }]}
-                                  />
-                                );
-                              })}
-                              {req.applications.length > 5 && (
-                                <Avatar.Text
-                                  key={`avatar-more-${req.id}`}
-                                  size={32}
-                                  label={`+${req.applications.length - 5}`}
-                                  style={[styles.avatar, { marginLeft: -8, backgroundColor: '#E5E7EB' }]}
-                                  labelStyle={{ color: '#6B7280', fontSize: 11, fontWeight: '500' }}
-                                />
-                              )}
-                            </View>
-                            <Text style={styles.applicantsCount}>
-                              {req.applications.length} {req.applications.length === 1 ? 'applicant' : 'applicants'}
-                            </Text>
-                          </>
-                        ) : (
-                          <Text style={[styles.applicantsCount, { color: '#9CA3AF' }]}>No applicants yet</Text>
-                        )}
-                      </View>
-
-                      <Button
-                        mode="text"
-                        onPress={() => router.push({
-                          pathname: '/hospital/applications/[requirementId]',
-                          params: { requirementId: req.id.toString() }
-                        })}
-                        style={styles.viewButton}
-                        labelStyle={styles.viewButtonLabel}
-                        textColor="#2563EB"
-                        icon={() => <Text style={styles.viewButtonIcon}>→</Text>}
-                      >
-                        View Applications
-                      </Button>
-                    </Card.Content>
-                  </Card>
+                  <RequirementItem key={req.id} req={req} onDelete={handleDelete} />
                 ))
               )}
             </View>
@@ -916,51 +1026,7 @@ export default function HospitalDashboard() {
               ) : (
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{paddingRight: 16}}>
                       {sessions.slice(0, 5).map((session: any) => (
-                          <TouchableOpacity 
-                            key={session.id} 
-                            style={styles.workCard}
-                            onPress={() => {
-                                // If completed and not confirmed, go to review. Else details.
-                                if (session.status === 'completed' && !session.hospital_confirmed) {
-                                  router.push(`/hospital/review-session/${session.id}` as any);
-                                } else {
-                                  router.push(`/hospital/job-session/${session.id}` as any);
-                                }
-                            }}
-                          >
-                             <View style={styles.workHeader}>
-                                {session.doctor?.profile_photo ? (
-                                    <Avatar.Image 
-                                        size={40} 
-                                        source={{ uri: session.doctor.profile_photo }} 
-                                    />
-                                ) : (
-                                    <Avatar.Icon size={40} icon="account" style={{backgroundColor: '#F1F5F9'}} color="#64748B" />
-                                )}
-                                <View style={{marginLeft: 10, flex: 1}}>
-                                    <Text style={styles.workDoctorName} numberOfLines={1}>{session.doctor?.name}</Text>
-                                    <Text style={styles.workDept} numberOfLines={1}>{session.job_requirement?.department}</Text>
-                                </View>
-                             </View>
-                             
-                             <View style={styles.workStatusRow}>
-                                <View style={[
-                                    styles.workStatusBadge, 
-                                    { backgroundColor: session.status === 'completed' ? '#DCFCE7' : '#DBEAFE' }
-                                ]}>
-                                    <Text style={{
-                                        color: session.status === 'completed' ? '#166534' : '#1E40AF',
-                                        fontSize: 10, fontWeight: '700'
-                                    }}>
-                                        {session.status === 'completed' ? (session.hospital_confirmed ? 'APPROVED' : 'REVIEW NEEDED') : 'IN PROGRESS'}
-                                    </Text>
-                                </View>
-                             </View>
-                             
-                             <Text style={styles.workDate}>
-                                {new Date(session.session_date).toLocaleDateString()}
-                             </Text>
-                          </TouchableOpacity>
+                          <SessionItem key={session.id} session={session} />
                       ))}
                   </ScrollView>
               )}

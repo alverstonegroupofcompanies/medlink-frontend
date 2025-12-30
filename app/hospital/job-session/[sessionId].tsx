@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   StatusBar,
   Image,
+  Platform,
 } from 'react-native';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import {
@@ -26,6 +27,7 @@ import API from '../../api';
 import { ScreenSafeArea } from '@/components/screen-safe-area';
 import { formatISTDateTime, formatISTDateWithWeekday } from '@/utils/timezone';
 import { getFullImageUrl } from '@/utils/url-helper';
+import { Card, Surface, Chip, Avatar, Button, Divider } from 'react-native-paper';
 
 export default function HospitalJobSessionScreen() {
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
@@ -133,189 +135,217 @@ export default function HospitalJobSessionScreen() {
   const isInProgress = session.status === 'in_progress' && session.check_in_time;
 
   return (
-    <ScreenSafeArea backgroundColor={NeutralColors.background}>
+    <ScreenSafeArea backgroundColor={PrimaryColors.dark}>
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={PrimaryColors.dark} />
       
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <ArrowLeft size={24} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Job Session</Text>
-        <View style={styles.headerRight} />
-      </View>
+      {/* Header - White Surface like Dashboard */}
+      <Surface style={styles.headerSurface} elevation={0}>
+        <View style={styles.headerContent}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <ArrowLeft size={24} color={NeutralColors.textPrimary} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Job Session</Text>
+          <View style={{ width: 40 }} />
+        </View>
+      </Surface>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
         {/* Doctor Info Card */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <User size={24} color={PrimaryColors.main} />
-            <Text style={styles.cardTitle}>Doctor Information</Text>
-          </View>
-          <View style={styles.doctorInfoRow}>
-            {doctor?.profile_photo && (
-              <Image
-                source={{ uri: getFullImageUrl(doctor.profile_photo) }}
-                style={styles.doctorImage}
-              />
-            )}
-            <View style={styles.doctorDetails}>
-              <Text style={styles.doctorName}>{doctor?.name || 'Doctor'}</Text>
-              <Text style={styles.department}>{requirement?.department || 'Department'}</Text>
+        <Card style={styles.card} mode="outlined">
+          <Card.Content>
+            <View style={styles.cardHeader}>
+              <Avatar.Icon size={40} icon="account" style={{ backgroundColor: '#EFF6FF' }} color={PrimaryColors.main} />
+              <Text style={styles.cardTitle}>Doctor Information</Text>
             </View>
-          </View>
-        </View>
+            <View style={styles.doctorInfoRow}>
+              {doctor?.profile_photo ? (
+                <Avatar.Image
+                  size={60}
+                  source={{ uri: getFullImageUrl(doctor.profile_photo) }}
+                  style={{ marginRight: 16 }}
+                />
+              ) : (
+                <Avatar.Text 
+                   size={60} 
+                   label={doctor?.name?.charAt(0) || 'D'} 
+                   style={{ marginRight: 16, backgroundColor: '#EFF6FF' }}
+                   color={PrimaryColors.main}
+                />
+              )}
+              <View style={styles.doctorDetails}>
+                <Text style={styles.doctorName}>{doctor?.name || 'Doctor'}</Text>
+                <Text style={styles.department}>{requirement?.department || 'Department'}</Text>
+              </View>
+            </View>
+          </Card.Content>
+        </Card>
 
         {/* Status Card */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <CheckCircle size={24} color={isCompleted ? StatusColors.success : PrimaryColors.main} />
-            <Text style={styles.cardTitle}>Session Status</Text>
-          </View>
-          <View style={styles.statusBadge}>
-            <Text style={[styles.statusText, { color: isCompleted ? StatusColors.success : PrimaryColors.main }]}>
-              {isCompleted ? 'Completed' : isInProgress ? 'In Progress' : 'Scheduled'}
-            </Text>
-          </View>
-          
-          {(isInProgress || session.status === 'scheduled') && (
-            <TouchableOpacity 
-              style={styles.trackButton}
-              onPress={() => router.push(`/hospital/live-tracking?sessionId=${session.id}&doctorId=${doctor?.id}`)}
-              activeOpacity={0.8}
+        <Card style={styles.card} mode="outlined">
+          <Card.Content>
+            <View style={styles.cardHeader}>
+              <CheckCircle size={24} color={isCompleted ? StatusColors.success : PrimaryColors.main} />
+              <Text style={styles.cardTitle}>Session Status</Text>
+            </View>
+            <Chip 
+              mode="flat" 
+              style={{ backgroundColor: isCompleted ? '#DCFCE7' : '#EFF6FF', alignSelf: 'flex-start', marginTop: 8 }}
+              textStyle={{ color: isCompleted ? StatusColors.success : PrimaryColors.main, fontWeight: '700' }}
             >
-              <MapPin size={16} color="#fff" />
-              <Text style={styles.trackButtonText}>Track Live Location</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+              {isCompleted ? 'COMPLETED' : isInProgress ? 'IN PROGRESS' : 'SCHEDULED'}
+            </Chip>
+            
+            {(isInProgress || session.status === 'scheduled') && (
+              <Button 
+                mode="contained"
+                onPress={() => router.push(`/hospital/live-tracking?sessionId=${session.id}&doctorId=${doctor?.id}`)}
+                style={{ marginTop: 16, backgroundColor: PrimaryColors.main }}
+                icon={() => <MapPin size={16} color="#fff" />}
+              >
+                Track Live Location
+              </Button>
+            )}
+          </Card.Content>
+        </Card>
 
         {/* Check-In Information */}
         {session.check_in_time && (
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Clock size={24} color={StatusColors.success} />
-              <Text style={styles.cardTitle}>Check-In Information</Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Check-In Time:</Text>
-              <Text style={styles.infoValue}>
-                {formatISTDateTime(session.check_in_time)}
-              </Text>
-            </View>
-            {session.check_in_verified && (
-              <View style={styles.verifiedBadge}>
-                <CheckCircle size={16} color={StatusColors.success} />
-                <Text style={styles.verifiedText}>Location Verified</Text>
+          <Card style={styles.card} mode="outlined">
+            <Card.Content>
+              <View style={styles.cardHeader}>
+                <Clock size={24} color={StatusColors.success} />
+                <Text style={styles.cardTitle}>Check-In Information</Text>
               </View>
-            )}
-          </View>
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Check-In Time:</Text>
+                <Text style={styles.infoValue}>
+                  {formatISTDateTime(session.check_in_time)}
+                </Text>
+              </View>
+              {session.check_in_verified && (
+                <Chip icon="check" style={{ backgroundColor: '#DCFCE7', marginTop: 8 }} textStyle={{ color: StatusColors.success }}>
+                  Location Verified
+                </Chip>
+              )}
+            </Card.Content>
+          </Card>
         )}
 
         {/* Work Timer (if in progress) */}
         {isInProgress && (
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Timer size={24} color={PrimaryColors.main} />
-              <Text style={styles.cardTitle}>Work Timer</Text>
-            </View>
-            
-            <View style={styles.timerContainer}>
-              <Text style={styles.timerText}>{formatTime(timeElapsed)}</Text>
-              <Text style={styles.timerLabel}>Time Elapsed</Text>
-            </View>
-          </View>
+          <Card style={styles.card} mode="outlined">
+            <Card.Content>
+              <View style={styles.cardHeader}>
+                <Timer size={24} color={PrimaryColors.main} />
+                <Text style={styles.cardTitle}>Work Timer</Text>
+              </View>
+              
+              <View style={styles.timerContainer}>
+                <Text style={styles.timerText}>{formatTime(timeElapsed)}</Text>
+                <Text style={styles.timerLabel}>Time Elapsed</Text>
+              </View>
+            </Card.Content>
+          </Card>
         )}
 
         {/* Completion Information */}
         {isCompleted && session.end_time && (
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <CheckCircle size={24} color={StatusColors.success} />
-              <Text style={styles.cardTitle}>Completion Information</Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Completed At:</Text>
-              <Text style={styles.infoValue}>
-                {formatISTDateTime(session.end_time)}
-              </Text>
-            </View>
-            {session.check_in_time && (
+          <Card style={styles.card} mode="outlined">
+            <Card.Content>
+              <View style={styles.cardHeader}>
+                <CheckCircle size={24} color={StatusColors.success} />
+                <Text style={styles.cardTitle}>Completion Information</Text>
+              </View>
               <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Work Duration:</Text>
+                <Text style={styles.infoLabel}>Completed At:</Text>
                 <Text style={styles.infoValue}>
-                  {formatTime(new Date(session.end_time).getTime() - new Date(session.check_in_time).getTime())}
+                  {formatISTDateTime(session.end_time)}
                 </Text>
               </View>
-            )}
-          </View>
+              {session.check_in_time && (
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Work Duration:</Text>
+                  <Text style={styles.infoValue}>
+                    {formatTime(new Date(session.end_time).getTime() - new Date(session.check_in_time).getTime())}
+                  </Text>
+                </View>
+              )}
+            </Card.Content>
+          </Card>
         )}
 
         {/* Session Details */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Calendar size={24} color={PrimaryColors.main} />
-            <Text style={styles.cardTitle}>Session Details</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Date:</Text>
-            <Text style={styles.infoValue}>
-              {formatISTDateWithWeekday(session.session_date)}
-            </Text>
-          </View>
-          {session.start_time && (
+        <Card style={styles.card} mode="outlined">
+          <Card.Content>
+            <View style={styles.cardHeader}>
+              <Calendar size={24} color={PrimaryColors.main} />
+              <Text style={styles.cardTitle}>Session Details</Text>
+            </View>
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Start Time:</Text>
+              <Text style={styles.infoLabel}>Date:</Text>
               <Text style={styles.infoValue}>
-                {(() => {
-                  try {
-                    // Try parsing as ISO first if full date, else append date
-                    const timeStr = session.start_time.includes('T') || session.start_time.includes('-') 
-                      ? session.start_time 
-                      : `2000-01-01 ${session.start_time}`;
-                    return new Date(timeStr).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
-                  } catch (e) {
-                    return session.start_time;
-                  }
-                })()}
+                {formatISTDateWithWeekday(session.session_date)}
               </Text>
             </View>
-          )}
-          {session.schedule_end_time && (
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Scheduled End Time:</Text>
-              <Text style={styles.infoValue}>
-                 {(() => {
-                  try {
-                    const timeStr = session.schedule_end_time.includes('T') || session.schedule_end_time.includes('-') 
-                      ? session.schedule_end_time 
-                      : `2000-01-01 ${session.schedule_end_time}`;
-                    return new Date(timeStr).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
-                  } catch (e) {
-                    return session.schedule_end_time;
-                  }
-                })()}
-              </Text>
-            </View>
-          )}
-        </View>
+            {session.start_time && (
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Start Time:</Text>
+                <Text style={styles.infoValue}>
+                  {(() => {
+                    try {
+                      const timeStr = session.start_time.includes('T') || session.start_time.includes('-') 
+                        ? session.start_time 
+                        : `2000-01-01 ${session.start_time}`;
+                      return new Date(timeStr).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+                    } catch (e) {
+                      return session.start_time;
+                    }
+                  })()}
+                </Text>
+              </View>
+            )}
+            {session.schedule_end_time && (
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Scheduled End Time:</Text>
+                <Text style={styles.infoValue}>
+                   {(() => {
+                    try {
+                      const timeStr = session.schedule_end_time.includes('T') || session.schedule_end_time.includes('-') 
+                        ? session.schedule_end_time 
+                        : `2000-01-01 ${session.schedule_end_time}`;
+                      return new Date(timeStr).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+                    } catch (e) {
+                      return session.schedule_end_time;
+                    }
+                  })()}
+                </Text>
+              </View>
+            )}
+          </Card.Content>
+        </Card>
 
         {/* Payment Info */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Building2 size={24} color={PrimaryColors.main} />
-            <Text style={styles.cardTitle}>Payment</Text>
-          </View>
-          {session.payment_amount && (
-            <Text style={styles.paymentAmount}>
-              ₹{typeof session.payment_amount === 'number' ? session.payment_amount.toFixed(2) : parseFloat(session.payment_amount || '0').toFixed(2)}
-            </Text>
-          )}
-          <Text style={styles.paymentStatus}>
-            Status: {session.payment_status || 'pending'}
-          </Text>
-        </View>
+        <Card style={styles.card} mode="outlined">
+          <Card.Content>
+            <View style={styles.cardHeader}>
+              <Building2 size={24} color={PrimaryColors.main} />
+              <Text style={styles.cardTitle}>Payment</Text>
+            </View>
+            {session.payment_amount && (
+              <Text style={styles.paymentAmount}>
+                ₹{typeof session.payment_amount === 'number' ? session.payment_amount.toFixed(2) : parseFloat(session.payment_amount || '0').toFixed(2)}
+              </Text>
+            )}
+            <Chip 
+               mode="outlined" 
+               style={{ borderColor: session.payment_status === 'paid' ? StatusColors.success : NeutralColors.border }}
+               textStyle={{ color: session.payment_status === 'paid' ? StatusColors.success : NeutralColors.textSecondary }}
+            >
+              Status: {session.payment_status?.toUpperCase() || 'PENDING'}
+            </Chip>
+          </Card.Content>
+        </Card>
       </ScrollView>
     </View>
     </ScreenSafeArea>
@@ -325,63 +355,42 @@ export default function HospitalJobSessionScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: NeutralColors.background,
+    backgroundColor: '#F9FAFB',
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: NeutralColors.textSecondary,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: 16,
-    color: NeutralColors.textSecondary,
-  },
-  header: {
-    backgroundColor: PrimaryColors.dark,
-    paddingTop: 50,
-    paddingBottom: 16,
+  headerSurface: {
+    backgroundColor: '#fff',
+    paddingTop: Platform.OS === 'ios' ? 0 : 20, // Adjust for safe area content
+    paddingBottom: 20,
     paddingHorizontal: 16,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+  },
+  headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   backButton: {
     padding: 8,
+    marginLeft: -8,
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#fff',
-  },
-  headerRight: {
-    width: 40,
+    color: NeutralColors.textPrimary,
   },
   scrollView: {
     flex: 1,
   },
   content: {
-    padding: 16,
+    padding: 20,
+    paddingBottom: 120,
+    gap: 16,
   },
   card: {
-    backgroundColor: NeutralColors.cardBackground,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    // No manual shadows needed, Paper Card handles it
   },
   cardHeader: {
     flexDirection: 'row',
@@ -457,7 +466,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 8,
   },
   infoLabel: {
     fontSize: 14,
@@ -469,45 +478,27 @@ const styles = StyleSheet.create({
     color: NeutralColors.textPrimary,
     fontWeight: '600',
   },
-  verifiedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 8,
-    padding: 8,
-    backgroundColor: `${StatusColors.success}15`,
-    borderRadius: 8,
-  },
-  verifiedText: {
-    fontSize: 12,
-    color: StatusColors.success,
-    fontWeight: '600',
-  },
   timerContainer: {
     alignItems: 'center',
-    marginVertical: 24,
+    marginVertical: 16,
   },
   timerText: {
-    fontSize: 48,
+    fontSize: 40,
     fontWeight: '700',
     color: PrimaryColors.main,
-    fontFamily: 'monospace',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   timerLabel: {
-    fontSize: 14,
+    fontSize: 12,
     color: NeutralColors.textSecondary,
-    marginTop: 8,
+    marginTop: 4,
   },
   paymentAmount: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '700',
     color: PrimaryColors.main,
     marginTop: 8,
     marginBottom: 8,
-  },
-  paymentStatus: {
-    fontSize: 14,
-    color: NeutralColors.textSecondary,
   },
 });
 

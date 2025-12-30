@@ -1,41 +1,8 @@
-interface DoctorLocation {
-  doctor_id: number;
-  doctor_name: string;
-  latitude: number;
-  longitude: number;
-  department?: string;
-  check_in_verified?: boolean;
-  profile_photo?: string;
-}
-
-interface LiveTrackingMapProps {
-  hospital: {
-    latitude: number;
-    longitude: number;
-    name: string;
-    logo?: string;
-  };
-  doctors: DoctorLocation[];
-  height?: number;
-  initialRegion?: any;
-}
-
-// ... (keep decodePolyline and fetchDirections as is, so I'll skip them in replacement if possible, but I need to replace the component body)
-// I will replace the whole file content from line 7 to 291 to apply changes cleanly including imports.
-// Wait, I need to verify imports. `Image` is used. I'll need `Building2` and `User` from lucide.
-
-// Actually, I can target specific blocks. 
-
-// Block 1: Interfaces
-// Block 2: Component Body (Marker rendering)
-
-// Let's do it in one go for the whole file to be safe with imports.
-
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Text, Image } from 'react-native';
 import { MapPin, Building2, User } from 'lucide-react-native';
 import { HospitalPrimaryColors as PrimaryColors } from '@/constants/hospital-theme';
-import MapView, { Marker, Polyline, UrlTile } from 'react-native-maps';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { getFullImageUrl } from '@/utils/url-helper';
 
 interface DoctorLocation {
@@ -62,8 +29,6 @@ interface LiveTrackingMapProps {
   height?: number;
   initialRegion?: any;
 }
-
-// ... helper functions ... (I will include them to match original)
 
 // Decode Google Maps polyline
 const decodePolyline = (encoded: string): { latitude: number; longitude: number }[] => {
@@ -127,8 +92,6 @@ const fetchDirections = async (
   return [start, end];
 };
 
-// ... (imports remain)
-
 export function LiveTrackingMap({ hospital, doctors, height = 400, initialRegion }: LiveTrackingMapProps) {
   // Ensure hospital coordinates are numbers
   const hospitalLat = typeof hospital.latitude === 'number' ? hospital.latitude : parseFloat(hospital.latitude || '0');
@@ -165,8 +128,10 @@ export function LiveTrackingMap({ hospital, doctors, height = 400, initialRegion
       // Add job locations to bounds if they exist
       validDoctors.forEach(d => {
           if (d.job_latitude && d.job_longitude) {
-              allLats.push(typeof d.job_latitude === 'number' ? d.job_latitude : parseFloat(d.job_latitude));
-              allLngs.push(typeof d.job_longitude === 'number' ? d.job_longitude : parseFloat(d.job_longitude));
+              const jLat = typeof d.job_latitude === 'number' ? d.job_latitude : parseFloat(d.job_latitude as string);
+              const jLng = typeof d.job_longitude === 'number' ? d.job_longitude : parseFloat(d.job_longitude as string);
+              if (!isNaN(jLat)) allLats.push(jLat);
+              if (!isNaN(jLng)) allLngs.push(jLng);
           }
       });
 
@@ -209,8 +174,8 @@ export function LiveTrackingMap({ hospital, doctors, height = 400, initialRegion
         let destLng = hospitalLng;
         
         if (doctor.job_latitude && doctor.job_longitude) {
-             const jobLat = typeof doctor.job_latitude === 'number' ? doctor.job_latitude : parseFloat(doctor.job_latitude);
-             const jobLng = typeof doctor.job_longitude === 'number' ? doctor.job_longitude : parseFloat(doctor.job_longitude);
+             const jobLat = typeof doctor.job_latitude === 'number' ? doctor.job_latitude : parseFloat(doctor.job_latitude as string);
+             const jobLng = typeof doctor.job_longitude === 'number' ? doctor.job_longitude : parseFloat(doctor.job_longitude as string);
              if (!isNaN(jobLat) && !isNaN(jobLng)) {
                  destLat = jobLat;
                  destLng = jobLng;
@@ -248,17 +213,10 @@ export function LiveTrackingMap({ hospital, doctors, height = 400, initialRegion
       <MapView
         style={styles.map}
         region={region}
+        provider={PROVIDER_GOOGLE}
         showsUserLocation={false}
         showsMyLocationButton={false}
-        mapType="none" // Use "none" to hide Google Maps and use OSM tiles
       >
-        <UrlTile
-          urlTemplate="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          maximumZ={19}
-          flipY={false}
-          zIndex={-1}
-        />
-
         {/* Hospital Marker */}
         {!isNaN(hospitalLat) && !isNaN(hospitalLng) && (
           <Marker
@@ -297,8 +255,8 @@ export function LiveTrackingMap({ hospital, doctors, height = 400, initialRegion
           let showJobMarker = false;
           let jobLat = 0, jobLng = 0;
           if (doctor.job_latitude && doctor.job_longitude) {
-              jobLat = typeof doctor.job_latitude === 'number' ? doctor.job_latitude : parseFloat(doctor.job_latitude);
-              jobLng = typeof doctor.job_longitude === 'number' ? doctor.job_longitude : parseFloat(doctor.job_longitude);
+              jobLat = typeof doctor.job_latitude === 'number' ? doctor.job_latitude : parseFloat(doctor.job_latitude as string);
+              jobLng = typeof doctor.job_longitude === 'number' ? doctor.job_longitude : parseFloat(doctor.job_longitude as string);
               
               // Show job marker if it exists and is valid
               if (!isNaN(jobLat) && !isNaN(jobLng)) {
@@ -327,9 +285,7 @@ export function LiveTrackingMap({ hospital, doctors, height = 400, initialRegion
                 <Polyline
                   coordinates={routeCoords}
                   strokeColor={PrimaryColors.main}
-                  strokeWidth={4}
-                  lineCap="round"
-                  lineJoin="round"
+                  strokeWidth={7}
                 />
               )}
 
@@ -361,68 +317,66 @@ export function LiveTrackingMap({ hospital, doctors, height = 400, initialRegion
   );
 }
 
-  const styles = StyleSheet.create({
-    container: {
-      borderRadius: 0,
-      overflow: 'hidden',
-      backgroundColor: '#fff',
-    },
-    map: {
-      flex: 1,
-      width: '100%',
-    },
-    doctorMarkerContainer: {
-      alignItems: 'center',
-      justifyContent: 'center',
-      width: 60,
-      height: 60,
-    },
-    doctorMarker: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
-      backgroundColor: '#2563EB',
-      borderWidth: 3,
-      borderColor: '#fff',
-      alignItems: 'center',
-      justifyContent: 'center',
-      overflow: 'hidden',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.3,
-      shadowRadius: 5,
-      elevation: 8,
-    },
-    doctorImage: {
-      width: '100%',
-      height: '100%',
-    },
-    // No arrow for "Uber-like", just a clean circle floating
-    markerArrow: {
-        display: 'none', 
-    },
-    hospitalMarker: {
-      backgroundColor: '#10B981',
-      borderRadius: 24,
-      width: 48,
-      height: 48,
-      justifyContent: 'center',
-      alignItems: 'center',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 3 },
-      shadowOpacity: 0.3,
-      shadowRadius: 4,
-      elevation: 6,
-      borderWidth: 3,
-      borderColor: '#fff',
-      overflow: 'hidden',
-    },
-    hospitalLogo: {
-      width: '100%',
-      height: '100%',
-    },
-    hospitalMarkerIcon: {
-      fontSize: 22,
-    },
-  });
-
+const styles = StyleSheet.create({
+  container: {
+    borderRadius: 0,
+    overflow: 'hidden',
+    backgroundColor: '#fff',
+  },
+  map: {
+    flex: 1,
+    width: '100%',
+  },
+  doctorMarkerContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 60,
+    height: 60,
+  },
+  doctorMarker: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#2563EB',
+    borderWidth: 3,
+    borderColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 8,
+  },
+  doctorImage: {
+    width: '100%',
+    height: '100%',
+  },
+  markerArrow: {
+      display: 'none', 
+  },
+  hospitalMarker: {
+    backgroundColor: '#10B981',
+    borderRadius: 24,
+    width: 48,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 6,
+    borderWidth: 3,
+    borderColor: '#fff',
+    overflow: 'hidden',
+  },
+  hospitalLogo: {
+    width: '100%',
+    height: '100%',
+  },
+  hospitalMarkerIcon: {
+    fontSize: 22,
+  },
+});

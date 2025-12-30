@@ -27,7 +27,7 @@ export default function LiveTrackingScreen() {
   const [doctors, setDoctors] = useState<any[]>([]);
   const [hospital, setHospital] = useState<any>(null);
   const [selectedDoctor, setSelectedDoctor] = useState<string | null>(doctorId || null);
-  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pollIntervalRef = useRef<any>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -49,7 +49,7 @@ export default function LiveTrackingScreen() {
 
   const startPolling = () => {
     stopPolling();
-    pollIntervalRef.current = setInterval(fetchTrackingData, 10000); // Poll every 10 seconds
+    pollIntervalRef.current = setInterval(fetchTrackingData, 3000); // Poll every 3 seconds for live updates
   };
 
   const stopPolling = () => {
@@ -168,7 +168,7 @@ export default function LiveTrackingScreen() {
           <View style={styles.headerLeft} />
         )}
         <Text style={styles.headerTitle}>
-            {doctorId ? 'Tracking Doctor' : 'Live Doctor Tracking'}
+            {doctorId ? 'Tracking Doctor' : 'Live Tracking'}
         </Text>
         <View style={{ width: 40 }} />
       </View>
