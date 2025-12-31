@@ -3,7 +3,7 @@ require('dotenv').config();
 
 module.exports = {
   expo: {
-    name: "AlverstoneMedLink",
+    name: "AlverConnect",
     slug: "AlverstoneMedLink",
     version: "1.0.0",
     orientation: "portrait",

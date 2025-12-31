@@ -20,7 +20,7 @@ import API from '../api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect } from 'expo-router';
 import { Plus, MapPin, Building2, Clock, X, Navigation, Bell, LogOut, CreditCard } from 'lucide-react-native';
-import { ScreenSafeArea } from '@/components/screen-safe-area';
+import { ScreenSafeArea, useSafeBottomPadding } from '@/components/screen-safe-area';
 import * as Location from 'expo-location';
 import { DepartmentPicker } from '@/components/department-picker';
 import { DatePicker } from '@/components/date-picker';
@@ -125,7 +125,7 @@ const RequirementItem = React.memo(({ req, onDelete }: { req: any, onDelete: (id
                         <Avatar.Image
                         key={`avatar-${application.id}-${index}`}
                         size={32}
-                        source={{ uri: profilePhoto }}
+                        source={{ uri: getFullImageUrl(profilePhoto) }}
                         style={[styles.avatar, { marginLeft: index > 0 ? -8 : 0 }]}
                         />
                     ) : (
@@ -198,7 +198,7 @@ const SessionItem = React.memo(({ session }: { session: any }) => {
             {session.doctor?.profile_photo ? (
                 <Avatar.Image 
                     size={40} 
-                    source={{ uri: session.doctor.profile_photo }} 
+                    source={{ uri: getFullImageUrl(session.doctor.profile_photo) }} 
                 />
             ) : (
                 <Avatar.Icon size={40} icon="account" style={{backgroundColor: '#F1F5F9'}} color="#64748B" />
@@ -242,6 +242,7 @@ const HOSPITAL_INFO_KEY = 'hospitalInfo';
 
 export default function HospitalDashboard() {
   const theme = useTheme();
+  const safeBottomPadding = useSafeBottomPadding();
   // Use refs to track if data has been loaded at least once to avoid spinner flicker on focus
   const hasLoadedSessions = React.useRef(false);
 
@@ -847,7 +848,7 @@ export default function HospitalDashboard() {
       >
         <ScrollView 
           style={styles.scrollView} 
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, { paddingBottom: 120 + safeBottomPadding + 20 }]}
           removeClippedSubviews={false}
           showsVerticalScrollIndicator={true}
         >

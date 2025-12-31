@@ -19,7 +19,11 @@ import { ModernColors, Spacing, BorderRadius, Shadows, Typography } from "@/cons
 import { logoutDoctor, getDoctorInfo, isDoctorLoggedIn, getDoctorToken, saveDoctorAuth, getProfilePhotoUrl } from "@/utils/auth";
 import API from "../api";
 import { ScreenSafeArea, useSafeBottomPadding } from "@/components/screen-safe-area";
+import echo from "@/services/echo";
+import { showNotificationFromData, scheduleLocalNotification } from "@/utils/notifications";
+
 import { ModernCard } from "@/components/modern-card";
+import { useLocationTracking } from "@/hooks/useLocationTracking";
 
 const { width } = Dimensions.get('window');
 
@@ -44,6 +48,7 @@ export default function DoctorHome() {
   const [completedJobsCount, setCompletedJobsCount] = useState(0);
   const [notificationCount, setNotificationCount] = useState(0);
   const safeBottomPadding = useSafeBottomPadding();
+  const { startTracking, stopTracking, isTracking } = useLocationTracking();
 
   const loadDoctor = async () => {
     try {
@@ -259,9 +264,57 @@ export default function DoctorHome() {
     loadJobSessions();
     generateWeekDates();
     
+    // Calculate session metrics
+    const activeSessions = jobSessions.filter((session: any) => session.status === 'in_progress');
+    const todaySessions = jobSessions.filter((session: any) => {
+      if (!session.session_date) return false;
+      const sessionDate = new Date(session.session_date);
+      const today = new Date();
+      sessionDate.setHours(0, 0, 0, 0);
+      today.setHours(0, 0, 0, 0);
+      return sessionDate.getTime() === today.getTime();
+    });
+
+    // Calculate issues: late check-ins, missing check-outs, etc.
+    const issuesCount = jobSessions.filter((session: any) => {
+      const now = new Date();
+      const sessionDate = session.session_date ? new Date(session.session_date) : null;
+      
+      // Late check-in: session date/time passed but no check_in_time
+      if (sessionDate && sessionDate < now && !session.check_in_time && session.status === 'scheduled') {
+        return true;
+      }
+      
+      // Missing check-out: status is in_progress for more than expected duration
+      return false;
+    }).length;
+    
     const notificationInterval = setInterval(() => {
       loadNotifications();
     }, 30000);
+
+    // Listen for real-time application updates
+    if (doctor?.id) {
+        console.log(`🔌 Subscribing to private channel: App.Models.User.${doctor.id}`);
+        echo.private(`App.Models.User.${doctor.id}`)
+            .listen('.ApplicationStatusUpdated', (e: any) => {
+                console.log('🔔 Real-time update received:', e);
+                
+                // Show system notification
+                showNotificationFromData({
+                    title: 'Application Update',
+                    message: e.message,
+                    type: e.data?.type || 'info', // Use type from event data
+                    data: e.data
+                });
+
+                // Refresh data
+                loadMyApplications();
+                loadNotifications();
+                loadJobRequirements();
+                loadJobSessions();
+            });
+    }
     
     const subscription = AppState.addEventListener("change", (nextAppState) => {
       if (nextAppState === "active") {
@@ -272,11 +325,26 @@ export default function DoctorHome() {
         loadJobSessions();
       }
     });
+
     return () => {
       subscription.remove();
       clearInterval(notificationInterval);
+      stopTracking(); 
+      if (doctor?.id) {
+          echo.leave(`App.Models.User.${doctor.id}`);
+      }
     };
-  }, []);
+  }, [doctor?.id]); // Re-run if doctor ID changes (e.g. login)
+
+  // Auto-start tracking if there are active sessions
+  useEffect(() => {
+    if (activeSessions.length > 0 && !isTracking) {
+        console.log("Auto-starting tracking for active session...", activeSessions[0].id);
+        startTracking(activeSessions[0].id);
+    } else if (activeSessions.length === 0 && isTracking) {
+        stopTracking();
+    }
+  }, [activeSessions, isTracking]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -333,36 +401,7 @@ export default function DoctorHome() {
     return taskDate >= today;
   });
 
-  // Calculate session metrics
-  const activeSessions = jobSessions.filter((session: any) => session.status === 'in_progress');
-  const todaySessions = jobSessions.filter((session: any) => {
-    if (!session.session_date) return false;
-    const sessionDate = new Date(session.session_date);
-    const today = new Date();
-    sessionDate.setHours(0, 0, 0, 0);
-    today.setHours(0, 0, 0, 0);
-    return sessionDate.getTime() === today.getTime();
-  });
 
-  // Calculate issues: late check-ins, missing check-outs, etc.
-  const issuesCount = jobSessions.filter((session: any) => {
-    const now = new Date();
-    const sessionDate = session.session_date ? new Date(session.session_date) : null;
-    
-    // Late check-in: session date/time passed but no check_in_time
-    if (sessionDate && sessionDate < now && !session.check_in_time && session.status === 'scheduled') {
-      return true;
-    }
-    
-    // Missing check-out: status is in_progress for more than expected duration
-    if (session.status === 'in_progress' && session.check_in_time) {
-      const checkInTime = new Date(session.check_in_time);
-      const hoursSinceCheckIn = (now.getTime() - checkInTime.getTime()) / (1000 * 60 * 60);
-      if (hoursSinceCheckIn > 12) return true; // Arbitrary threshold
-    }
-    
-    return false;
-  }).length;
 
   // Attention needed sessions - ONLY missed check-ins (approved but didn't check in after scheduled time)
   const attentionNeeded = jobSessions.filter((session: any) => {
@@ -442,6 +481,22 @@ export default function DoctorHome() {
     return 'Good Evening';
   };
 
+  const trackingIndicator = isTracking ? (
+    <View style={{ 
+        backgroundColor: ModernColors.success.main, 
+        paddingHorizontal: 12, 
+        paddingVertical: 6, 
+        borderRadius: 20,
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 8,
+        alignSelf: 'flex-start'
+    }}>
+        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#fff', marginRight: 6 }} />
+        <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>LIVE TRACKING ACTIVE</Text>
+    </View>
+  ) : null;
+
   return (
     <ScreenSafeArea 
       backgroundColor={ModernColors.primary.main} 
@@ -473,6 +528,7 @@ export default function DoctorHome() {
               <View style={styles.profileInfo}>
                 <Text style={styles.greetingText}>{getGreeting()}</Text>
                 <Text style={styles.doctorName}>{doctor?.name || "Dr. User"}</Text>
+                {trackingIndicator}
                 {rating > 0 && renderStars(rating)}
               </View>
             </View>
