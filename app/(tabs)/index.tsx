@@ -256,6 +256,36 @@ export default function DoctorHome() {
     );
   };
 
+
+  // Calculate session metrics
+  // Active sessions: Either explicitly in_progress OR tracking has started (and not finished)
+  const activeSessions = jobSessions.filter((session: any) => 
+    session.status === 'in_progress' || 
+    (session.tracking_started_at && !session.check_out_time && session.status !== 'completed' && session.status !== 'cancelled')
+  );
+  const todaySessions = jobSessions.filter((session: any) => {
+    if (!session.session_date) return false;
+    const sessionDate = new Date(session.session_date);
+    const today = new Date();
+    sessionDate.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
+    return sessionDate.getTime() === today.getTime();
+  });
+
+  // Calculate issues: late check-ins, missing check-outs, etc.
+  const issuesCount = jobSessions.filter((session: any) => {
+    const now = new Date();
+    const sessionDate = session.session_date ? new Date(session.session_date) : null;
+    
+    // Late check-in: session date/time passed but no check_in_time
+    if (sessionDate && sessionDate < now && !session.check_in_time && session.status === 'scheduled') {
+      return true;
+    }
+    
+    // Missing check-out: status is in_progress for more than expected duration
+    return false;
+  }).length;
+
   useEffect(() => {
     loadDoctor();
     loadJobRequirements();
@@ -264,30 +294,7 @@ export default function DoctorHome() {
     loadJobSessions();
     generateWeekDates();
     
-    // Calculate session metrics
-    const activeSessions = jobSessions.filter((session: any) => session.status === 'in_progress');
-    const todaySessions = jobSessions.filter((session: any) => {
-      if (!session.session_date) return false;
-      const sessionDate = new Date(session.session_date);
-      const today = new Date();
-      sessionDate.setHours(0, 0, 0, 0);
-      today.setHours(0, 0, 0, 0);
-      return sessionDate.getTime() === today.getTime();
-    });
 
-    // Calculate issues: late check-ins, missing check-outs, etc.
-    const issuesCount = jobSessions.filter((session: any) => {
-      const now = new Date();
-      const sessionDate = session.session_date ? new Date(session.session_date) : null;
-      
-      // Late check-in: session date/time passed but no check_in_time
-      if (sessionDate && sessionDate < now && !session.check_in_time && session.status === 'scheduled') {
-        return true;
-      }
-      
-      // Missing check-out: status is in_progress for more than expected duration
-      return false;
-    }).length;
     
     const notificationInterval = setInterval(() => {
       loadNotifications();
@@ -483,17 +490,20 @@ export default function DoctorHome() {
 
   const trackingIndicator = isTracking ? (
     <View style={{ 
-        backgroundColor: ModernColors.success.main, 
-        paddingHorizontal: 12, 
-        paddingVertical: 6, 
-        borderRadius: 20,
+        backgroundColor: 'rgba(16, 185, 129, 0.2)', // More transparent/minimal background
+        paddingHorizontal: 10, 
+        paddingVertical: 4, 
+        borderRadius: 12,
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 8,
-        alignSelf: 'flex-start'
+        marginTop: 6,
+        marginBottom: 4, // Add gap below
+        alignSelf: 'flex-start',
+        borderWidth: 1,
+        borderColor: 'rgba(16, 185, 129, 0.5)' // Subtle border
     }}>
-        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#fff', marginRight: 6 }} />
-        <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>LIVE TRACKING ACTIVE</Text>
+        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981', marginRight: 6 }} />
+        <Text style={{ color: '#fff', fontSize: 10, fontWeight: '600', letterSpacing: 0.5 }}>LIVE TRACKING</Text>
     </View>
   ) : null;
 

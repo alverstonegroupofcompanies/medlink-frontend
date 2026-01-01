@@ -352,6 +352,7 @@ const styles = StyleSheet.create({
   doctorImage: {
     width: '100%',
     height: '100%',
+    borderRadius: 24, // Explicitly add radius to image
   },
   markerArrow: {
       display: 'none', 
@@ -375,6 +376,7 @@ const styles = StyleSheet.create({
   hospitalLogo: {
     width: '100%',
     height: '100%',
+    borderRadius: 24, // Explicitly add radius to image
   },
   hospitalMarkerIcon: {
     fontSize: 22,

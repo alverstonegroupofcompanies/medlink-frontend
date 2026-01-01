@@ -224,7 +224,7 @@ const SessionItem = React.memo(({ session }: { session: any }) => {
             </View>
             
             <Text style={styles.workDate}>
-            {new Date(session.session_date).toLocaleDateString()}
+            {formatISTDateOnly(session.session_date)}
             </Text>
         </TouchableOpacity>
     );
@@ -807,7 +807,7 @@ export default function HospitalDashboard() {
   };
 
   return (
-    <ScreenSafeArea backgroundColor={PrimaryColors.dark}>
+    <ScreenSafeArea backgroundColor="transparent" statusBarStyle="dark-content" edges={['top', 'left', 'right']}>
       {/* Custom Logout Confirmation Modal - appears on top of everything */}
       <Modal
         visible={showLogoutModal}
@@ -851,6 +851,7 @@ export default function HospitalDashboard() {
           contentContainerStyle={[styles.content, { paddingBottom: 120 + safeBottomPadding + 20 }]}
           removeClippedSubviews={false}
           showsVerticalScrollIndicator={true}
+          overScrollMode="never"
         >
         {/* Minimal Header */}
         <Surface style={styles.headerSurface} elevation={0}>
@@ -1006,7 +1007,7 @@ export default function HospitalDashboard() {
             {/* Active & Recent Work Section */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                 <Text style={styles.sectionTitle}>Active & Recent Work</Text>
+                 <Text style={styles.sectionTitle}>Job Sessions</Text>
                  <TouchableOpacity onPress={() => router.push('/hospital/sessions' as any)}>
                     <Text style={{color: '#2563EB', fontWeight: '600'}}>View All</Text>
                  </TouchableOpacity>
@@ -1403,7 +1404,8 @@ const styles = StyleSheet.create({
   },
   section: {
     paddingHorizontal: 20,
-    marginBottom: 24,
+
+    marginBottom: 32, // Increased spacing from 24 to 32
   },
   sectionHeader: {
     flexDirection: 'row',

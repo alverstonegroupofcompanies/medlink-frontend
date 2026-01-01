@@ -49,13 +49,7 @@ import API from '@/app/api';
 import { getDoctorToken } from './auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Import router dynamically to avoid circular dependencies
-let router: any = null;
-try {
-  router = require('expo-router').router;
-} catch (e) {
-  console.warn('Router not available:', e);
-}
+import { router } from 'expo-router';
 
 // Configure notification behavior (only if Notifications is available)
 if (Notifications) {
@@ -316,10 +310,7 @@ export async function getStoredPushToken(): Promise<string | null> {
  * Handle notification tap navigation
  */
 export function handleNotificationNavigation(data: any) {
-  if (!router) {
-    console.warn('⚠️ Router not available for notification navigation');
-    return;
-  }
+  // Router is guaranteed to be available with static import
 
   try {
     const notificationType = data?.type;
@@ -344,8 +335,8 @@ export function handleNotificationNavigation(data: any) {
             break;
 
           case 'new_job_posting':
-            // Navigate to home to see new openings
-            router.push('/(tabs)');
+            // Navigate to all openings list since we don't have a dedicated requirement detail screen
+            router.push('/all-openings');
             break;
 
           case 'missed_checkin':
@@ -354,7 +345,8 @@ export function handleNotificationNavigation(data: any) {
             // Navigate to specific job session details if session ID provided
             if (data?.job_session_id || data?.session_id) {
               const sessionId = data.job_session_id || data.session_id;
-              router.push(`/(tabs)/job-session/${sessionId}`);
+              // Update to correct path: /check-in/[id] or fallback to active jobs
+              router.push(`/check-in/${sessionId}`);
             } else {
               // Fallback to home page where TAT section is visible
               router.push('/(tabs)');

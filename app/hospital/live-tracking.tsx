@@ -18,6 +18,7 @@ import API from '../api';
 import { LiveTrackingMap } from '@/components/LiveTrackingMap';
 import * as Location from 'expo-location';
 import { getFullImageUrl } from '@/utils/url-helper';
+import { formatISTDateTime, formatISTTimeOnly } from '@/utils/timezone';
 
 const { width, height } = Dimensions.get('window');
 
@@ -329,7 +330,11 @@ export default function LiveTrackingScreen() {
                       <View style={styles.detailGrid}>
                           <View style={styles.detailItem}>
                              <Text style={styles.detailLabel}>Last Updated</Text>
-                             <Text style={styles.detailValue}>{getTimeAgo(doctor.location_updated_at)}</Text>
+                             <Text style={styles.detailValue}>
+                               {doctor.location_updated_at ? (
+                                   `${formatISTTimeOnly(doctor.location_updated_at)} • ${getTimeAgo(doctor.location_updated_at)}`
+                               ) : 'Never'}
+                             </Text>
                           </View>
                           <View style={styles.detailItem}>
                              <Text style={styles.detailLabel}>Checked In</Text>
