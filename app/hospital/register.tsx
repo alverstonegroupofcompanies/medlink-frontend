@@ -159,24 +159,29 @@ export default function HospitalRegisterScreen() {
   };
 
   return (
-    <ScreenSafeArea backgroundColor={NeutralColors.background}>
-    <ThemedView style={styles.container}>
+    <View style={styles.mainContainer}>
+      <LinearGradient
+        colors={['#1e40af', '#3b82f6', '#60a5fa']}
+        locations={[0, 0.5, 1]}
+        style={StyleSheet.absoluteFill}
+      />
+    <ScreenSafeArea backgroundColor="transparent">
+    <View style={styles.container}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          <View style={styles.header}>
+            <View style={styles.header}>
             <TouchableOpacity style={styles.backButton} onPress={() => {
               if (router.canGoBack()) {
                 router.back();
               } else {
-                // If can't go back, navigate to login screen explicitly
                 router.replace('/hospital/login');
               }
             }} activeOpacity={0.7}>
-              <MaterialIcons name="arrow-back" size={24} color={colorScheme === 'dark' ? '#fff' : '#11181C'} />
-              <ThemedText style={[styles.backText, { color: colorScheme === 'dark' ? '#fff' : '#11181C' }]}>Back</ThemedText>
+              <MaterialIcons name="arrow-back" size={24} color="#FFFFFF" />
+              <ThemedText style={styles.backText}>Back</ThemedText>
             </TouchableOpacity>
-            <ThemedText style={[styles.heading, { color: colorScheme === 'dark' ? '#fff' : '#000' }]}>Hospital Registration</ThemedText>
-            <ThemedText style={[styles.subheading, { color: colorScheme === 'dark' ? '#ccc' : '#666' }]}>Create your hospital account</ThemedText>
+            <ThemedText style={styles.heading}>Hospital Registration</ThemedText>
+            <ThemedText style={styles.subheading}>Create your hospital account</ThemedText>
           </View>
 
           <View style={[styles.formCard, { backgroundColor: NeutralColors.cardBackground }]}>
@@ -261,59 +266,111 @@ export default function HospitalRegisterScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </ThemedView>
+    </View>
     </ScreenSafeArea>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: NeutralColors.background },
-  scrollContent: { flexGrow: 1, padding: 24, paddingTop: 40 },
-  backButton: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
-  backText: { fontSize: 16, marginLeft: 8 },
-  header: { marginBottom: 24 },
-  heading: { fontSize: 26, fontWeight: '700' },
-  subheading: { fontSize: 14, color: '#666', marginTop: 4 },
+  mainContainer: {
+    flex: 1,
+    backgroundColor: '#3b82f6',
+  },
+  container: { flex: 1 },
+  scrollContent: { 
+    flexGrow: 1, 
+    padding: 24, 
+    paddingTop: 12 
+  },
+  backButton: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginBottom: 20 
+  },
+  backText: { 
+    fontSize: 16, 
+    marginLeft: 8, 
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  header: { 
+    marginBottom: 28,
+    paddingTop: 10,
+  },
+  heading: { 
+    fontSize: 28, 
+    fontWeight: '800', 
+    color: '#FFFFFF',
+    marginBottom: 8,
+    textShadowColor: 'rgba(0,0,0,0.1)',
+    textShadowOffset: {width: 0, height: 2},
+    textShadowRadius: 4,
+  },
+  subheading: { 
+    fontSize: 16, 
+    color: 'rgba(255,255,255,0.9)', 
+    marginTop: 0,
+    fontWeight: '500',
+  },
   formCard: {
     backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 32,
+    padding: 24,
     shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 3,
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.5)',
   },
-  inputGroup: { marginBottom: 16 },
+  inputGroup: { marginBottom: 20 },
   logoButton: {
     padding: 16,
-    backgroundColor: PrimaryColors.lighter,
-    borderRadius: 12,
+    backgroundColor: '#F0F9FF',
+    borderRadius: 16,
     alignItems: 'center',
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: PrimaryColors.main,
+    marginBottom: 24,
+    borderWidth: 2,
+    borderColor: '#BAE6FD',
     borderStyle: 'dashed',
   },
-  logoButtonText: { color: PrimaryColors.main, fontWeight: '600' },
+  logoButtonText: { 
+    color: '#0284C7', 
+    fontWeight: '600' 
+  },
   fileSizeHint: {
-    fontSize: 11,
-    color: NeutralColors.textSecondary,
+    fontSize: 12,
+    color: '#64748B',
     textAlign: 'center',
-    marginTop: -12,
-    marginBottom: 8,
+    marginTop: -16,
+    marginBottom: 20,
     fontStyle: 'italic',
   },
-  submitButton: { marginTop: 10, backgroundColor: PrimaryColors.main },
+  submitButton: { 
+    marginTop: 10, 
+    backgroundColor: '#2563EB',
+    borderRadius: 16,
+    height: 56,
+    shadowColor: '#2563EB',
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 8,
+  },
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
+    color: '#334155',
+    marginBottom: 6,
+    marginLeft: 4,
   },
   subLabel: {
     fontSize: 12,
-    color: '#666',
-    marginBottom: 8,
+    color: '#64748B',
+    marginBottom: 12,
+    marginLeft: 4,
   },
 });
 

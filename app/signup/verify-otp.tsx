@@ -12,6 +12,7 @@ import { DoctorPrimaryColors as PrimaryColors, DoctorNeutralColors as NeutralCol
 import { API_BASE_URL } from '@/config/api';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function VerifyOtpScreen() {
   const params = useLocalSearchParams();
@@ -157,7 +158,13 @@ export default function VerifyOtpScreen() {
   };
 
   return (
-    <ThemedView style={styles.container}>
+    <View style={styles.mainContainer}>
+      <LinearGradient
+        colors={['#1e40af', '#3b82f6', '#60a5fa']}
+        locations={[0, 0.5, 1]}
+        style={StyleSheet.absoluteFill}
+      />
+      <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
@@ -167,18 +174,18 @@ export default function VerifyOtpScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Curved Header */}
-          <LinearGradient colors={[PrimaryColors.lighter, NeutralColors.background]} style={styles.header}>
+          {/* Header */}
+          <View style={styles.header}>
             <TouchableOpacity
               style={styles.backButton}
               onPress={() => router.back()}
               activeOpacity={0.7}
             >
-              <MaterialIcons name="arrow-back" size={24} color="#11181C" />
+              <MaterialIcons name="arrow-back" size={24} color="#FFFFFF" />
               <ThemedText style={styles.backText}>Back</ThemedText>
             </TouchableOpacity>
             <ThemedText style={styles.signUpText}>Verify Email</ThemedText>
-          </LinearGradient>
+          </View>
 
           {/* White Form Card */}
           <View style={styles.formCard}>
@@ -201,10 +208,9 @@ export default function VerifyOtpScreen() {
                     styles.otpInput,
                     {
                       borderColor: digit
-                        ? PrimaryColors.main
-                        : colorScheme === 'dark'
-                        ? '#374151'
-                        : '#e5e7eb',
+                        ? '#2563EB'
+                        : '#E2E8F0',
+                      backgroundColor: '#F8FAFC',
                     },
                   ]}
                   value={digit}
@@ -244,80 +250,124 @@ export default function VerifyOtpScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </ThemedView>
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: NeutralColors.background },
+  mainContainer: {
+    flex: 1,
+    backgroundColor: '#3b82f6',
+  },
+  safeArea: { flex: 1 },
   keyboardView: { flex: 1 },
-  scrollContent: { flexGrow: 1, paddingBottom: 40 },
+  scrollContent: { 
+    flexGrow: 1, 
+    padding: 24,
+    paddingTop: 12,
+  },
   header: {
-    borderBottomLeftRadius: 80,
-    borderBottomRightRadius: 80,
-    paddingTop: 70,
-    paddingBottom: 60,
-    paddingHorizontal: 30,
+    paddingTop: 10,
+    paddingBottom: 32,
+    paddingHorizontal: 8,
   },
-  backButton: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
-  backText: { fontSize: 16, marginLeft: 8, color: '#11181C' },
-  signUpText: { fontSize: 32, fontWeight: '700', color: '#000' },
+  backButton: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginBottom: 20,
+    paddingVertical: 8,
+  },
+  backText: { 
+    fontSize: 16, 
+    marginLeft: 8, 
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  signUpText: { 
+    fontSize: 32, 
+    fontWeight: '800', 
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(0,0,0,0.1)',
+    textShadowOffset: {width: 0, height: 2},
+    textShadowRadius: 4,
+  },
   formCard: {
-    backgroundColor: NeutralColors.cardBackground,
-    marginHorizontal: 20,
-    marginTop: -40,
-    borderRadius: 25,
-    paddingVertical: 30,
-    paddingHorizontal: 24,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 32,
+    padding: 28,
     shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 4,
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.5)',
   },
-  registerText: { fontSize: 14, color: NeutralColors.textSecondary, marginBottom: 8 },
-  heading: { fontSize: 22, fontWeight: '700', marginBottom: 8 },
+  registerText: { 
+    fontSize: 15, 
+    color: '#64748B', 
+    marginBottom: 8,
+    fontWeight: '500', 
+  },
+  heading: { 
+    fontSize: 24, 
+    fontWeight: '800', 
+    marginBottom: 8,
+    color: '#1E3A8A',
+  },
   subheading: {
-    fontSize: 14,
-    color: NeutralColors.textSecondary,
+    fontSize: 15,
+    color: '#64748B',
     textAlign: 'center',
-    marginBottom: 30,
-    lineHeight: 20,
+    marginBottom: 32,
+    lineHeight: 22,
   },
-  emailText: { fontWeight: '600', color: PrimaryColors.main },
+  emailText: { 
+    fontWeight: '700', 
+    color: '#2563EB',
+  },
   otpContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 20,
+    marginBottom: 24,
+    gap: 8,
   },
   otpInput: {
-    width: 45,
-    height: 55,
-    borderWidth: 2,
-    borderRadius: 12,
+    width: 48,
+    height: 60,
+    borderWidth: 1.5,
+    borderRadius: 16,
     textAlign: 'center',
     fontSize: 24,
-    fontWeight: '600',
-    backgroundColor: '#FAFAFA',
+    fontWeight: '700',
+    color: '#1E3A8A',
   },
   resendContainer: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   resendText: {
     fontSize: 14,
-    color: NeutralColors.textSecondary,
+    color: '#64748B',
   },
   resendLink: {
-    color: PrimaryColors.main,
-    fontWeight: '600',
+    color: '#2563EB',
+    fontWeight: '700',
   },
   timerText: {
-    color: NeutralColors.textSecondary,
+    color: '#94A3B8',
+    fontWeight: '500',
   },
   verifyButton: {
-    backgroundColor: PrimaryColors.main,
-    borderRadius: 25,
-    height: 50,
+    backgroundColor: '#2563EB',
+    borderRadius: 16,
+    height: 56,
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
     justifyContent: 'center',
     alignItems: 'center',
   },

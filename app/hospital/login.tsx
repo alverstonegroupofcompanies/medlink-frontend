@@ -102,9 +102,15 @@ export default function HospitalLoginScreen() {
   };
 
   return (
-    <SafeAreaView style={safeAreaStyle} edges={['top', 'right', 'left']}>
-      <ThemedView style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor={PrimaryColors.lighter} />
+    <View style={styles.mainContainer}>
+      <StatusBar barStyle="light-content" backgroundColor="#1e40af" />
+      <LinearGradient
+        colors={['#1e40af', '#3b82f6', '#60a5fa']}
+        locations={[0, 0.5, 1]}
+        style={StyleSheet.absoluteFill}
+      />
+      
+      <SafeAreaView style={safeAreaStyle} edges={['top', 'right', 'left']}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.keyboardView}
@@ -115,10 +121,10 @@ export default function HospitalLoginScreen() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            <LinearGradient colors={[PrimaryColors.lighter, NeutralColors.background]} style={styles.header}>
+            <View style={styles.header}>
               <ThemedText style={styles.helloText}>Hello Hospital!</ThemedText>
               <ThemedText style={styles.welcomeText}>Welcome to Alverstone MedLink</ThemedText>
-            </LinearGradient>
+            </View>
 
           <View style={formStyle}>
             <ThemedText type="title" style={styles.loginHeading}>
@@ -193,57 +199,61 @@ export default function HospitalLoginScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </ThemedView>
-    </SafeAreaView>
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  mainContainer: {
+    flex: 1,
+    backgroundColor: '#3b82f6',
+  },
   safeArea: {
     flex: 1,
-    backgroundColor: NeutralColors.background,
   },
-  container: { flex: 1, backgroundColor: NeutralColors.background },
   keyboardView: { flex: 1 },
   scrollContent: { 
     flexGrow: 1, 
     justifyContent: 'center',
-    paddingBottom: 20 
+    padding: 24,
   },
   scrollContentTablet: { paddingHorizontal: 48, paddingBottom: 32 },
   header: {
-    backgroundColor: PrimaryColors.lighter,
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingTop: Platform.OS === 'ios' ? 20 : 20,
     paddingBottom: 40,
-    paddingHorizontal: 30,
-    minHeight: 180,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   helloText: { 
     fontSize: 32, 
-    fontWeight: '700', 
-    color: PrimaryColors.darker, 
+    fontWeight: '800', 
+    color: '#FFFFFF', 
     marginBottom: 8,
-    includeFontPadding: false,
+    textAlign: 'center',
+    letterSpacing: -0.5,
   },
   welcomeText: { 
     fontSize: 16, 
-    color: NeutralColors.textSecondary, 
+    color: 'rgba(255, 255, 255, 0.9)', 
     marginTop: 0,
     fontWeight: '500',
+    textAlign: 'center',
   },
   form: {
-    backgroundColor: NeutralColors.cardBackground,
-    marginHorizontal: 24,
-    marginTop: -30,
-    borderRadius: 24,
-    paddingVertical: 32,
-    paddingHorizontal: 24,
+    backgroundColor: 'rgba(255, 255, 255, 1)',
+    borderRadius: 32,
+    padding: 32,
     shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 12,
+    width: '100%',
+    maxWidth: 420,
+    alignSelf: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.5)',
   },
   formTablet: {
     alignSelf: 'center',
@@ -252,33 +262,35 @@ const styles = StyleSheet.create({
   },
   loginHeading: { 
     fontSize: 24, 
-    fontWeight: '700', 
+    fontWeight: '800', 
     marginBottom: 24, 
     textAlign: 'center',
-    color: PrimaryColors.darker
+    color: '#1E3A8A'
   },
-  inputGroup: { marginBottom: 16 },
+  inputGroup: { marginBottom: 20 },
   input: { 
     width: '100%', 
-    borderRadius: 12, 
+    borderRadius: 16, 
     paddingHorizontal: 16, 
-    height: 50,
-    backgroundColor: '#F3F4F6',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    height: 56,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    fontSize: 16,
   },
   loginButton: { 
     marginTop: 8, 
-    backgroundColor: PrimaryColors.main, 
-    borderRadius: 12, 
-    height: 50, 
+    backgroundColor: '#2563EB', 
+    borderRadius: 16, 
+    height: 56, 
     justifyContent: 'center', 
     alignItems: 'center', 
-    marginBottom: 16,
-    shadowColor: PrimaryColors.main,
+    marginBottom: 24,
+    shadowColor: '#2563EB',
     shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 8,
   },
   signupContainer: { 
     flexDirection: 'row', 
@@ -286,9 +298,9 @@ const styles = StyleSheet.create({
     alignItems: 'center', 
     marginTop: 8, 
   },
-  signupText: { fontSize: 14, color: NeutralColors.textSecondary },
-  signupLink: { fontSize: 14, fontWeight: '600', color: PrimaryColors.main },
-  backContainer: { marginTop: 16, alignItems: 'center' },
-  backLink: { fontSize: 14, fontWeight: '600', color: PrimaryColors.main },
+  signupText: { fontSize: 15, color: '#64748B' },
+  signupLink: { fontSize: 15, fontWeight: '700', color: '#2563EB' },
+  backContainer: { marginTop: 24, alignItems: 'center' },
+  backLink: { fontSize: 14, fontWeight: '600', color: '#2563EB' },
 });
 

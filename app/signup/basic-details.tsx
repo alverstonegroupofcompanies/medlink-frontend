@@ -13,6 +13,8 @@ import { DoctorPrimaryColors as PrimaryColors, DoctorNeutralColors as NeutralCol
 import { API_BASE_URL } from '@/config/api';
 import axios from 'axios';
 
+import { SafeAreaView } from 'react-native-safe-area-context';
+
 export default function BasicDetailsScreen() {
   const [fullName, setFullName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -109,7 +111,13 @@ export default function BasicDetailsScreen() {
   };
 
   return (
-    <ThemedView style={styles.container}>
+    <View style={styles.mainContainer}>
+      <LinearGradient
+        colors={['#1e40af', '#3b82f6', '#60a5fa']}
+        locations={[0, 0.5, 1]}
+        style={StyleSheet.absoluteFill}
+      />
+      <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
@@ -119,12 +127,8 @@ export default function BasicDetailsScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Curved Header */}
-          <LinearGradient 
-            colors={[PrimaryColors.main, PrimaryColors.lighter, NeutralColors.background]} 
-            locations={[0, 0.5, 1]}
-            style={styles.header}
-          >
+          {/* Header */}
+          <View style={styles.header}>
             <TouchableOpacity
               style={styles.backButton}
               onPress={() => router.push('/login')}
@@ -137,7 +141,7 @@ export default function BasicDetailsScreen() {
               <ThemedText style={styles.signUpText}>Create Account</ThemedText>
               <ThemedText style={styles.subtitleText}>Step 1 of 2: Basic Information</ThemedText>
             </View>
-          </LinearGradient>
+          </View>
 
           {/* White Form Card */}
           <View style={styles.formCard}>
@@ -215,26 +219,33 @@ export default function BasicDetailsScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </ThemedView>
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: NeutralColors.background },
+  mainContainer: {
+    flex: 1,
+    backgroundColor: '#3b82f6',
+  },
+  safeArea: { flex: 1 },
   keyboardView: { flex: 1 },
-  scrollContent: { flexGrow: 1, paddingBottom: 40 },
+  scrollContent: { 
+    flexGrow: 1, 
+    padding: 24,
+    paddingTop: 12,
+  },
   header: { 
-    borderBottomLeftRadius: 80, 
-    borderBottomRightRadius: 80, 
-    paddingTop: Platform.OS === 'ios' ? 70 : 60, 
-    paddingBottom: 70, 
-    paddingHorizontal: 30,
-    minHeight: 220,
+    paddingTop: 10, 
+    paddingBottom: 32, 
+    paddingHorizontal: 8,
   },
   backButton: { 
     flexDirection: 'row', 
     alignItems: 'center', 
     marginBottom: 24,
+    paddingVertical: 8,
   },
   backText: { 
     fontSize: 16, 
@@ -244,15 +255,17 @@ const styles = StyleSheet.create({
   },
   headerContent: {
     alignItems: 'flex-start',
+    paddingLeft: 4,
   },
   signUpText: { 
-    fontSize: 36, 
+    fontSize: 32, 
     fontWeight: '800', 
     color: '#FFFFFF',
     marginBottom: 8,
     textShadowColor: 'rgba(0, 0, 0, 0.1)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
+    letterSpacing: -0.5,
   },
   subtitleText: {
     fontSize: 16,
@@ -261,85 +274,89 @@ const styles = StyleSheet.create({
   },
   formCard: { 
     backgroundColor: '#FFFFFF', 
-    marginHorizontal: 20, 
-    marginTop: -50, 
-    borderRadius: 28, 
+    borderRadius: 32, 
     paddingVertical: 32, 
-    paddingHorizontal: 28, 
+    paddingHorizontal: 24, 
     shadowColor: '#000', 
-    shadowOpacity: 0.12, 
+    shadowOpacity: 0.15, 
     shadowRadius: 24, 
-    shadowOffset: { width: 0, height: 8 },
+    shadowOffset: { width: 0, height: 10 },
     elevation: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
   },
   formHeader: {
     marginBottom: 28,
     alignItems: 'center',
   },
   heading: { 
-    fontSize: 26, 
-    fontWeight: '700', 
+    fontSize: 24, 
+    fontWeight: '800', 
     marginBottom: 8,
-    color: PrimaryColors.darkText,
+    color: '#1E3A8A',
   },
   formSubheading: {
-    fontSize: 14,
-    color: NeutralColors.textSecondary,
+    fontSize: 15,
+    color: '#64748B',
     textAlign: 'center',
   },
   inputGroup: { marginBottom: 20 },
   input: { 
-    borderWidth: 1, 
-    borderColor: '#E5E7EB', 
+    borderWidth: 1.5, 
+    borderColor: '#E2E8F0', 
     borderRadius: 16, 
-    backgroundColor: '#FAFAFA', 
+    backgroundColor: '#F8FAFC', 
     paddingHorizontal: 18, 
     height: 56,
+    fontSize: 16,
   },
   profilePhotoButton: { 
     borderWidth: 2, 
-    borderColor: '#E5E7EB',
+    borderColor: '#E2E8F0',
     borderStyle: 'dashed',
-    borderRadius: 16, 
+    borderRadius: 20, 
     padding: 24, 
     minHeight: 140, 
     justifyContent: 'center', 
     alignItems: 'center', 
     marginTop: 8, 
-    marginBottom: 12,
-    backgroundColor: '#F9FAFB',
+    marginBottom: 16,
+    backgroundColor: '#F8FAFC',
   },
   profileImage: { 
     width: 120, 
     height: 120, 
     borderRadius: 60,
-    borderWidth: 3,
+    borderWidth: 4,
     borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   profilePhotoText: { 
     marginTop: 12, 
     fontSize: 15, 
-    color: NeutralColors.textSecondary,
+    color: '#64748B',
     fontWeight: '600',
   },
   fileSizeHint: {
-    fontSize: 12,
-    color: NeutralColors.textSecondary,
+    fontSize: 13,
+    color: '#94A3B8',
     textAlign: 'center',
-    marginBottom: 8,
-    fontStyle: 'italic',
+    marginBottom: 20,
+    marginTop: -8,
   },
   nextButton: { 
-    backgroundColor: PrimaryColors.main, 
+    backgroundColor: '#2563EB', 
     borderRadius: 16, 
     height: 56, 
     justifyContent: 'center', 
-    alignItems: 'center',
-    marginTop: 8,
-    shadowColor: PrimaryColors.main,
-    shadowOffset: { width: 0, height: 4 },
+    alignItems: 'center', 
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowRadius: 16,
+    elevation: 8,
   },
 });

@@ -27,6 +27,7 @@ import { DatePicker } from '@/components/date-picker';
 import { TimePicker } from '@/components/time-picker';
 import { formatISTDateTime, formatISTDateOnly } from '@/utils/timezone';
 import { getFullImageUrl } from '@/utils/url-helper';
+import { RazorpayPaymentModal } from '@/components/RazorpayPaymentModal';
 
 // Import MapView - Metro will automatically resolve .web or .native based on platform
 import { LocationPickerMap } from '@/components/LocationPickerMap';
@@ -320,6 +321,11 @@ export default function HospitalDashboard() {
   });
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [isCustomLocation, setIsCustomLocation] = useState(false);
+  
+  // Payment modal state
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState(0);
+  const [preparedJobData, setPreparedJobData] = useState<any>(null);
 
   // Auto-calculate duration when start/end time changes
   useEffect(() => {
@@ -613,101 +619,102 @@ export default function HospitalDashboard() {
       return;
     }
 
-    setLoading(true);
-    try {
-      const safeParseFloat = (val: string) => {
-        const parsed = parseFloat(val);
-        return isNaN(parsed) ? 0 : parsed;
-      };
+    // Prepare job data for payment
+    const safeParseFloat = (val: string) => {
+      const parsed = parseFloat(val);
+      return isNaN(parsed) ? 0 : parsed;
+    };
 
-      const safeParseInt = (val: string) => {
-        const parsed = parseInt(val, 10);
-        return isNaN(parsed) ? 1 : parsed;
-      };
+    const safeParseInt = (val: string) => {
+      const parsed = parseInt(val, 10);
+      return isNaN(parsed) ? 1 : parsed;
+    };
 
-      const data: any = {
-        department_id: formData.department_id,
-        work_type: formData.work_type,
-        required_sessions: safeParseInt(formData.required_sessions),
-        work_required_date: formData.work_required_date, // Already in YYYY-MM-DD format
-        start_time: formData.start_time, // Already in HH:MM format
-        end_time: formData.end_time, // Already in HH:MM format
-        duration_hours: safeParseFloat(formData.duration_hours) > 0 ? safeParseFloat(formData.duration_hours) : 1,
-        description: formData.description?.trim() || null,
-        location_name: formData.location_name?.trim() || null,
-        address: formData.address?.trim() || null,
-      };
+    const jobData: any = {
+      department_id: formData.department_id,
+      work_type: formData.work_type,
+      required_sessions: safeParseInt(formData.required_sessions),
+      work_required_date: formData.work_required_date,
+      start_time: formData.start_time,
+      end_time: formData.end_time,
+      duration_hours: safeParseFloat(formData.duration_hours) > 0 ? safeParseFloat(formData.duration_hours) : 1,
+      description: formData.description?.trim() || null,
+      location_name: formData.location_name?.trim() || null,
+      address: formData.address?.trim() || null,
+    };
 
-      if (location) {
-        data.latitude = location.latitude;
-        data.longitude = location.longitude;
-      }
-
-      if (formData.salary_range_min && formData.salary_range_min.trim()) {
-        const minSalary = safeParseFloat(formData.salary_range_min);
-        if (minSalary >= 0) {
-          data.salary_range_min = minSalary;
-        }
-      }
-      
-      if (formData.salary_range_max && formData.salary_range_max.trim()) {
-        const maxSalary = parseFloat(formData.salary_range_max);
-        if (!isNaN(maxSalary) && maxSalary >= 0) {
-          data.salary_range_max = maxSalary;
-        }
-      }
-
-      await API.post('/hospital/requirements', data);
-      Alert.alert('Success', 'Job requirement posted successfully!');
-      setShowForm(false);
-      setFormData({
-        department: '',
-        department_id: null,
-        work_type: 'full-time',
-        required_sessions: '1',
-        work_required_date: '',
-        start_time: '',
-        end_time: '',
-        duration_hours: '1',
-        description: '',
-        location_name: '',
-        address: '',
-        salary_range_min: '',
-        salary_range_max: '',
-      });
-      // Reset to hospital location if available
-      if (hospital?.latitude && hospital?.longitude) {
-        setLocation({
-          latitude: parseFloat(hospital.latitude),
-          longitude: parseFloat(hospital.longitude)
-        });
-      } else {
-        setLocation(null);
-      }
-      setIsCustomLocation(false);
-      loadRequirements();
-    } catch (error: any) {
-      console.error('Error posting requirement:', error);
-      let message = 'Failed to post requirement. Please try again.';
-      
-      if (error.message?.includes('Network') || error.message?.includes('connect')) {
-        message = 'Cannot connect to server. Please check your connection.';
-      } else if (error.response?.data?.message) {
-        message = error.response.data.message;
-      } else if (error.response?.data?.errors) {
-        // Format validation errors nicely
-        const errors = error.response.data.errors;
-        const errorMessages = Object.entries(errors).map(([field, messages]: [string, any]) => {
-          const fieldName = field.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-          return `${fieldName}: ${Array.isArray(messages) ? messages.join(', ') : messages}`;
-        });
-        message = errorMessages.join('\n');
-      }
-      
-      Alert.alert('Validation Error', message);
-    } finally {
-      setLoading(false);
+    if (location) {
+      jobData.latitude = location.latitude;
+      jobData.longitude = location.longitude;
     }
+
+    if (formData.salary_range_min && formData.salary_range_min.trim()) {
+      const minSalary = safeParseFloat(formData.salary_range_min);
+      if (minSalary >= 0) {
+        jobData.salary_range_min = minSalary;
+      }
+    }
+    
+    if (formData.salary_range_max && formData.salary_range_max.trim()) {
+      const maxSalary = parseFloat(formData.salary_range_max);
+      if (!isNaN(maxSalary) && maxSalary >= 0) {
+        jobData.salary_range_max = maxSalary;
+      }
+    }
+
+    // Calculate payment amount (you can customize this logic)
+    // For now, using a base amount of 500 INR per job posting
+    const baseAmount = 500;
+    const calculatedAmount = baseAmount * safeParseInt(formData.required_sessions);
+
+    // Store job data and show payment modal
+    setPreparedJobData(jobData);
+    setPaymentAmount(calculatedAmount);
+    setShowPaymentModal(true);
+  };
+
+  const handlePaymentSuccess = (jobRequirement: any) => {
+    setShowPaymentModal(false);
+    Alert.alert('Success', 'Payment completed and job posted successfully!');
+    
+    // Reset form
+    setShowForm(false);
+    setFormData({
+      department: '',
+      department_id: null,
+      work_type: 'full-time',
+      required_sessions: '1',
+      work_required_date: '',
+      start_time: '',
+      end_time: '',
+      duration_hours: '1',
+      description: '',
+      location_name: '',
+      address: '',
+      salary_range_min: '',
+      salary_range_max: '',
+    });
+    
+    // Reset to hospital location if available
+    if (hospital?.latitude && hospital?.longitude) {
+      setLocation({
+        latitude: parseFloat(hospital.latitude),
+        longitude: parseFloat(hospital.longitude)
+      });
+    } else {
+      setLocation(null);
+    }
+    setIsCustomLocation(false);
+    setPreparedJobData(null);
+    setPaymentAmount(0);
+    
+    // Reload requirements
+    loadRequirements();
+  };
+
+  const handlePaymentFailure = (error: string) => {
+    setShowPaymentModal(false);
+    Alert.alert('Payment Failed', error || 'Payment could not be completed. Please try again.');
   };
 
   const handleDelete = async (id: number) => {
@@ -841,6 +848,18 @@ export default function HospitalDashboard() {
           </View>
         </View>
       </Modal>
+
+      {/* Razorpay Payment Modal */}
+      {preparedJobData && (
+        <RazorpayPaymentModal
+          visible={showPaymentModal}
+          onClose={() => setShowPaymentModal(false)}
+          amount={paymentAmount}
+          jobData={preparedJobData}
+          onSuccess={handlePaymentSuccess}
+          onFailure={handlePaymentFailure}
+        />
+      )}
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

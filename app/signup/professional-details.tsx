@@ -22,6 +22,7 @@ import { DoctorPrimaryColors as PrimaryColors, DoctorNeutralColors as NeutralCol
 import { saveDoctorAuth } from '@/utils/auth';
 import { useEffect, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TouchableOpacity, View, Modal } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ProfessionalDetailsScreen() {
   const navParams = useLocalSearchParams();
@@ -243,14 +244,17 @@ export default function ProfessionalDetailsScreen() {
   };
 
   return (
-    <ThemedView style={styles.container}>
+    <View style={styles.mainContainer}>
+      <LinearGradient
+        colors={['#1e40af', '#3b82f6', '#60a5fa']}
+        locations={[0, 0.5, 1]}
+        style={StyleSheet.absoluteFill}
+      />
+      <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-          <LinearGradient 
-            colors={[PrimaryColors.main, PrimaryColors.lighter, NeutralColors.background]} 
-            locations={[0, 0.5, 1]}
-            style={styles.headerGradient}
-          >
+          
+          <View style={styles.header}>
             <TouchableOpacity style={styles.backButton} onPress={() => {
               try {
                 router.back();
@@ -270,7 +274,7 @@ export default function ProfessionalDetailsScreen() {
                 Step 2 of 2: Complete your profile
               </ThemedText>
             </View>
-          </LinearGradient>
+          </View>
 
           <View style={styles.formCard}>
             <View style={styles.formHeader}>
@@ -367,25 +371,33 @@ export default function ProfessionalDetailsScreen() {
         </View>
       </Modal>
 
-    </ThemedView>
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F7F8FA' },
-  scrollContent: { flexGrow: 1, paddingBottom: 40 },
-  headerGradient: {
-    borderBottomLeftRadius: 80,
-    borderBottomRightRadius: 80,
-    paddingTop: Platform.OS === 'ios' ? 70 : 60,
-    paddingBottom: 70,
-    paddingHorizontal: 30,
-    minHeight: 220,
+  mainContainer: {
+    flex: 1,
+    backgroundColor: '#3b82f6',
+  },
+  safeArea: { flex: 1 },
+  scrollContent: { 
+    flexGrow: 1, 
+    padding: 24,
+    paddingTop: 12,
+    paddingBottom: 40,
+  },
+  header: {
+    paddingTop: 10,
+    paddingBottom: 32,
+    paddingHorizontal: 8,
   },
   backButton: { 
     flexDirection: 'row', 
     alignItems: 'center', 
     marginBottom: 24,
+    paddingVertical: 8, 
   },
   backText: { 
     fontSize: 16, 
@@ -395,9 +407,10 @@ const styles = StyleSheet.create({
   },
   headerContent: {
     alignItems: 'flex-start',
+    paddingLeft: 4,
   },
   heading: { 
-    fontSize: 36, 
+    fontSize: 32, 
     fontWeight: '800',
     color: '#FFFFFF',
     marginBottom: 8,
@@ -412,15 +425,15 @@ const styles = StyleSheet.create({
   },
   formCard: { 
     backgroundColor: '#FFFFFF', 
-    marginHorizontal: 20, 
-    marginTop: -50,
-    borderRadius: 28, 
-    padding: 28, 
+    borderRadius: 32, 
+    padding: 24, 
     shadowColor: '#000', 
-    shadowOpacity: 0.12, 
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15, 
+    shadowRadius: 24, 
+    shadowOffset: { width: 0, height: 10 },
     elevation: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.5)',
   },
   formHeader: {
     marginBottom: 24,
@@ -428,92 +441,100 @@ const styles = StyleSheet.create({
   },
   formTitle: {
     fontSize: 24,
-    fontWeight: '700',
-    color: PrimaryColors.darkText,
+    fontWeight: '800',
+    color: '#1E3A8A',
     marginBottom: 8,
   },
   formSubheading: {
-    fontSize: 14,
-    color: NeutralColors.textSecondary,
+    fontSize: 15,
+    color: '#64748B',
     textAlign: 'center',
   },
   inputGroup: { marginBottom: 20 },
   label: { 
     fontSize: 15, 
     fontWeight: '600', 
-    color: '#333', 
+    color: '#334155', 
     marginBottom: 10,
+    marginLeft: 4,
   },
   submitButton: { 
     marginTop: 24, 
-    backgroundColor: PrimaryColors.main,
+    backgroundColor: '#2563EB',
     borderRadius: 16,
     height: 56,
-    shadowColor: PrimaryColors.main,
-    shadowOffset: { width: 0, height: 4 },
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowRadius: 16,
+    elevation: 8,
   },
   dropdownInput: {
-    backgroundColor: '#F5F5F5',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 18,
+    paddingVertical: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   dropdownPlaceholder: {
-    color: '#9E9E9E',
+    color: '#94A3B8',
     fontSize: 16,
   },
   dropdownText: {
-    color: '#333333',
+    color: '#0F172A',
     fontSize: 16,
+    fontWeight: '500',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
     paddingBottom: 40,
     maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 24,
   },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 20,
+    padding: 24,
     borderBottomWidth: 1,
-    borderBottomColor: '#EEEEEE',
+    borderBottomColor: '#F1F5F9',
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
-    color: '#333',
+    color: '#1E293B',
   },
   modalOption: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
+    paddingVertical: 18,
+    paddingHorizontal: 24,
     borderBottomWidth: 1,
-    borderBottomColor: '#F5F5F5',
+    borderBottomColor: '#F8FAFC',
   },
   modalOptionText: {
     fontSize: 16,
-    color: '#333',
+    color: '#334155',
+    fontWeight: '500',
   },
   modalOptionTextSelected: {
-    color: PrimaryColors.main,
-    fontWeight: '600',
+    color: '#2563EB',
+    fontWeight: '700',
   },
 });

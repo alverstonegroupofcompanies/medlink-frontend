@@ -2,6 +2,7 @@ import { Tabs, router, useFocusEffect } from 'expo-router';
 import React, { useEffect } from 'react';
 import { Platform, View } from 'react-native';
 import { Home, Briefcase, User, Settings } from 'lucide-react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { isDoctorLoggedIn } from '@/utils/auth';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -129,6 +130,26 @@ export default function TabLayout() {
               }}
             >
               <Briefcase size={24} color={color} fill={focused ? color : 'transparent'} />
+            </View>
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="wallet"
+        options={{
+          title: 'Wallet',
+          tabBarIcon: ({ color, focused }) => (
+            <View
+              style={{
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                backgroundColor: focused ? 'rgba(0, 102, 255, 0.1)' : 'transparent',
+              }}
+            >
+              <MaterialIcons name="account-balance-wallet" size={24} color={color} />
             </View>
           ),
         }}
