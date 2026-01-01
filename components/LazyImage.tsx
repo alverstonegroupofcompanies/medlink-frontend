@@ -18,19 +18,31 @@ export const LazyImage: React.FC<Props> = ({ uri, width, height, borderRadius = 
   const [error, setError] = useState(false);
 
   const getFullUri = (path?: string | null) => {
-    if (!path) return null;
+    console.log('🖼️ [LazyImage] getFullUri input:', path);
+    
+    if (!path) {
+      console.log('🖼️ [LazyImage] No path provided');
+      return null;
+    }
+    
     if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('file://')) {
+      console.log('🖼️ [LazyImage] Already full URL:', path);
       return path;
     }
+    
     // Handle relative paths (e.g. /storage/...)
     const cleanPath = path.startsWith('/') ? path.substring(1) : path;
     const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL : `${API_BASE_URL}/`;
-    return `${baseUrl}${cleanPath}`;
+    const fullUrl = `${baseUrl}${cleanPath}`;
+    
+    console.log('🖼️ [LazyImage] Constructed URL:', fullUrl);
+    return fullUrl;
   };
 
   const fullUri = getFullUri(uri);
 
   if (!fullUri || error) {
+    console.log('🖼️ [LazyImage] Showing fallback - fullUri:', fullUri, 'error:', error);
     return (
       <View style={[styles.placeholder, { width, height, borderRadius }]}>
         {fallback}
@@ -50,8 +62,15 @@ export const LazyImage: React.FC<Props> = ({ uri, width, height, borderRadius = 
         style={{ width, height, borderRadius }}
         contentFit="cover"
         cachePolicy="memory-disk"
-        onLoad={() => setLoaded(true)}
-        onError={() => setError(true)}
+        onLoad={() => {
+          console.log('🖼️ [LazyImage] ✅ Image loaded successfully:', fullUri);
+          setLoaded(true);
+        }}
+        onError={(error) => {
+          console.error('🖼️ [LazyImage] ❌ Image load failed:', fullUri);
+          console.error('🖼️ [LazyImage] Error details:', error);
+          setError(true);
+        }}
       />
     </View>
   );

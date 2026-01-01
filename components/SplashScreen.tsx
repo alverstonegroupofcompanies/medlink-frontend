@@ -3,11 +3,16 @@ import { View, StyleSheet, Animated, Dimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
-export function AppSplashScreen() {
+interface SplashScreenProps {
+  onFinish: () => void;
+}
+
+export default function SplashScreen({ onFinish }: SplashScreenProps) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.3)).current;
+  const logoRotate = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     // Sequence of animations
@@ -39,7 +44,17 @@ export function AppSplashScreen() {
           useNativeDriver: true,
         }),
       ]),
-    ]).start();
+      // Hold for a moment
+      Animated.delay(600),
+      // Fade out
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      onFinish();
+    });
   }, []);
 
   return (
@@ -56,7 +71,9 @@ export function AppSplashScreen() {
               styles.logoContainer,
               {
                 opacity: fadeAnim,
-                transform: [{ scale: scaleAnim }],
+                transform: [
+                  { scale: scaleAnim },
+                ],
               },
             ]}
           >

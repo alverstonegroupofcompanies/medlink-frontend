@@ -178,6 +178,25 @@ export default function DoctorHome() {
 
   const handleApply = async (requirementId: number) => {
     try {
+      // Check if banking details exist before applying
+      const bankingResponse = await API.get('/doctor/banking-details');
+      const hasBankingDetails = bankingResponse.data.banking_details?.has_banking_details;
+
+      if (!hasBankingDetails) {
+        Alert.alert(
+          'Banking Details Required',
+          'Please add your banking details before applying for jobs. This is required to receive payments.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Add Now', 
+              onPress: () => router.push('/(tabs)/wallet')
+            },
+          ]
+        );
+        return;
+      }
+
       await API.post(`/jobs/${requirementId}/apply`);
       Alert.alert('Success', 'Application submitted successfully!');
       loadJobRequirements();
@@ -819,8 +838,11 @@ export default function DoctorHome() {
                       <View style={styles.openingHeader}>
                         {requirement.hospital?.logo_url ? (
                           <Image
+                            key={requirement.hospital.logo_url}
                             source={{ uri: requirement.hospital.logo_url }}
                             style={styles.hospitalLogo}
+                            onLoad={() => console.log('🏥 [Hospital Logo] ✅ Loaded:', requirement.hospital.logo_url)}
+                            onError={(error) => console.error('🏥 [Hospital Logo] ❌ Failed:', requirement.hospital.logo_url, error.nativeEvent)}  
                           />
                         ) : (
                           <View style={[styles.hospitalLogoPlaceholder, { backgroundColor: ModernColors.primary.light }]}>

@@ -35,7 +35,7 @@ export function RazorpayPaymentModal({
       setPaymentStep('processing');
 
       // Step 1: Create Razorpay order
-      const orderResponse = await API.post('/payments/create-razorpay-order', {
+      const orderResponse = await API.post('/hospital/payments/create-razorpay-order', {
         amount,
         job_data: jobData,
       });

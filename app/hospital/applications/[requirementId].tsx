@@ -20,6 +20,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ScreenSafeArea } from '@/components/screen-safe-area';
 import { formatISTDateTime, formatISTDateTimeLong } from '@/utils/timezone';
 import { getFullImageUrl } from '@/utils/url-helper';
+import { RazorpayPaymentWidget } from '@/components/RazorpayPaymentWidget';
 
 const HOSPITAL_TOKEN_KEY = 'hospitalToken';
 const HOSPITAL_INFO_KEY = 'hospitalInfo';
@@ -34,6 +35,11 @@ export default function ApplicationsScreen() {
   const [processingAction, setProcessingAction] = useState<'accept' | 'reject' | null>(null);
   const [selectedApplication, setSelectedApplication] = useState<any>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  
+  // Payment state
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState(0);
+  const [pendingApplicationId, setPendingApplicationId] = useState<number | null>(null);
 
   useEffect(() => {
     loadHospital();
@@ -129,8 +135,65 @@ export default function ApplicationsScreen() {
 
   const handleAccept = async (applicationId: number, doctorName: string) => {
     console.log('🔵 handleAccept called for application:', applicationId);
-    // Call performAccept directly without confirmation for now
-    performAccept(applicationId);
+    
+    // Find the application to get doctor and requirement details
+    const application = applications.find(app => app.id === applicationId);
+    if (!application) {
+      Alert.alert('Error', 'Application not found');
+      return;
+    }
+
+    // Calculate payment amount based on requirement
+    // Use payment_amount (new) or salary_range_max (legacy) or default to 500
+    const amount = requirement?.payment_amount 
+      ? parseFloat(requirement.payment_amount) 
+      : (requirement?.salary_range_max ? parseFloat(requirement.salary_range_max) : 500);
+
+    // Prepare job data for payment
+    const jobData = {
+      application_id: applicationId,
+      job_requirement_id: requirement?.id,
+      doctor_id: application.doctor?.id,
+      department_id: requirement?.department_id,
+      work_type: requirement?.work_type || 'full-time',
+      required_sessions: requirement?.required_sessions || 1,
+      work_required_date: requirement?.work_required_date,
+      start_time: requirement?.start_time,
+      end_time: requirement?.end_time,
+      duration_hours: requirement?.duration_hours || 1,
+      description: requirement?.description,
+      location_name: requirement?.location_name,
+      address: requirement?.address,
+      latitude: requirement?.latitude,
+      longitude: requirement?.longitude,
+      payment_amount: amount,
+      // effective_rate is what we'll use for calculations
+      effective_rate: amount,
+    };
+
+    // Store pending application ID and show payment modal
+    setPendingApplicationId(applicationId);
+    setPaymentAmount(amount);
+    setShowPaymentModal(true);
+  };
+
+  const handlePaymentSuccess = async (jobRequirement: any) => {
+    setShowPaymentModal(false);
+    
+    // Now perform the actual acceptance
+    if (pendingApplicationId) {
+      performAccept(pendingApplicationId);
+    }
+    
+    setPendingApplicationId(null);
+    setPaymentAmount(0);
+  };
+
+  const handlePaymentFailure = (error: string) => {
+    setShowPaymentModal(false);
+    Alert.alert('Payment Failed', error || 'Payment could not be completed. Please try again.');
+    setPendingApplicationId(null);
+    setPaymentAmount(0);
   };
 
   const performAccept = async (applicationId: number) => {
@@ -172,7 +235,7 @@ export default function ApplicationsScreen() {
       
       // Show success message
       setTimeout(() => {
-        Alert.alert('Success', 'Application accepted successfully!');
+        Alert.alert('Success', 'Payment completed and doctor accepted successfully!');
       }, 300);
       
     } catch (error: any) {
@@ -715,6 +778,38 @@ export default function ApplicationsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Payment Modal */}
+      {requirement && (
+        <RazorpayPaymentWidget
+          visible={showPaymentModal}
+          onClose={() => {
+            setShowPaymentModal(false);
+            setPendingApplicationId(null);
+            setPaymentAmount(0);
+          }}
+          amount={paymentAmount}
+          jobData={{
+            application_id: pendingApplicationId,
+            job_requirement_id: requirement.id,
+            department_id: requirement.department_id,
+            work_type: requirement.work_type,
+            required_sessions: requirement.required_sessions,
+            work_required_date: requirement.work_required_date,
+            start_time: requirement.start_time,
+            end_time: requirement.end_time,
+            duration_hours: requirement.duration_hours,
+            description: requirement.description,
+            location_name: requirement.location_name,
+            address: requirement.address,
+            latitude: requirement.latitude,
+            longitude: requirement.longitude,
+            salary_range_max: paymentAmount,
+          }}
+          onSuccess={handlePaymentSuccess}
+          onFailure={handlePaymentFailure}
+        />
+      )}
     </View>
     </ScreenSafeArea>
   );

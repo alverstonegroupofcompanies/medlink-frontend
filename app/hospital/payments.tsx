@@ -56,8 +56,8 @@ export default function PaymentHistoryScreen() {
     <View style={styles.card}>
       <View style={styles.cardHeader}>
         <View style={styles.doctorInfo}>
-            <View style={styles.avatar}>
-               <User size={20} color="#64748B" />
+            <View style={[styles.avatar, { backgroundColor: PrimaryColors.main + '15' }]}>
+               <CreditCard size={20} color={PrimaryColors.main} />
             </View>
             <View>
                 <Text style={styles.doctorName}>Dr. {item.doctor?.name || 'Unknown Doctor'}</Text>
@@ -87,11 +87,11 @@ export default function PaymentHistoryScreen() {
 
   return (
     <ScreenSafeArea style={styles.container}>
-      <StatusBar style="dark" backgroundColor="#fff" />
+      <StatusBar style="light" backgroundColor={PrimaryColors.main} />
       
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <ArrowLeft size={24} color="#0F172A" />
+          <ArrowLeft size={24} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Payment History</Text>
         <View style={{ width: 24 }} />
@@ -130,16 +130,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 20, // Adjusted since ScreenSafeArea handles top inset? No, usually header needs padding inside SafeArea
+    paddingTop: 20,
     paddingBottom: 20,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    backgroundColor: PrimaryColors.main,
+    borderBottomWidth: 0,
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#0F172A',
+    color: '#fff',
   },
   backBtn: {
     padding: 4,

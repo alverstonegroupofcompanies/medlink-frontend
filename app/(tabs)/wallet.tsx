@@ -1,36 +1,57 @@
 import React, { useEffect, useState } from 'react';
-import { View, ScrollView, StyleSheet, RefreshControl, TouchableOpacity, Alert } from 'react-native';
+import { View, ScrollView, StyleSheet, RefreshControl, TouchableOpacity, Alert, TextInput, ActivityIndicator, StatusBar } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { ScreenSafeArea } from '@/components/screen-safe-area';
-import { DoctorPrimaryColors as PrimaryColors, DoctorNeutralColors as NeutralColors } from '@/constants/doctor-theme';
+import { DoctorPrimaryColors as PrimaryColors } from '@/constants/doctor-theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BankingDetailsForm } from '@/components/BankingDetailsForm';
 import API from '../api';
 
 interface WalletData {
   balance: number;
-  pending_amount: number;
+  pending_balance: number;
   total_earned: number;
   total_withdrawn: number;
+  pending_transactions?: Transaction[];
 }
 
 interface Transaction {
   id: number;
-  type: 'credit' | 'debit' | 'pending';
+  type: 'credit' | 'debit' | 'hold' | 'release' | 'withdrawal';
   amount: number;
   description: string;
-  status: 'pending' | 'completed' | 'cancelled';
-  expected_release_at?: string;
-  time_until_release?: string;
+  status: 'pending' | 'completed' | 'failed' | 'cancelled';
   created_at: string;
+  job_session?: {
+    hospital?: {
+      name: string;
+    };
+  };
+}
+
+interface BankingDetails {
+  bank_account_holder_name?: string;
+  bank_account_number?: string;
+  bank_ifsc_code?: string;
+  bank_name?: string;
+  bank_branch?: string;
+  upi_id?: string;
+  banking_verified: boolean;
+  has_banking_details: boolean;
 }
 
 export default function WalletScreen() {
   const [wallet, setWallet] = useState<WalletData | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [bankingDetails, setBankingDetails] = useState<BankingDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [showBankingForm, setShowBankingForm] = useState(false);
+  const [showWithdrawal, setShowWithdrawal] = useState(false);
+  const [withdrawalAmount, setWithdrawalAmount] = useState('');
+  const [withdrawing, setWithdrawing] = useState(false);
 
   useEffect(() => {
     fetchWalletData();
@@ -38,13 +59,15 @@ export default function WalletScreen() {
 
   const fetchWalletData = async () => {
     try {
-      const [walletRes, transactionsRes] = await Promise.all([
+      const [walletRes, transactionsRes, bankingRes] = await Promise.all([
         API.get('/doctor/wallet'),
-        API.get('/doctor/wallet/transactions')
+        API.get('/doctor/wallet/transactions'),
+        API.get('/doctor/banking-details'),
       ]);
 
       setWallet(walletRes.data.wallet);
-      setTransactions(transactionsRes.data.transactions);
+      setTransactions(transactionsRes.data.transactions.data || transactionsRes.data.transactions);
+      setBankingDetails(bankingRes.data.banking_details);
     } catch (error) {
       console.error('Failed to fetch wallet data:', error);
       Alert.alert('Error', 'Failed to load wallet information');
@@ -54,178 +77,438 @@ export default function WalletScreen() {
     }
   };
 
-  const onRefresh = () => {
+  const handleRefresh = () => {
     setRefreshing(true);
     fetchWalletData();
   };
 
-  const getTransactionIcon = (type: string, status: string) => {
-    if (status === 'pending') return 'schedule';
-    return type === 'credit' ? 'arrow-downward' : 'arrow-upward';
+  const handleBankingSuccess = () => {
+    // Refresh wallet data after banking details are saved
+    fetchWalletData();
   };
 
-  const getTransactionColor = (type: string, status: string) => {
-    if (status === 'pending') return '#F59E0B';
-    return type === 'credit' ? '#10B981' : '#EF4444';
+  const handleWithdraw = async () => {
+    const amount = parseFloat(withdrawalAmount);
+
+    if (!amount || amount < 100) {
+      Alert.alert('Error', 'Minimum withdrawal amount is ₹100');
+      return;
+    }
+
+    if (amount > (wallet?.balance || 0)) {
+      Alert.alert('Error', 'Insufficient balance');
+      return;
+    }
+
+    setWithdrawing(true);
+
+    try {
+      const response = await API.post('/doctor/wallet/withdraw', {
+        amount,
+      });
+
+      if (response.data.success) {
+        Alert.alert('Success', 'Withdrawal request submitted successfully');
+        setShowWithdrawal(false);
+        setWithdrawalAmount('');
+        fetchWalletData();
+      }
+    } catch (error: any) {
+      console.error('Withdrawal error:', error);
+      Alert.alert(
+        'Error',
+        error.response?.data?.message || 'Failed to process withdrawal'
+      );
+    } finally {
+      setWithdrawing(false);
+    }
+  };
+
+  const getTransactionIcon = (type: string) => {
+    switch (type) {
+      case 'hold':
+        return 'lock-clock';
+      case 'release':
+        return 'check-circle';
+      case 'withdrawal':
+        return 'account-balance-wallet';
+      case 'credit':
+        return 'arrow-downward';
+      case 'debit':
+        return 'arrow-upward';
+      default:
+        return 'swap-horiz';
+    }
+  };
+
+  const getTransactionColor = (type: string) => {
+    switch (type) {
+      case 'hold':
+        return '#FF9800';
+      case 'release':
+        return '#4CAF50';
+      case 'withdrawal':
+        return PrimaryColors.main;
+      case 'credit':
+        return '#4CAF50';
+      case 'debit':
+        return '#F44336';
+      default:
+        return '#999';
+    }
   };
 
   if (loading) {
     return (
-      <ScreenSafeArea backgroundColor={NeutralColors.background}>
+      <ScreenSafeArea>
         <ThemedView style={styles.container}>
-          <ThemedText>Loading wallet...</ThemedText>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={PrimaryColors.main} />
+          </View>
         </ThemedView>
       </ScreenSafeArea>
     );
   }
 
   return (
-    <ScreenSafeArea backgroundColor={NeutralColors.background}>
-      <ScrollView
-        style={styles.container}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[PrimaryColors.main]} />
-        }
-      >
-        {/* Header */}
-        <LinearGradient
-          colors={[PrimaryColors.main, PrimaryColors.lighter]}
-          style={styles.header}
+    <ScreenSafeArea>
+      <StatusBar barStyle="light-content" backgroundColor={PrimaryColors.main} />
+      <ThemedView style={styles.container}>
+        <ScrollView
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+          }
         >
-          <ThemedText style={styles.headerTitle}>My Wallet</ThemedText>
-          <ThemedText style={styles.headerSubtitle}>Track your earnings</ThemedText>
-        </LinearGradient>
-
-        {/* Balance Cards */}
-        <View style={styles.cardsContainer}>
-          {/* Available Balance */}
-          <View style={[styles.balanceCard, styles.primaryCard]}>
-            <View style={styles.cardHeader}>
-              <MaterialIcons name="account-balance-wallet" size={24} color="#FFFFFF" />
-              <ThemedText style={styles.cardLabel}>Available Balance</ThemedText>
-            </View>
-            <ThemedText style={styles.balanceAmount}>
-              ₹{wallet?.balance ? Number(wallet.balance).toFixed(2) : '0.00'}
-            </ThemedText>
-            <TouchableOpacity style={styles.withdrawButton}>
-              <ThemedText style={styles.withdrawButtonText}>Withdraw</ThemedText>
-              <MaterialIcons name="arrow-forward" size={16} color="#FFFFFF" />
-            </TouchableOpacity>
+          {/* Header */}
+          <View style={styles.header}>
+            <ThemedText style={styles.headerTitle}>My Wallet</ThemedText>
+            <ThemedText style={styles.headerSubtitle}>Manage your earnings</ThemedText>
           </View>
 
-          {/* Pending Amount - Trust Building */}
-          {wallet && wallet.pending_amount > 0 && (
-            <View style={[styles.balanceCard, styles.pendingCard]}>
-              <View style={styles.cardHeader}>
-                <MaterialIcons name="schedule" size={24} color="#F59E0B" />
-                <ThemedText style={styles.pendingCardLabel}>Pending Approval</ThemedText>
+          {/* Payment Flow Stages */}
+          <View style={styles.stagesCard}>
+            <ThemedText style={styles.stagesTitle}>Payment Flow</ThemedText>
+            <View style={styles.stagesContainer}>
+              <View style={styles.stage}>
+                <View style={[styles.stageIcon, { backgroundColor: PrimaryColors.main + '20' }]}>
+                  <MaterialIcons name="work" size={20} color={PrimaryColors.main} />
+                </View>
+                <ThemedText style={styles.stageLabel}>Job Done</ThemedText>
               </View>
-              <ThemedText style={styles.pendingAmount}>
-                ₹{Number(wallet.pending_amount).toFixed(2)}
-              </ThemedText>
-              <View style={styles.pendingInfo}>
-                <MaterialIcons name="info-outline" size={16} color="#64748B" />
-                <ThemedText style={styles.pendingInfoText}>
-                  Will be credited after job approval + 30 min
+              <View style={styles.stageArrow}>
+                <MaterialIcons name="arrow-forward" size={16} color="#ccc" />
+              </View>
+              <View style={styles.stage}>
+                <View style={[styles.stageIcon, { backgroundColor: '#4CAF50' + '20' }]}>
+                  <MaterialIcons name="check-circle" size={20} color="#4CAF50" />
+                </View>
+                <ThemedText style={styles.stageLabel}>Released</ThemedText>
+              </View>
+              <View style={styles.stageArrow}>
+                <MaterialIcons name="arrow-forward" size={16} color="#ccc" />
+              </View>
+              <View style={styles.stage}>
+                <View style={[styles.stageIcon, { backgroundColor: PrimaryColors.dark + '20' }]}>
+                  <MaterialIcons name="account-balance" size={20} color={PrimaryColors.dark} />
+                </View>
+                <ThemedText style={styles.stageLabel}>Withdraw</ThemedText>
+              </View>
+            </View>
+          </View>
+
+          {/* Balance Cards */}
+          <View style={styles.balanceContainer}>
+            {/* Available Balance */}
+            <LinearGradient
+              colors={['#2196F3', '#1976D2']}
+              style={styles.balanceCard}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <View style={styles.balanceHeader}>
+                <MaterialIcons name="account-balance-wallet" size={24} color="#fff" />
+                <ThemedText style={styles.balanceLabel}>Available Balance</ThemedText>
+              </View>
+              <View style={styles.balanceAmountContainer}>
+                <ThemedText style={styles.balanceAmount}>
+                  ₹{wallet?.balance.toFixed(2) || '0.00'}
                 </ThemedText>
               </View>
-            </View>
-          )}
+              <TouchableOpacity
+                style={styles.withdrawButton}
+                onPress={() => {
+                  if (!bankingDetails?.has_banking_details) {
+                    Alert.alert(
+                      'Banking Details Required',
+                      'Please add your banking details before withdrawing',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Add Now', onPress: () => setShowBankingForm(true) },
+                      ]
+                    );
+                  } else if ((wallet?.balance || 0) < 100) {
+                    Alert.alert('Insufficient Balance', 'Minimum withdrawal amount is ₹100');
+                  } else {
+                    setShowWithdrawal(true);
+                  }
+                }}
+              >
+                <MaterialIcons name="account-balance" size={18} color="#fff" />
+                <ThemedText style={styles.withdrawButtonText}>Withdraw to Bank</ThemedText>
+              </TouchableOpacity>
+            </LinearGradient>
 
-          {/* Stats Row */}
-          <View style={styles.statsRow}>
-            <View style={styles.statCard}>
-              <ThemedText style={styles.statLabel}>Total Earned</ThemedText>
-              <ThemedText style={styles.statValue}>
-                ₹{wallet?.total_earned ? Number(wallet.total_earned).toFixed(2) : '0.00'}
+            {/* Pending Balance */}
+            <View style={styles.pendingCard}>
+              <View style={styles.pendingHeader}>
+                <MaterialIcons name="schedule" size={20} color="#FF9800" />
+                <ThemedText style={styles.pendingLabel}>Pending (Held)</ThemedText>
+              </View>
+              <ThemedText style={styles.pendingAmount}>
+                ₹{wallet?.pending_balance.toFixed(2) || '0.00'}
               </ThemedText>
-            </View>
-            <View style={styles.statCard}>
-              <ThemedText style={styles.statLabel}>Total Withdrawn</ThemedText>
-              <ThemedText style={styles.statValue}>
-                ₹{wallet?.total_withdrawn ? Number(wallet.total_withdrawn).toFixed(2) : '0.00'}
-              </ThemedText>
-            </View>
-          </View>
-        </View>
-
-        {/* Transactions */}
-        <View style={styles.transactionsSection}>
-          <ThemedText style={styles.sectionTitle}>Recent Transactions</ThemedText>
-
-          {transactions.length === 0 ? (
-            <View style={styles.emptyState}>
-              <MaterialIcons name="receipt-long" size={64} color={NeutralColors.textSecondary} />
-              <ThemedText style={styles.emptyText}>No transactions yet</ThemedText>
-              <ThemedText style={styles.emptySubtext}>
-                Complete jobs to start earning
-              </ThemedText>
-            </View>
-          ) : (
-            transactions.map((transaction) => (
-              <View key={transaction.id} style={styles.transactionItem}>
-                <View
-                  style={[
-                    styles.transactionIcon,
-                    { backgroundColor: getTransactionColor(transaction.type, transaction.status) + '20' }
-                  ]}
-                >
-                  <MaterialIcons
-                    name={getTransactionIcon(transaction.type, transaction.status)}
-                    size={24}
-                    color={getTransactionColor(transaction.type, transaction.status)}
-                  />
-                </View>
-
-                <View style={styles.transactionDetails}>
-                  <ThemedText style={styles.transactionDescription}>
-                    {transaction.description}
-                  </ThemedText>
-                  
-                  {transaction.status === 'pending' && transaction.time_until_release && (
-                    <View style={styles.pendingBadge}>
-                      <MaterialIcons name="schedule" size={12} color="#F59E0B" />
-                      <ThemedText style={styles.pendingBadgeText}>
-                        Releasing in {transaction.time_until_release}
+              {transactions.filter(t => t.type === 'hold' && t.status === 'pending').map((transaction) => (
+                <View key={transaction.id} style={styles.pendingTransactionItem}>
+                  {transaction.job_session?.hospital && (
+                    <View style={styles.pendingHospitalRow}>
+                      <MaterialIcons name="local-hospital" size={14} color="#FF9800" />
+                      <ThemedText style={styles.pendingHospitalName}>
+                        {transaction.job_session.hospital.name}
+                      </ThemedText>
+                      <ThemedText style={styles.pendingTransactionAmount}>
+                        ₹{transaction.amount.toFixed(2)}
                       </ThemedText>
                     </View>
                   )}
-                  
-                  <ThemedText style={styles.transactionDate}>
-                    {new Date(transaction.created_at).toLocaleDateString('en-IN', {
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
-                  </ThemedText>
                 </View>
+              ))}
+              <ThemedText style={styles.pendingNote}>
+                Released after hospital approval
+              </ThemedText>
+            </View>
+          </View>
 
-                <View style={styles.transactionAmount}>
-                  <ThemedText
-                    style={[
-                      styles.amountText,
-                      {
-                        color: transaction.status === 'pending' 
-                          ? '#F59E0B' 
-                          : transaction.type === 'credit' 
-                          ? '#10B981' 
-                          : '#EF4444'
-                      }
-                    ]}
-                  >
-                    {transaction.type === 'debit' ? '-' : '+'}₹{Number(transaction.amount).toFixed(2)}
-                  </ThemedText>
-                  {transaction.status === 'pending' && (
-                    <ThemedText style={styles.statusBadge}>Pending</ThemedText>
-                  )}
+          {/* Stats */}
+          <View style={styles.statsContainer}>
+            <View style={styles.statCard}>
+              <MaterialIcons name="trending-up" size={28} color="#4CAF50" />
+              <ThemedText style={styles.statValue}>
+                ₹{wallet?.total_earned.toFixed(2) || '0.00'}
+              </ThemedText>
+              <ThemedText style={styles.statLabel}>Total Earned</ThemedText>
+            </View>
+
+            <View style={styles.statCard}>
+              <MaterialIcons name="account-balance" size={28} color={PrimaryColors.dark} />
+              <ThemedText style={styles.statValue}>
+                ₹{wallet?.total_withdrawn.toFixed(2) || '0.00'}
+              </ThemedText>
+              <ThemedText style={styles.statLabel}>Total Withdrawn</ThemedText>
+            </View>
+          </View>
+
+          {/* Banking Details */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <ThemedText style={styles.sectionTitle}>Banking Details</ThemedText>
+              <TouchableOpacity onPress={() => setShowBankingForm(true)}>
+                <ThemedText style={styles.editLink}>
+                  {bankingDetails?.has_banking_details ? 'Edit' : 'Add'}
+                </ThemedText>
+              </TouchableOpacity>
+            </View>
+
+            {bankingDetails?.has_banking_details ? (
+              <View style={styles.bankingCard}>
+                <View style={styles.bankingRow}>
+                  <MaterialIcons name="person" size={18} color={PrimaryColors.main} />
+                  <View style={styles.bankingInfo}>
+                    <ThemedText style={styles.bankingLabel}>Account Holder</ThemedText>
+                    <ThemedText style={styles.bankingValue}>
+                      {bankingDetails.bank_account_holder_name}
+                    </ThemedText>
+                  </View>
                 </View>
+                <View style={styles.bankingRow}>
+                  <MaterialIcons name="credit-card" size={18} color={PrimaryColors.main} />
+                  <View style={styles.bankingInfo}>
+                    <ThemedText style={styles.bankingLabel}>Account Number</ThemedText>
+                    <ThemedText style={styles.bankingValue}>
+                      ****{bankingDetails.bank_account_number?.slice(-4)}
+                    </ThemedText>
+                  </View>
+                </View>
+                <View style={styles.bankingRow}>
+                  <MaterialIcons name="account-balance" size={18} color={PrimaryColors.main} />
+                  <View style={styles.bankingInfo}>
+                    <ThemedText style={styles.bankingLabel}>IFSC Code</ThemedText>
+                    <ThemedText style={styles.bankingValue}>
+                      {bankingDetails.bank_ifsc_code}
+                    </ThemedText>
+                  </View>
+                </View>
+                {bankingDetails.bank_name && (
+                  <View style={styles.bankingRow}>
+                    <MaterialIcons name="business" size={18} color={PrimaryColors.main} />
+                    <View style={styles.bankingInfo}>
+                      <ThemedText style={styles.bankingLabel}>Bank</ThemedText>
+                      <ThemedText style={styles.bankingValue}>
+                        {bankingDetails.bank_name}
+                      </ThemedText>
+                    </View>
+                  </View>
+                )}
               </View>
-            ))
-          )}
-        </View>
-      </ScrollView>
+            ) : (
+              <TouchableOpacity
+                style={styles.addBankingButton}
+                onPress={() => setShowBankingForm(true)}
+              >
+                <MaterialIcons name="add-circle-outline" size={32} color={PrimaryColors.main} />
+                <ThemedText style={styles.addBankingText}>
+                  Add Banking Details
+                </ThemedText>
+                <ThemedText style={styles.addBankingSubtext}>
+                  Required to receive payments
+                </ThemedText>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Transactions */}
+          <View style={styles.section}>
+            <ThemedText style={styles.sectionTitle}>Transaction History</ThemedText>
+
+            {transactions.length === 0 ? (
+              <View style={styles.emptyState}>
+                <MaterialIcons name="receipt-long" size={64} color="#e0e0e0" />
+                <ThemedText style={styles.emptyText}>No transactions yet</ThemedText>
+                <ThemedText style={styles.emptySubtext}>
+                  Complete jobs to start earning
+                </ThemedText>
+              </View>
+            ) : (
+              transactions.map((transaction) => (
+                <View key={transaction.id} style={styles.transactionCard}>
+                  <View style={styles.transactionLeft}>
+                    <View
+                      style={[
+                        styles.transactionIcon,
+                        { backgroundColor: getTransactionColor(transaction.type) + '15' },
+                      ]}
+                    >
+                      <MaterialIcons
+                        name={getTransactionIcon(transaction.type) as any}
+                        size={22}
+                        color={getTransactionColor(transaction.type)}
+                      />
+                    </View>
+                    <View style={styles.transactionInfo}>
+                      <ThemedText style={styles.transactionDescription}>
+                        {transaction.description}
+                      </ThemedText>
+                      {transaction.job_session?.hospital && (
+                        <View style={styles.hospitalBadge}>
+                          <MaterialIcons name="local-hospital" size={12} color="#2196F3" />
+                          <ThemedText style={styles.hospitalName}>
+                            {transaction.job_session.hospital.name}
+                          </ThemedText>
+                        </View>
+                      )}
+                      <ThemedText style={styles.transactionDate}>
+                        {new Date(transaction.created_at).toLocaleDateString('en-IN', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </ThemedText>
+                    </View>
+                  </View>
+                  <View style={styles.transactionRight}>
+                    <ThemedText
+                      style={[
+                        styles.transactionAmount,
+                        {
+                          color: getTransactionColor(transaction.type),
+                        },
+                      ]}
+                    >
+                      {transaction.type === 'release' || transaction.type === 'credit' ? '+' : transaction.type === 'hold' ? '' : '-'}
+                      ₹{transaction.amount.toFixed(2)}
+                    </ThemedText>
+                    <View style={[styles.statusBadge, { backgroundColor: transaction.status === 'completed' ? '#4CAF50' + '20' : '#FF9800' + '20' }]}>
+                      <ThemedText style={[styles.statusText, { color: transaction.status === 'completed' ? '#4CAF50' : '#FF9800' }]}>
+                        {transaction.status}
+                      </ThemedText>
+                    </View>
+                  </View>
+                </View>
+              ))
+            )}
+          </View>
+
+          <View style={{ height: 40 }} />
+        </ScrollView>
+
+        {/* Withdrawal Modal */}
+        {showWithdrawal && (
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <ThemedText style={styles.modalTitle}>Withdraw to Bank</ThemedText>
+
+              <View style={styles.modalInfo}>
+                <MaterialIcons name="info-outline" size={20} color={PrimaryColors.main} />
+                <ThemedText style={styles.modalInfoText}>
+                  Available Balance: ₹{wallet?.balance.toFixed(2)}
+                </ThemedText>
+              </View>
+
+              <TextInput
+                style={styles.modalInput}
+                value={withdrawalAmount}
+                onChangeText={setWithdrawalAmount}
+                placeholder="Enter amount (min ₹100)"
+                keyboardType="numeric"
+                placeholderTextColor="#999"
+              />
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={styles.modalCancelButton}
+                  onPress={() => {
+                    setShowWithdrawal(false);
+                    setWithdrawalAmount('');
+                  }}
+                >
+                  <ThemedText style={styles.modalCancelText}>Cancel</ThemedText>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.modalConfirmButton, withdrawing && styles.modalButtonDisabled]}
+                  onPress={handleWithdraw}
+                  disabled={withdrawing}
+                >
+                  {withdrawing ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <ThemedText style={styles.modalConfirmText}>Withdraw</ThemedText>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Banking Details Form */}
+        <BankingDetailsForm
+          visible={showBankingForm}
+          onClose={() => setShowBankingForm(false)}
+          onSuccess={handleBankingSuccess}
+          initialData={bankingDetails || undefined}
+        />
+      </ThemedView>
     </ScreenSafeArea>
   );
 }
@@ -233,220 +516,454 @@ export default function WalletScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   header: {
-    padding: 24,
-    paddingTop: 16,
-    paddingBottom: 32,
+    padding: 20,
+    paddingTop: 20,
   },
   headerTitle: {
     fontSize: 28,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    marginBottom: 4,
+    fontWeight: 'bold',
+    color: '#1a1a1a',
   },
   headerSubtitle: {
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontWeight: '500',
+    color: '#666',
+    marginTop: 4,
   },
-  cardsContainer: {
-    padding: 20,
-    marginTop: -20,
+  stagesCard: {
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 16,
+    borderRadius: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  stagesTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 16,
+  },
+  stagesContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  stage: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  stageIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  stageLabel: {
+    fontSize: 11,
+    color: '#666',
+    textAlign: 'center',
+  },
+  stageArrow: {
+    marginHorizontal: -4,
+  },
+  balanceContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 16,
   },
   balanceCard: {
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 24,
     borderRadius: 20,
-    padding: 20,
-    marginBottom: 16,
+    marginBottom: 12,
+    elevation: 4,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
   },
-  primaryCard: {
-    backgroundColor: PrimaryColors.main,
-  },
-  pendingCard: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 2,
-    borderColor: '#FEF3C7',
-  },
-  cardHeader: {
+  balanceHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
   },
-  cardLabel: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.9)',
-    marginLeft: 8,
-    fontWeight: '600',
+  balanceLabel: {
+    color: 'rgba(255,255,255,0.95)',
+    fontSize: 15,
+    marginLeft: 10,
+    fontWeight: '500',
   },
-  pendingCardLabel: {
-    fontSize: 14,
-    color: '#92400E',
-    marginLeft: 8,
-    fontWeight: '600',
+  balanceAmountContainer: {
+    paddingVertical: 8,
   },
   balanceAmount: {
-    fontSize: 36,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    marginBottom: 16,
-  },
-  pendingAmount: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: '#F59E0B',
-    marginBottom: 12,
+    color: '#fff',
+    fontSize: 40,
+    fontWeight: 'bold',
+    lineHeight: 48,
   },
   withdrawButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
+    marginTop: 16,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    padding: 14,
     borderRadius: 12,
-    alignSelf: 'flex-start',
   },
   withdrawButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 14,
-    marginRight: 6,
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
   },
-  pendingInfo: {
+  pendingCard: {
+    backgroundColor: '#fff',
+    padding: 20,
+    borderRadius: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF9800',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  pendingHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    padding: 12,
-    borderRadius: 12,
+    marginBottom: 8,
   },
-  pendingInfoText: {
-    fontSize: 12,
-    color: '#64748B',
-    marginLeft: 6,
-    flex: 1,
+  pendingLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginLeft: 8,
     fontWeight: '500',
   },
-  statsRow: {
+  pendingAmount: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#FF9800',
+    marginBottom: 6,
+  },
+  pendingNote: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 8,
+  },
+  pendingTransactionItem: {
+    marginTop: 8,
+  },
+  pendingHospitalRow: {
     flexDirection: 'row',
-    gap: 12,
+    alignItems: 'center',
+    backgroundColor: '#FFF3E0',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginTop: 4,
+  },
+  pendingHospitalName: {
+    fontSize: 12,
+    color: '#FF9800',
+    fontWeight: '600',
+    marginLeft: 6,
+    flex: 1,
+  },
+  pendingTransactionAmount: {
+    fontSize: 13,
+    color: '#FF9800',
+    fontWeight: 'bold',
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    marginBottom: 16,
   },
   statCard: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#fff',
+    padding: 20,
     borderRadius: 16,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
+    marginHorizontal: 6,
+    alignItems: 'center',
     elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginTop: 12,
+    marginBottom: 4,
+    color: '#333',
   },
   statLabel: {
     fontSize: 12,
-    color: NeutralColors.textSecondary,
-    marginBottom: 6,
-    fontWeight: '500',
+    color: '#666',
+    textAlign: 'center',
   },
-  statValue: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: PrimaryColors.darkText,
+  section: {
+    paddingHorizontal: 16,
+    marginBottom: 24,
   },
-  transactionsSection: {
-    padding: 20,
-    paddingTop: 8,
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: PrimaryColors.darkText,
-    marginBottom: 16,
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  editLink: {
+    color: PrimaryColors.main,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  bankingCard: {
+    backgroundColor: '#fff',
+    padding: 20,
+    borderRadius: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  bankingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  bankingInfo: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  bankingLabel: {
+    fontSize: 12,
+    color: '#999',
+    marginBottom: 4,
+  },
+  bankingValue: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+  },
+  addBankingButton: {
+    backgroundColor: '#fff',
+    padding: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: PrimaryColors.main,
+    borderStyle: 'dashed',
+  },
+  addBankingText: {
+    color: PrimaryColors.main,
+    fontSize: 17,
+    fontWeight: '600',
+    marginTop: 12,
+  },
+  addBankingSubtext: {
+    color: '#999',
+    fontSize: 13,
+    marginTop: 4,
   },
   emptyState: {
     alignItems: 'center',
-    paddingVertical: 48,
+    padding: 48,
+    backgroundColor: '#fff',
+    borderRadius: 16,
   },
   emptyText: {
+    color: '#666',
     fontSize: 16,
-    fontWeight: '600',
-    color: NeutralColors.textSecondary,
+    fontWeight: '500',
     marginTop: 16,
   },
   emptySubtext: {
-    fontSize: 14,
-    color: NeutralColors.textSecondary,
-    marginTop: 4,
+    color: '#999',
+    fontSize: 13,
+    marginTop: 6,
   },
-  transactionItem: {
+  transactionCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 14,
+    marginBottom: 10,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  transactionLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    flex: 1,
   },
   transactionIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     justifyContent: 'center',
-    marginRight: 12,
+    alignItems: 'center',
+    marginRight: 14,
   },
-  transactionDetails: {
+  transactionInfo: {
     flex: 1,
   },
   transactionDescription: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
-    color: PrimaryColors.darkText,
-    marginBottom: 4,
-  },
-  pendingBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-    marginBottom: 4,
-  },
-  pendingBadgeText: {
-    fontSize: 11,
-    color: '#92400E',
-    marginLeft: 4,
-    fontWeight: '600',
+    color: '#333',
+    marginBottom: 5,
   },
   transactionDate: {
     fontSize: 12,
-    color: NeutralColors.textSecondary,
+    color: '#999',
   },
-  transactionAmount: {
+  hospitalBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E3F2FD',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    marginTop: 4,
+    marginBottom: 4,
+    alignSelf: 'flex-start',
+  },
+  hospitalName: {
+    fontSize: 11,
+    color: '#2196F3',
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  transactionRight: {
     alignItems: 'flex-end',
   },
-  amountText: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 4,
+  transactionAmount: {
+    fontSize: 17,
+    fontWeight: 'bold',
+    marginBottom: 6,
   },
   statusBadge: {
-    fontSize: 10,
-    color: '#F59E0B',
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusText: {
+    fontSize: 11,
     fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 28,
+    width: '88%',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 20,
+  },
+  modalInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: PrimaryColors.main + '10',
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 20,
+  },
+  modalInfoText: {
+    fontSize: 15,
+    color: '#333',
+    marginLeft: 10,
+    fontWeight: '500',
+  },
+  modalInput: {
+    borderWidth: 1.5,
+    borderColor: '#ddd',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 17,
+    color: '#333',
+    marginBottom: 24,
+    backgroundColor: '#f9f9f9',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  modalCancelButton: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: '#f0f0f0',
+    marginRight: 10,
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    color: '#666',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalConfirmButton: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: PrimaryColors.main,
+    marginLeft: 10,
+    alignItems: 'center',
+  },
+  modalConfirmText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalButtonDisabled: {
+    backgroundColor: '#ccc',
   },
 });

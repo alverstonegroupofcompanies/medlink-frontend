@@ -115,6 +115,26 @@ export default function AllOpeningsScreen() {
     }
 
     try {
+      // Check if banking details exist before applying
+      const bankingResponse = await API.get('/doctor/banking-details');
+      const hasBankingDetails = bankingResponse.data.banking_details?.has_banking_details;
+
+      if (!hasBankingDetails) {
+        const { Alert } = require('react-native');
+        Alert.alert(
+          'Banking Details Required',
+          'Please add your banking details before applying for jobs. This is required to receive payments.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Add Now', 
+              onPress: () => router.push('/(tabs)/wallet')
+            },
+          ]
+        );
+        return;
+      }
+
       await API.post(`/jobs/${requirementId}/apply`, {
         job_requirement_id: requirementId,
       });

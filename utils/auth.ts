@@ -80,7 +80,7 @@ export const clearDoctorAuth = async (): Promise<void> => {
       STORAGE_KEYS.DOCTOR_INFO,
     ]);
     console.log('✅ Doctor auth data cleared from storage');
-    
+
     // Verify it's cleared
     const token = await AsyncStorage.getItem(STORAGE_KEYS.DOCTOR_TOKEN);
     const info = await AsyncStorage.getItem(STORAGE_KEYS.DOCTOR_INFO);
@@ -107,7 +107,7 @@ export const clearDoctorAuth = async (): Promise<void> => {
 export const logoutDoctor = async (showAlert: boolean = true): Promise<void> => {
   try {
     console.log('🚪 Starting logout process...');
-    
+
     // Try to call backend logout API to invalidate token
     try {
       const token = await getDoctorToken();
@@ -131,11 +131,11 @@ export const logoutDoctor = async (showAlert: boolean = true): Promise<void> => 
 
     // Clear all local storage - do this multiple times to ensure it's cleared
     await clearDoctorAuth();
-    
+
     // Double-check and clear again
     const remainingToken = await AsyncStorage.getItem(STORAGE_KEYS.DOCTOR_TOKEN);
     const remainingInfo = await AsyncStorage.getItem(STORAGE_KEYS.DOCTOR_INFO);
-    
+
     if (remainingToken || remainingInfo) {
       console.warn('⚠️ Data still exists, performing additional cleanup...');
       await AsyncStorage.multiRemove([
@@ -149,7 +149,7 @@ export const logoutDoctor = async (showAlert: boolean = true): Promise<void> => 
     // Verify everything is cleared
     const finalToken = await AsyncStorage.getItem(STORAGE_KEYS.DOCTOR_TOKEN);
     const finalInfo = await AsyncStorage.getItem(STORAGE_KEYS.DOCTOR_INFO);
-    
+
     if (finalToken || finalInfo) {
       console.error('❌ ERROR: Data still exists after cleanup!');
       // Last resort - try removing individually
@@ -186,7 +186,7 @@ export const logoutDoctor = async (showAlert: boolean = true): Promise<void> => 
 
     // Try navigation immediately
     navigateToLogin();
-    
+
     // Also try after a short delay to ensure it works
     setTimeout(() => {
       console.log('🔄 Retry navigation to login after delay...');
@@ -212,7 +212,7 @@ export const logoutDoctor = async (showAlert: boolean = true): Promise<void> => 
       } catch (navError) {
         console.error('❌ Navigation error in fallback:', navError);
       }
-      
+
       // Also retry after delay
       setTimeout(() => {
         try {
@@ -232,7 +232,7 @@ export const logoutDoctor = async (showAlert: boolean = true): Promise<void> => 
       } catch (forceNavError) {
         console.error('❌ Force navigation failed:', forceNavError);
       }
-      
+
       // Retry after delay
       setTimeout(() => {
         try {
@@ -263,43 +263,57 @@ export const clearAllStorage = async (): Promise<void> => {
  * Returns profile_photo if available, otherwise returns a placeholder avatar
  */
 export const getProfilePhotoUrl = (doctor: any): string => {
+  console.log('👤 [getProfilePhotoUrl] Input doctor:', doctor?.id, doctor?.name);
+
   if (!doctor) {
+    console.log('👤 [getProfilePhotoUrl] No doctor data, returning default avatar');
     return 'https://i.pravatar.cc/150?img=1';
   }
 
   // Check if doctor has a profile_photo property
   if (doctor.profile_photo && doctor.profile_photo.trim()) {
     const profilePhoto = doctor.profile_photo.trim();
-    
+    console.log('👤 [getProfilePhotoUrl] Raw profile_photo:', profilePhoto);
+
     // If it's already a full URL (starts with http/https), return as is
     if (profilePhoto.startsWith('http://') || profilePhoto.startsWith('https://')) {
+      console.log('👤 [getProfilePhotoUrl] ✅ Already full URL:', profilePhoto);
       return profilePhoto;
     }
-    
+
     // Import BASE_BACKEND_URL from config
     const { BASE_BACKEND_URL } = require('@/config/api');
-    
+    console.log('👤 [getProfilePhotoUrl] Backend URL:', BASE_BACKEND_URL);
+
+    let finalUrl = '';
+
     // Backend uses Storage::url() which returns paths like: /storage/uploads/doctors/11/profile/...
     // If it starts with /storage, prepend backend URL
     if (profilePhoto.startsWith('/storage/')) {
-      return `${BASE_BACKEND_URL}${profilePhoto}`;
+      finalUrl = `${BASE_BACKEND_URL}${profilePhoto}`;
+      console.log('👤 [getProfilePhotoUrl] Path starts with /storage/');
     }
-    
     // If it's a relative path (uploads/doctors/...), add /storage/ prefix
-    if (profilePhoto.startsWith('uploads/')) {
-      return `${BASE_BACKEND_URL}/storage/${profilePhoto}`;
+    else if (profilePhoto.startsWith('uploads/')) {
+      finalUrl = `${BASE_BACKEND_URL}/storage/${profilePhoto}`;
+      console.log('👤 [getProfilePhotoUrl] Path starts with uploads/');
     }
-    
     // If it starts with storage/ (without leading slash), add leading slash
-    if (profilePhoto.startsWith('storage/')) {
-      return `${BASE_BACKEND_URL}/${profilePhoto}`;
+    else if (profilePhoto.startsWith('storage/')) {
+      finalUrl = `${BASE_BACKEND_URL}/${profilePhoto}`;
+      console.log('👤 [getProfilePhotoUrl] Path starts with storage/');
     }
-    
     // Otherwise, assume it's a relative path and prepend /storage/
-    return `${BASE_BACKEND_URL}/storage/${profilePhoto}`;
+    else {
+      finalUrl = `${BASE_BACKEND_URL}/storage/${profilePhoto}`;
+      console.log('👤 [getProfilePhotoUrl] Using default /storage/ prefix');
+    }
+
+    console.log('👤 [getProfilePhotoUrl] ✅ Final URL:', finalUrl);
+    return finalUrl;
   }
 
   // Return default avatar if no profile photo
+  console.log('👤 [getProfilePhotoUrl] No profile_photo field, returning default avatar');
   return 'https://i.pravatar.cc/150?img=1';
 };
-
