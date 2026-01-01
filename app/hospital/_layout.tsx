@@ -2,7 +2,7 @@ import { Tabs, router, useFocusEffect } from 'expo-router';
 import * as React from 'react';
 import { useEffect } from 'react';
 import { Platform, View } from 'react-native';
-import { Home, Calendar, Bell, MapPin, User } from 'lucide-react-native';
+import { Home, Calendar, Bell, MapPin, User, CreditCard } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -106,6 +106,26 @@ export default function HospitalTabLayout() {
         }}
       />
       <Tabs.Screen
+        name="payments"
+        options={{
+          title: 'Payments',
+          tabBarIcon: ({ color, focused }) => (
+            <View
+              style={{
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                backgroundColor: focused ? 'rgba(123, 97, 255, 0.1)' : 'transparent',
+              }}
+            >
+              <CreditCard size={24} color={color} fill={focused ? color : 'transparent'} />
+            </View>
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="notifications"
         options={{
           title: 'Notifications',
@@ -150,12 +170,14 @@ export default function HospitalTabLayout() {
         name="login"
         options={{
           href: null,
+          tabBarStyle: { display: 'none' },
         }}
       />
       <Tabs.Screen
         name="register"
         options={{
           href: null,
+          tabBarStyle: { display: 'none' },
         }}
       />
       <Tabs.Screen

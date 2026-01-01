@@ -198,7 +198,20 @@ const SessionItem = React.memo(({ session }: { session: any }) => {
             {session.doctor?.profile_photo ? (
                 <Avatar.Image 
                     size={40} 
-                    source={{ uri: getFullImageUrl(session.doctor.profile_photo) }} 
+                    source={{ 
+                      uri: getFullImageUrl(session.doctor.profile_photo),
+                      headers: { 'Cache-Control': 'no-cache' }
+                    }}
+                    onError={(error) => {
+                      console.log('❌ Dashboard session avatar failed:', {
+                        profile_photo: session.doctor.profile_photo,
+                        full_url: getFullImageUrl(session.doctor.profile_photo),
+                        error
+                      });
+                    }}
+                    onLoad={() => {
+                      console.log('✅ Dashboard session avatar loaded:', getFullImageUrl(session.doctor.profile_photo));
+                    }}
                 />
             ) : (
                 <Avatar.Icon size={40} icon="account" style={{backgroundColor: '#F1F5F9'}} color="#64748B" />

@@ -103,24 +103,28 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={styles.mainContainer}>
+    <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1e40af" />
       <LinearGradient
         colors={['#1e40af', '#3b82f6', '#60a5fa']}
-        locations={[0, 0.5, 1]}
-        style={StyleSheet.absoluteFill}
-      />
-      
-      <SafeAreaView style={styles.safeArea}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.keyboardView}
-        >
-          <ScrollView
-            contentContainerStyle={styles.scrollContent}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.gradient}
+      >
+        {/* Animated background circles */}
+        <View style={styles.bgCircle1} />
+        <View style={styles.bgCircle2} />
+        
+        <SafeAreaView style={styles.safeArea}>
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.keyboardView}
           >
+            <ScrollView 
+              contentContainerStyle={styles.scrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
             <View style={[styles.card, isTablet && styles.cardTablet]}>
               
               {/* Header Icon */}
@@ -200,51 +204,66 @@ export default function LoginScreen() {
                 onPress={handleLogin}
                 disabled={loading}
               >
-                <ThemedText style={styles.loginBtnText}>
-                  {loading ? 'Verifying...' : 'Log In Securely'}
-                </ThemedText>
+                <LinearGradient
+                  colors={['#2563EB', '#3B82F6']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.loginBtnGradient}
+                >
+                  <ThemedText style={styles.loginBtnText}>
+                    {loading ? 'Verifying...' : 'Log In Securely'}
+                  </ThemedText>
+                </LinearGradient>
               </TouchableOpacity>
 
-              {/* Footer Badges */}
-              <View style={styles.footerBadges}>
-                <View style={styles.badge}>
-                  <ShieldCheck size={16} color="#10B981" />
-                  <ThemedText style={styles.badgeText}>HIPAA Compliant</ThemedText>
-                </View>
-                <View style={styles.divider} />
-                <View style={styles.badge}>
-                  <Lock size={16} color="#10B981" />
-                  <ThemedText style={styles.badgeText}>Escrow Secured</ThemedText>
-                </View>
+              {/* Sign Up Prompt */}
+              <View style={styles.signupPrompt}>
+                <ThemedText style={styles.signupPromptText}>New here? </ThemedText>
+                <TouchableOpacity onPress={() => router.push('/signup/basic-details')}>
+                  <ThemedText style={styles.signupLink}>Create an account</ThemedText>
+                </TouchableOpacity>
               </View>
-               
-               <View style={styles.signupPrompt}>
-                  <ThemedText style={styles.signupPromptText}>New here?</ThemedText>
-                  <TouchableOpacity onPress={() => router.push('/signup/basic-details')}>
-                    <ThemedText style={styles.signupLink}>Create an account</ThemedText>
-                  </TouchableOpacity>
-               </View>
 
-               <View style={styles.hospitalLinkContainer}>
-                   <Link href="/hospital/login" asChild>
-                       <TouchableOpacity>
-                         <ThemedText style={styles.hospitalLink}>Hospital Login</ThemedText>
-                       </TouchableOpacity>
-                   </Link>
-               </View>
-
+              {/* Hospital Login Button */}
+              <TouchableOpacity 
+                style={styles.hospitalLoginBtn}
+                onPress={() => router.push('/hospital/login')}
+              >
+                <ThemedText style={styles.hospitalLoginText}>Hospital Login</ThemedText>
+              </TouchableOpacity>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+      </LinearGradient>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  mainContainer: {
+  container: {
     flex: 1,
-    backgroundColor: '#3b82f6',
+  },
+  gradient: {
+    flex: 1,
+  },
+  bgCircle1: {
+    position: 'absolute',
+    width: 400,
+    height: 400,
+    borderRadius: 200,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    top: -200,
+    right: -100,
+  },
+  bgCircle2: {
+    position: 'absolute',
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    bottom: -150,
+    left: -100,
   },
   safeArea: {
     flex: 1,
@@ -258,19 +277,19 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   card: {
-    backgroundColor: 'rgba(255, 255, 255, 1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
     borderRadius: 32,
-    padding: 32,
+    padding: 28,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.15,
-    shadowRadius: 24,
-    elevation: 12,
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.25,
+    shadowRadius: 40,
+    elevation: 20,
     width: '100%',
     maxWidth: 420,
     alignSelf: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.5)',
+    borderColor: 'rgba(255,255,255,0.8)',
   },
   cardTablet: {
     maxWidth: 500,
@@ -280,7 +299,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 28,
+    marginBottom: 20,
     gap: 12,
   },
   iconCircle: {
@@ -302,7 +321,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
     borderRadius: 16,
     padding: 6,
-    marginBottom: 36,
+    marginBottom: 24,
   },
   toggleActive: {
     flex: 1,
@@ -332,7 +351,7 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   welcomeContainer: {
-    marginBottom: 32,
+    marginBottom: 20,
     alignItems: 'center',
   },
   welcomeHeading: {
@@ -362,26 +381,27 @@ const styles = StyleSheet.create({
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
     borderRadius: 16,
     paddingHorizontal: 16,
-    height: 56,
-    backgroundColor: '#F8FAFC',
-    marginBottom: 20,
+    paddingVertical: 4,
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
     shadowColor: '#000',
-    shadowOpacity: 0.02,
-    shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   inputIcon: {
     marginRight: 12,
   },
   input: {
     flex: 1,
-    color: '#0F172A',
-    fontSize: 16,
-    height: '100%',
+    fontSize: 15,
+    color: '#1E293B',
+    paddingVertical: 14,
     fontWeight: '500',
   },
   eyeIcon: {
@@ -389,7 +409,7 @@ const styles = StyleSheet.create({
   },
   forgotBtn: {
     alignSelf: 'flex-end',
-    marginTop: -8,
+    marginBottom: 16,
   },
   forgotText: {
     fontSize: 14,
@@ -397,16 +417,19 @@ const styles = StyleSheet.create({
     color: '#3B82F6',
   },
   loginBtn: {
-    backgroundColor: '#2563EB',
-    paddingVertical: 18,
     borderRadius: 16,
     alignItems: 'center',
-    marginBottom: 32,
-    shadowColor: '#2563EB',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
+    marginTop: 4,
+    marginBottom: 20,
+    overflow: 'hidden',
+  },
+  loginBtnGradient: {
+    paddingVertical: 18,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%', // Ensure gradient fills the button
+    borderRadius: 16, // Match parent borderRadius
   },
   loginBtnText: {
     fontSize: 17,
@@ -443,7 +466,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 20,
+    marginTop: 16,
+    marginBottom: 10,
   },
   signupPromptText: {
     fontSize: 15,
@@ -454,15 +478,20 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#2563EB',
   },
-  hospitalLinkContainer: {
-    alignItems: 'center',
+  hospitalLoginBtn: {
     marginTop: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    backgroundColor: 'rgba(100, 116, 139, 0.08)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(100, 116, 139, 0.15)',
   },
-  hospitalLink: {
-     fontSize: 14,
-     fontWeight: '600',
-     color: '#64748B',
-     textDecorationLine: 'underline',
-  }
+  hospitalLoginText: {
+    fontSize: 14,
+    color: '#64748B',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
 
 });

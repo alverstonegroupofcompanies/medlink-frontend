@@ -106,25 +106,29 @@ export default function HospitalLoginScreen() {
       <StatusBar barStyle="light-content" backgroundColor="#1e40af" />
       <LinearGradient
         colors={['#1e40af', '#3b82f6', '#60a5fa']}
-        locations={[0, 0.5, 1]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
-      />
-      
-      <SafeAreaView style={safeAreaStyle} edges={['top', 'right', 'left']}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.keyboardView}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-        >
-          <ScrollView
-            contentContainerStyle={scrollContentStyle}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
+      >
+        {/* Animated background circles */}
+        <View style={styles.bgCircle1} />
+        <View style={styles.bgCircle2} />
+        
+        <SafeAreaView style={safeAreaStyle} edges={['top', 'right', 'left']}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.keyboardView}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
           >
-            <View style={styles.header}>
-              <ThemedText style={styles.helloText}>Hello Hospital!</ThemedText>
-              <ThemedText style={styles.welcomeText}>Welcome to Alverstone MedLink</ThemedText>
-            </View>
+            <ScrollView
+              contentContainerStyle={scrollContentStyle}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.header}>
+                <ThemedText style={styles.helloText}>Hello Hospital!</ThemedText>
+                <ThemedText style={styles.welcomeText}>Welcome to Alverstone MedLink</ThemedText>
+              </View>
 
           <View style={formStyle}>
             <ThemedText type="title" style={styles.loginHeading}>
@@ -163,11 +167,18 @@ export default function HospitalLoginScreen() {
               activeOpacity={0.8}
               disabled={loading}
             >
-              {loading ? (
-                <ThemedText style={{ color: '#FFFFFF', fontWeight: '600' }}>Logging in...</ThemedText>
-              ) : (
-                <ThemedText style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 16 }}>Login</ThemedText>
-              )}
+              <LinearGradient
+                colors={['#2563EB', '#3B82F6']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.loginBtnGradient}
+              >
+                {loading ? (
+                  <ThemedText style={{ color: '#FFFFFF', fontWeight: '600' }}>Logging in...</ThemedText>
+                ) : (
+                  <ThemedText style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 17 }}>Login</ThemedText>
+                )}
+              </LinearGradient>
             </TouchableOpacity>
 
             <View style={styles.signupContainer}>
@@ -184,22 +195,17 @@ export default function HospitalLoginScreen() {
               </Link>
             </View>
 
-            <View style={styles.backContainer}>
-              <Link href="/login" asChild>
-                <ThemedText
-                  type="link"
-                  style={styles.backLink}
-                  lightColor={PrimaryColors.main}
-                  darkColor={PrimaryColors.light}
-                >
-                  ← Back to Doctor Login
-                </ThemedText>
-              </Link>
-            </View>
+            <TouchableOpacity 
+              style={styles.backButton}
+              onPress={() => router.push('/login')}
+            >
+              <ThemedText style={styles.backButtonText}>← Back to Doctor Login</ThemedText>
+            </TouchableOpacity>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
+      </LinearGradient>
     </View>
   );
 }
@@ -207,7 +213,24 @@ export default function HospitalLoginScreen() {
 const styles = StyleSheet.create({
   mainContainer: {
     flex: 1,
-    backgroundColor: '#3b82f6',
+  },
+  bgCircle1: {
+    position: 'absolute',
+    width: 400,
+    height: 400,
+    borderRadius: 200,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    top: -200,
+    right: -100,
+  },
+  bgCircle2: {
+    position: 'absolute',
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    bottom: -150,
+    left: -100,
   },
   safeArea: {
     flex: 1,
@@ -220,8 +243,8 @@ const styles = StyleSheet.create({
   },
   scrollContentTablet: { paddingHorizontal: 48, paddingBottom: 32 },
   header: {
-    paddingTop: Platform.OS === 'ios' ? 20 : 20,
-    paddingBottom: 40,
+    paddingTop: Platform.OS === 'ios' ? 12 : 12,
+    paddingBottom: 28,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -241,19 +264,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   form: {
-    backgroundColor: 'rgba(255, 255, 255, 1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
     borderRadius: 32,
-    padding: 32,
+    padding: 28,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.15,
-    shadowRadius: 24,
-    elevation: 12,
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.25,
+    shadowRadius: 40,
+    elevation: 20,
     width: '100%',
     maxWidth: 420,
     alignSelf: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.5)',
+    borderColor: 'rgba(255,255,255,0.8)',
   },
   formTablet: {
     alignSelf: 'center',
@@ -263,11 +286,11 @@ const styles = StyleSheet.create({
   loginHeading: { 
     fontSize: 24, 
     fontWeight: '800', 
-    marginBottom: 24, 
+    marginBottom: 20, 
     textAlign: 'center',
     color: '#1E3A8A'
   },
-  inputGroup: { marginBottom: 20 },
+  inputGroup: { marginBottom: 16 },
   input: { 
     width: '100%', 
     borderRadius: 16, 
@@ -279,28 +302,43 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   loginButton: { 
-    marginTop: 8, 
-    backgroundColor: '#2563EB', 
+    marginTop: 4, 
     borderRadius: 16, 
-    height: 56, 
     justifyContent: 'center', 
     alignItems: 'center', 
-    marginBottom: 24,
-    shadowColor: '#2563EB',
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 8,
+    marginBottom: 20,
+    overflow: 'hidden',
+  },
+  loginBtnGradient: {
+    paddingVertical: 18,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    borderRadius: 16,
   },
   signupContainer: { 
     flexDirection: 'row', 
     justifyContent: 'center', 
     alignItems: 'center', 
-    marginTop: 8, 
+    marginTop: 16, 
   },
   signupText: { fontSize: 15, color: '#64748B' },
   signupLink: { fontSize: 15, fontWeight: '700', color: '#2563EB' },
-  backContainer: { marginTop: 24, alignItems: 'center' },
-  backLink: { fontSize: 14, fontWeight: '600', color: '#2563EB' },
+  backButton: {
+    marginTop: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    backgroundColor: 'rgba(100, 116, 139, 0.08)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(100, 116, 139, 0.15)',
+  },
+  backButtonText: {
+    fontSize: 14,
+    color: '#64748B',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
 });
 

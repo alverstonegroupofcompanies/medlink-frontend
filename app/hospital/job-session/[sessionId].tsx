@@ -162,8 +162,21 @@ export default function HospitalJobSessionScreen() {
               {doctor?.profile_photo ? (
                 <Avatar.Image
                   size={60}
-                  source={{ uri: getFullImageUrl(doctor.profile_photo) }}
+                  source={{ 
+                    uri: getFullImageUrl(doctor.profile_photo),
+                    headers: { 'Cache-Control': 'no-cache' }
+                  }}
                   style={{ marginRight: 16 }}
+                  onError={(error) => {
+                    console.log('❌ Doctor avatar failed to load:', {
+                      profile_photo: doctor.profile_photo,
+                      full_url: getFullImageUrl(doctor.profile_photo),
+                      error
+                    });
+                  }}
+                  onLoad={() => {
+                    console.log('✅ Doctor avatar loaded successfully:', getFullImageUrl(doctor.profile_photo));
+                  }}
                 />
               ) : (
                 <Avatar.Text 

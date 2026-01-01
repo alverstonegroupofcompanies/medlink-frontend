@@ -51,17 +51,28 @@ export default function RootLayout() {
     
     async function prepare() {
       try {
+        const startTime = Date.now();
+        const minSplashTime = 5000; // Show splash for at least 5 seconds
+        
         // Set a timeout to proceed even if fonts don't load
         timeoutId = setTimeout(() => {
           console.warn('Font loading timeout - proceeding with system fonts');
           setAppIsReady(true);
           SplashScreen.hideAsync();
-        }, 3000); // 3 second timeout
+        }, 5000); // 5 second timeout
 
         // Wait for fonts to load or error
         if (fontsLoaded || fontError) {
           clearTimeout(timeoutId);
           setupNotificationListeners();
+          
+          // Calculate remaining time to show splash
+          const elapsedTime = Date.now() - startTime;
+          const remainingTime = Math.max(0, minSplashTime - elapsedTime);
+          
+          // Wait for minimum splash time
+          await new Promise(resolve => setTimeout(resolve, remainingTime));
+          
           setAppIsReady(true);
           await SplashScreen.hideAsync();
         }
