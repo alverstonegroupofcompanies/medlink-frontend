@@ -27,7 +27,6 @@ import { DatePicker } from '@/components/date-picker';
 import { TimePicker } from '@/components/time-picker';
 import { formatISTDateTime, formatISTDateOnly } from '@/utils/timezone';
 import { getFullImageUrl } from '@/utils/url-helper';
-import { RazorpayPaymentModal } from '@/components/RazorpayPaymentModal';
 
 // Import MapView - Metro will automatically resolve .web or .native based on platform
 import { LocationPickerMap } from '@/components/LocationPickerMap';
@@ -316,16 +315,10 @@ export default function HospitalDashboard() {
     description: '',
     location_name: '',
     address: '',
-    salary_range_min: '',
-    salary_range_max: '',
+    payment_amount: '',
   });
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [isCustomLocation, setIsCustomLocation] = useState(false);
-  
-  // Payment modal state
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [paymentAmount, setPaymentAmount] = useState(0);
-  const [preparedJobData, setPreparedJobData] = useState<any>(null);
 
   // Auto-calculate duration when start/end time changes
   useEffect(() => {
@@ -594,17 +587,7 @@ export default function HospitalDashboard() {
     
     if (!location) {
       Alert.alert('Error', 'Please select a location on the map');
-      return;
-    }
-
-    // Validate end time is after start time
-    const [startHour, startMin] = formData.start_time.split(':').map(Number);
-    const [endHour, endMin] = formData.end_time.split(':').map(Number);
-    const startMinutes = startHour * 60 + startMin;
-    const endMinutes = endHour * 60 + endMin;
-    
-    if (endMinutes <= startMinutes) {
-      Alert.alert('Error', 'End time must be after start time');
+      Alert.alert('Error', 'Please select start and end time');
       return;
     }
 
@@ -619,102 +602,86 @@ export default function HospitalDashboard() {
       return;
     }
 
-    // Prepare job data for payment
-    const safeParseFloat = (val: string) => {
-      const parsed = parseFloat(val);
-      return isNaN(parsed) ? 0 : parsed;
-    };
+    setLoading(true);
+    try {
+      const safeParseFloat = (val: string) => {
+        const parsed = parseFloat(val);
+        return isNaN(parsed) ? 0 : parsed;
+      };
 
-    const safeParseInt = (val: string) => {
-      const parsed = parseInt(val, 10);
-      return isNaN(parsed) ? 1 : parsed;
-    };
+      const safeParseInt = (val: string) => {
+        const parsed = parseInt(val, 10);
+        return isNaN(parsed) ? 1 : parsed;
+      };
 
-    const jobData: any = {
-      department_id: formData.department_id,
-      work_type: formData.work_type,
-      required_sessions: safeParseInt(formData.required_sessions),
-      work_required_date: formData.work_required_date,
-      start_time: formData.start_time,
-      end_time: formData.end_time,
-      duration_hours: safeParseFloat(formData.duration_hours) > 0 ? safeParseFloat(formData.duration_hours) : 1,
-      description: formData.description?.trim() || null,
-      location_name: formData.location_name?.trim() || null,
-      address: formData.address?.trim() || null,
-    };
+      const data: any = {
+        department_id: formData.department_id,
+        work_type: formData.work_type,
+        required_sessions: safeParseInt(formData.required_sessions),
+        work_required_date: formData.work_required_date,
+        start_time: formData.start_time,
+        end_time: formData.end_time,
+        duration_hours: safeParseFloat(formData.duration_hours) > 0 ? safeParseFloat(formData.duration_hours) : 1,
+        description: formData.description?.trim() || null,
+        location_name: formData.location_name?.trim() || null,
+        address: formData.address?.trim() || null,
+      };
 
-    if (location) {
-      jobData.latitude = location.latitude;
-      jobData.longitude = location.longitude;
-    }
-
-    if (formData.salary_range_min && formData.salary_range_min.trim()) {
-      const minSalary = safeParseFloat(formData.salary_range_min);
-      if (minSalary >= 0) {
-        jobData.salary_range_min = minSalary;
+      if (location) {
+        data.latitude = location.latitude;
+        data.longitude = location.longitude;
       }
-    }
-    
-    if (formData.salary_range_max && formData.salary_range_max.trim()) {
-      const maxSalary = parseFloat(formData.salary_range_max);
-      if (!isNaN(maxSalary) && maxSalary >= 0) {
-        jobData.salary_range_max = maxSalary;
+
+
+      if (formData.payment_amount && formData.payment_amount.trim()) {
+        const paymentAmount = safeParseFloat(formData.payment_amount);
+        if (paymentAmount >= 0) {
+          data.payment_amount = paymentAmount;
+        }
       }
-    }
 
-    // Calculate payment amount (you can customize this logic)
-    // For now, using a base amount of 500 INR per job posting
-    const baseAmount = 500;
-    const calculatedAmount = baseAmount * safeParseInt(formData.required_sessions);
 
-    // Store job data and show payment modal
-    setPreparedJobData(jobData);
-    setPaymentAmount(calculatedAmount);
-    setShowPaymentModal(true);
-  };
-
-  const handlePaymentSuccess = (jobRequirement: any) => {
-    setShowPaymentModal(false);
-    Alert.alert('Success', 'Payment completed and job posted successfully!');
-    
-    // Reset form
-    setShowForm(false);
-    setFormData({
-      department: '',
-      department_id: null,
-      work_type: 'full-time',
-      required_sessions: '1',
-      work_required_date: '',
-      start_time: '',
-      end_time: '',
-      duration_hours: '1',
-      description: '',
-      location_name: '',
-      address: '',
-      salary_range_min: '',
-      salary_range_max: '',
-    });
-    
-    // Reset to hospital location if available
-    if (hospital?.latitude && hospital?.longitude) {
-      setLocation({
-        latitude: parseFloat(hospital.latitude),
-        longitude: parseFloat(hospital.longitude)
+      // Post job directly without payment
+      await API.post('/hospital/requirements', data);
+      
+      Alert.alert('Success', 'Job requirement posted successfully!');
+      
+      // Reset form
+      setShowForm(false);
+      setFormData({
+        department: '',
+        department_id: null,
+        work_type: 'full-time',
+        required_sessions: '1',
+        work_required_date: '',
+        start_time: '',
+        end_time: '',
+        duration_hours: '1',
+        description: '',
+        location_name: '',
+        address: '',
+        payment_amount: '',
       });
-    } else {
-      setLocation(null);
+      
+      // Reset to hospital location if available
+      if (hospital?.latitude && hospital?.longitude) {
+        setLocation({
+          latitude: parseFloat(hospital.latitude),
+          longitude: parseFloat(hospital.longitude)
+        });
+      } else {
+        setLocation(null);
+      }
+      setIsCustomLocation(false);
+      
+      // Reload requirements
+      loadRequirements();
+    } catch (error: any) {
+      console.error('Submit error:', error);
+      Alert.alert('Error', error.response?.data?.message || 'Failed to post job requirement');
+    } finally {
+      setLoading(false);
     }
-    setIsCustomLocation(false);
-    setPreparedJobData(null);
-    setPaymentAmount(0);
-    
-    // Reload requirements
-    loadRequirements();
-  };
-
-  const handlePaymentFailure = (error: string) => {
-    setShowPaymentModal(false);
-    Alert.alert('Payment Failed', error || 'Payment could not be completed. Please try again.');
   };
 
   const handleDelete = async (id: number) => {
@@ -848,18 +815,6 @@ export default function HospitalDashboard() {
           </View>
         </View>
       </Modal>
-
-      {/* Razorpay Payment Modal */}
-      {preparedJobData && (
-        <RazorpayPaymentModal
-          visible={showPaymentModal}
-          onClose={() => setShowPaymentModal(false)}
-          amount={paymentAmount}
-          jobData={preparedJobData}
-          onSuccess={handlePaymentSuccess}
-          onFailure={handlePaymentFailure}
-        />
-      )}
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -1270,23 +1225,17 @@ export default function HospitalDashboard() {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Salary Range (Optional)</Text>
-              <View style={styles.salaryRow}>
-                <TextInput
-                  style={[styles.input, styles.salaryInput]}
-                  placeholder="Min"
-                  value={formData.salary_range_min}
-                  onChangeText={(text) => setFormData({ ...formData, salary_range_min: text })}
-                  keyboardType="numeric"
-                />
-                <TextInput
-                  style={[styles.input, styles.salaryInput]}
-                  placeholder="Max"
-                  value={formData.salary_range_max}
-                  onChangeText={(text) => setFormData({ ...formData, salary_range_max: text })}
-                  keyboardType="numeric"
-                />
-              </View>
+              <Text style={styles.label}>Payment Amount (₹) *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter payment amount"
+                value={formData.payment_amount}
+                onChangeText={(text) => setFormData({ ...formData, payment_amount: text })}
+                keyboardType="numeric"
+              />
+              <Text style={[styles.helpText, { color: NeutralColors.textSecondary }]}>
+                Amount to be paid to the doctor for this job
+              </Text>
             </View>
 
             <Button
