@@ -1,22 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
   Image,
   ActivityIndicator,
   Alert,
-  TextInput
+  Platform,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ArrowLeft, ArrowRight, Star, Clock, Calendar, CheckCircle, User, Check } from 'lucide-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { ArrowLeft, ArrowRight, Star, Clock, CheckCircle, User, Check, Building2 } from 'lucide-react-native';
+import { Card, Text, Button, Divider, Surface, Avatar, Chip } from 'react-native-paper';
 import API from '../../api';
-import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors } from '@/constants/hospital-theme';
+import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors, HospitalStatusColors as StatusColors } from '@/constants/hospital-theme';
 import { ScreenSafeArea } from '@/components/screen-safe-area';
+import { formatISTDateTime, formatISTDateWithWeekday } from '@/utils/timezone';
+import { getFullImageUrl } from '@/utils/url-helper';
 
 export default function ReviewSessionScreen() {
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
@@ -119,6 +120,9 @@ export default function ReviewSessionScreen() {
   const hours = Math.floor(durationMs / (1000 * 60 * 60));
   const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
 
+  const shouldShowReleasePayment = session.hospital_confirmed && session.payment_status !== 'paid' && session.payment_status !== 'released';
+  const isPaid = session.payment_status === 'paid' || session.payment_status === 'released';
+
   return (
     <ScreenSafeArea style={styles.container}>
       <StatusBar style="dark" backgroundColor="#fff" />
@@ -148,120 +152,155 @@ export default function ReviewSessionScreen() {
       )}
       
       {/* Header */}
-      <View style={styles.header}>
-         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <ArrowLeft size={24} color="#0F172A" />
-         </TouchableOpacity>
-         <Text style={styles.headerTitle}>Review & Pay</Text>
-         <View style={{width: 24}} />
-      </View>
+      <Surface style={styles.headerSurface} elevation={0}>
+        <View style={styles.headerContent}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <ArrowLeft size={24} color={NeutralColors.textPrimary} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Review & Pay</Text>
+          <View style={{ width: 40 }} />
+        </View>
+      </Surface>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         
         {/* Doctor Card */}
-        <View style={styles.card}>
-            <View style={styles.doctorRow}>
+        <Card style={styles.card} mode="outlined">
+          <Card.Content>
+             <View style={styles.doctorRow}>
                 {session.doctor?.profile_photo ? (
-                    <Image source={{ uri: session.doctor.profile_photo }} style={styles.avatar} />
+                    <Avatar.Image 
+                        size={60} 
+                        source={{ uri: getFullImageUrl(session.doctor.profile_photo) }} 
+                        style={{ backgroundColor: '#F1F5F9' }}
+                    />
                 ) : (
-                    <View style={[styles.avatar, {backgroundColor: '#F1F5F9', alignItems:'center', justifyContent:'center'}]}>
-                        <User size={24} color="#64748B" />
-                    </View>
+                    <Avatar.Text 
+                        size={60} 
+                        label={session.doctor?.name?.substring(0,2) || 'Dr'} 
+                        style={{ backgroundColor: '#F1F5F9' }} 
+                        color={PrimaryColors.main}
+                    />
                 )}
-                <View>
-                    <Text style={styles.doctorName}>Dr. {session.doctor?.name}</Text>
-                    <Text style={styles.dept}>{session.job_requirement?.department || 'General Department'}</Text>
+                <View style={{marginLeft: 16}}>
+                    <Text variant="titleMedium" style={{fontWeight: '700', color: '#0F172A'}}>Dr. {session.doctor?.name}</Text>
+                    <Text variant="bodyMedium" style={{color: '#64748B'}}>{session.job_requirement?.department || 'General Department'}</Text>
                 </View>
             </View>
-        </View>
+          </Card.Content>
+        </Card>
 
         {/* Work Summary */}
-        <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Work Summary & Doctor Rating</Text>
-            <View style={styles.statsGrid}>
-                <View style={styles.statItem}>
-                    <Text style={styles.statLabel}>Check In</Text>
-                    <Text style={styles.statValue}>{checkIn.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
+        <Card style={styles.card} mode="outlined">
+            <Card.Content>
+                <View style={styles.cardHeader}>
+                    <Clock size={20} color={PrimaryColors.main} />
+                    <Text variant="titleMedium" style={{fontWeight: '600', color: '#0F172A'}}>Work Summary</Text>
                 </View>
-                 <View style={styles.statItem}>
-                    <Text style={styles.statLabel}>Check Out</Text>
-                    <Text style={styles.statValue}>{session.check_out_time ? checkOut.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--'}</Text>
-                </View>
-                 <View style={styles.statItem}>
-                    <Text style={styles.statLabel}>Avg Rating</Text>
-                    <View style={{flexDirection:'row', alignItems:'center', justifyContent:'center'}}>
-                        <Star size={14} color="#F59E0B" fill="#F59E0B" style={{marginRight: 4}} />
-                        <Text style={styles.statValue}>{session.doctor?.average_rating || 'N/A'}</Text>
+                <Divider style={{marginVertical: 12}} />
+                <View style={styles.statsGrid}>
+                    <View style={styles.statItem}>
+                        <Text variant="labelMedium" style={{color: '#64748B'}}>Check In</Text>
+                        <Text variant="titleMedium" style={{fontWeight: '700'}}>{checkIn.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
+                    </View>
+                     <View style={[styles.statItem, {borderLeftWidth: 1, borderRightWidth: 1, borderColor: '#E2E8F0', paddingHorizontal: 20}]}>
+                        <Text variant="labelMedium" style={{color: '#64748B'}}>Check Out</Text>
+                        <Text variant="titleMedium" style={{fontWeight: '700'}}>{session.check_out_time ? checkOut.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--'}</Text>
+                    </View>
+                     <View style={styles.statItem}>
+                        <Text variant="labelMedium" style={{color: '#64748B'}}>Duration</Text>
+                        <Text variant="titleMedium" style={{fontWeight: '700'}}>{hours}h {minutes}m</Text>
                     </View>
                 </View>
-            </View>
-        </View>
+            </Card.Content>
+        </Card>
 
         {/* Rating */}
-        <View style={styles.section}>
-             <Text style={styles.sectionTitle}>Rate Performance</Text>
-             <View style={styles.starRow}>
-                {[1, 2, 3, 4, 5].map((star) => (
-                    <TouchableOpacity key={star} onPress={() => setRating(star)}>
-                        <Star 
-                            size={32} 
-                            color={star <= rating ? "#FFB800" : "#CBD5E1"} 
-                            fill={star <= rating ? "#FFB800" : "transparent"}
-                        />
-                    </TouchableOpacity>
-                ))}
-             </View>
-             <Text style={styles.ratingHint}>{rating > 0 ? `${rating} Stars` : 'Tap to rate'}</Text>
-        </View>
+        <Card style={styles.card} mode="outlined">
+             <Card.Content>
+                <View style={styles.cardHeader}>
+                    <Star size={20} color="#F59E0B" fill={ rating > 0 ? "#F59E0B" : "none"} />
+                    <Text variant="titleMedium" style={{fontWeight: '600', color: '#0F172A'}}>Doctor Rating</Text>
+                </View>
+                <View style={[styles.starRow, {marginTop: 16}]}>
+                    {[1, 2, 3, 4, 5].map((star) => (
+                        <TouchableOpacity key={star} onPress={() => setRating(star)} disabled={session.hospital_confirmed}>
+                            <Star 
+                                size={36} 
+                                color={star <= (session.hospital_confirmed ? session.doctor?.average_rating || 5 : rating) ? "#FFB800" : "#E2E8F0"} 
+                                fill={star <= (session.hospital_confirmed ? session.doctor?.average_rating || 5 : rating) ? "#FFB800" : "transparent"}
+                            />
+                        </TouchableOpacity>
+                    ))}
+                </View>
+             </Card.Content>
+        </Card>
 
-        {/* Payment */}
-        <View style={styles.paymentCard}>
-             <View style={styles.paymentRow}>
-                 <Text style={styles.payLabel}>Total Payment</Text>
-                 <Text style={styles.payValue}>₹{session.payment_amount || '0'}</Text>
-             </View>
-             <Text style={styles.payNote}>Includes platform fees and taxes</Text>
-        </View>
+        {/* Payment Card - BIG TEXT as requested */}
+        <Card style={[styles.card, {borderColor: '#FDE68A', backgroundColor: '#FFFBEB'}]} mode="outlined">
+             <Card.Content>
+                 <View style={{flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8}}>
+                    <Building2 size={20} color="#B45309" />
+                    <Text variant="titleMedium" style={{color: '#92400E', fontWeight: 'bold'}}>Total Payment</Text>
+                 </View>
+                 
+                 <Text style={{fontSize: 42, fontWeight: '800', color: '#92400E', marginVertical: 8}}>
+                    ₹{session.payment_amount || '0'}
+                 </Text>
+                 
+                 <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}>
+                    <Text variant="bodySmall" style={{color: '#B45309'}}>Includes platform fees</Text>
+                    <Chip 
+                        style={{backgroundColor: isPaid ? '#DCFCE7' : '#FEF3C7'}} 
+                        textStyle={{color: isPaid ? '#166534' : '#B45309', fontWeight: 'bold'}}
+                        icon={isPaid ? 'check' : 'clock'}
+                    >
+                        {isPaid ? 'PAID' : 'PENDING'}
+                    </Chip>
+                 </View>
+             </Card.Content>
+        </Card>
 
         {/* Action Button (Inline) */}
         <View style={styles.inlineFooter}>
             {!session.hospital_confirmed ? (
-                <TouchableOpacity 
-                    style={[styles.payBtn, (submitting || rating === 0) && styles.disabledBtn]} 
+                <Button 
+                    mode="contained" 
                     onPress={handleApprove}
+                    loading={submitting}
                     disabled={submitting || rating === 0}
+                    style={{ borderRadius: 12, backgroundColor: PrimaryColors.main }}
+                    contentStyle={{ height: 56 }}
+                    labelStyle={{ fontSize: 18, fontWeight: 'bold' }}
                 >
-                    {submitting ? (
-                        <ActivityIndicator color="#fff" />
-                    ) : (
-                        <>
-                            <Text style={styles.payBtnText}>Approve (Verified Work)</Text>
-                            <CheckCircle size={20} color="#fff" />
-                        </>
-                    )}
-                </TouchableOpacity>
-            ) : session.payment_status !== 'paid' ? (
+                    Approve Work
+                </Button>
+            ) : shouldShowReleasePayment ? (
                 <View>
-                    <View style={{backgroundColor: '#EFF6FF', padding: 12, borderRadius: 12, marginBottom: 16, flexDirection: 'row', gap: 12, alignItems: 'center'}}>
-                         <CheckCircle size={20} color="#2563EB" />
-                         <View>
-                             <Text style={{color: '#1E40AF', fontWeight: '700'}}>Work Approved</Text>
-                             <Text style={{color: '#1E40AF', fontSize: 12}}>Payment pending release</Text>
+                    <View style={{backgroundColor: '#EFF6FF', padding: 16, borderRadius: 12, marginBottom: 16, flexDirection: 'row', gap: 12, alignItems: 'center'}}>
+                         <CheckCircle size={24} color="#2563EB" />
+                         <View style={{flex: 1}}>
+                             <Text style={{color: '#1E40AF', fontWeight: '700', fontSize: 16}}>Work Approved</Text>
+                             <Text style={{color: '#1E40AF', fontSize: 13}}>Please release the payment to the doctor.</Text>
                          </View>
                     </View>
-                    <TouchableOpacity 
-                        style={[styles.payBtn, { backgroundColor: '#16A34A' }]}
+                    <Button 
+                        mode="contained"
                         onPress={handlePayment}
+                        style={{ borderRadius: 12, backgroundColor: '#16A34A' }}
+                        contentStyle={{ height: 56 }}
+                        labelStyle={{ fontSize: 18, fontWeight: 'bold' }}
+                        icon={() => <ArrowRight size={24} color="white" />}
                     >
-                        <Text style={styles.payBtnText}>Release Payment Now</Text>
-                        <ArrowRight size={20} color="#fff" />
-                    </TouchableOpacity>
+                        Release Payment Now
+                    </Button>
                 </View>
             ) : (
-                <View style={[styles.payBtn, { backgroundColor: '#DCFCE7' }]}>
-                    <Text style={[styles.payBtnText, { color: '#15803D' }]}>Payment Completed</Text>
-                    <Check size={24} color="#15803D" />
-                </View>
+                <Surface style={{padding: 20, alignItems: 'center', backgroundColor: '#DCFCE7', borderRadius: 16}} elevation={1}>
+                    <CheckCircle size={48} color="#15803D" />
+                    <Text variant="headlineSmall" style={{color: '#15803D', fontWeight: 'bold', marginTop: 12}}>Payment Completed</Text>
+                    <Text variant="bodyMedium" style={{color: '#166534', marginTop: 4}}>Transaction ID: #PAY-{session.id}</Text>
+                </Surface>
             )}
         </View>
 
@@ -280,156 +319,66 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 20,
-      paddingTop: 50,
-      paddingBottom: 20,
-      backgroundColor: '#fff',
-      borderBottomWidth: 1,
-      borderBottomColor: '#E2E8F0',
+  headerSurface: {
+    backgroundColor: '#fff',
+    paddingTop: Platform.OS === 'ios' ? 0 : 20, 
+    paddingBottom: 20,
+    paddingHorizontal: 16,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
   },
-  backBtn: {
-      padding: 4,
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  backButton: {
+    padding: 8,
+    marginLeft: -8,
   },
   headerTitle: {
-      fontSize: 18,
-      fontWeight: '600',
-      color: '#0F172A',
+    fontSize: 20,
+    fontWeight: '700',
+    color: NeutralColors.textPrimary,
   },
   scrollContent: {
-      padding: 20,
-      paddingBottom: 50, // Extra padding for scrolling
+    padding: 20,
+    paddingBottom: 50,
+    gap: 16,
   },
   card: {
-      backgroundColor: '#fff',
-      borderRadius: 16,
-      padding: 16,
-      marginBottom: 20,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.05,
-      shadowRadius: 2,
-      elevation: 2,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    // Paper handles shadow
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   doctorRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-  },
-  avatar: {
-      width: 50,
-      height: 50,
-      borderRadius: 25,
-      backgroundColor: '#F1F5F9',
-  },
-  doctorName: {
-      fontSize: 16,
-      fontWeight: '700',
-      color: '#0F172A',
-  },
-  dept: {
-      fontSize: 14,
-      color: '#64748B',
-  },
-  section: {
-      backgroundColor: '#fff',
-      borderRadius: 16,
-      padding: 20,
-      marginBottom: 20,
-  },
-  sectionTitle: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: '#0F172A',
-      marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   statsGrid: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      backgroundColor: '#F8FAFC',
-      padding: 16,
-      borderRadius: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
   },
   statItem: {
-      alignItems: 'center',
-  },
-  statLabel: {
-      fontSize: 12,
-      color: '#64748B',
-      marginBottom: 4,
-  },
-  statValue: {
-      fontSize: 14,
-      fontWeight: '700',
-      color: '#0F172A',
+    alignItems: 'center',
+    flex: 1,
   },
   starRow: {
-      flexDirection: 'row',
-      justifyContent: 'center',
-      gap: 8,
-      marginBottom: 8,
-  },
-  ratingHint: {
-      textAlign: 'center',
-      color: '#94A3B8',
-      fontSize: 14,
-  },
-  paymentCard: {
-      backgroundColor: '#FEF3C7', 
-      borderRadius: 16,
-      padding: 20,
-      marginBottom: 30, // More space before button
-      borderWidth: 1,
-      borderColor: '#FDE68A',
-  },
-  paymentRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 4,
-  },
-  payLabel: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: '#92400E',
-  },
-  payValue: {
-      fontSize: 24,
-      fontWeight: '700',
-      color: '#92400E',
-  },
-  payNote: {
-      fontSize: 12,
-      color: '#B45309',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 12,
   },
   inlineFooter: {
-      marginBottom: 20,
-  },
-  payBtn: {
-      backgroundColor: '#16A34A',
-      height: 56,
-      borderRadius: 28,
-      flexDirection: 'row',
-      justifyContent: 'center',
-      alignItems: 'center',
-      gap: 8,
-      shadowColor: '#16A34A',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.2,
-      shadowRadius: 8,
-      elevation: 4,
-  },
-  disabledBtn: {
-      backgroundColor: '#94A3B8',
-      shadowOpacity: 0,
-      elevation: 0,
-  },
-  payBtnText: {
-      color: '#fff',
-      fontSize: 18,
-      fontWeight: '600',
+    marginTop: 10,
+    marginBottom: 20,
   },
 });
