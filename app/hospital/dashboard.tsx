@@ -198,20 +198,7 @@ const SessionItem = React.memo(({ session }: { session: any }) => {
             {session.doctor?.profile_photo ? (
                 <Avatar.Image 
                     size={40} 
-                    source={{ 
-                      uri: getFullImageUrl(session.doctor.profile_photo),
-                      headers: { 'Cache-Control': 'no-cache' }
-                    }}
-                    onError={(error) => {
-                      console.log('❌ Dashboard session avatar failed:', {
-                        profile_photo: session.doctor.profile_photo,
-                        full_url: getFullImageUrl(session.doctor.profile_photo),
-                        error
-                      });
-                    }}
-                    onLoad={() => {
-                      console.log('✅ Dashboard session avatar loaded:', getFullImageUrl(session.doctor.profile_photo));
-                    }}
+                    source={{ uri: getFullImageUrl(session.doctor.profile_photo) }}
                 />
             ) : (
                 <Avatar.Icon size={40} icon="account" style={{backgroundColor: '#F1F5F9'}} color="#64748B" />
@@ -844,20 +831,32 @@ export default function HospitalDashboard() {
         <Surface style={styles.headerSurface} elevation={0}>
           <View style={styles.headerContent}>
             <TouchableOpacity onPress={() => router.push('/hospital/profile' as any)}>
-               {hospital?.profile_photo || hospital?.logo ? (
-                  <Avatar.Image 
-                    size={50} 
-                    source={{ uri: getFullImageUrl(hospital.profile_photo || hospital.logo) }}
-                    style={{ backgroundColor: '#fff', marginRight: 12 }} 
-                  />
-               ) : (
-                  <Avatar.Text 
-                    size={50} 
-                    label={hospital?.name?.charAt(0)?.toUpperCase() || 'H'} 
-                    style={{ backgroundColor: '#EFF6FF', marginRight: 12 }}
-                    labelStyle={{ color: '#2563EB', fontWeight: '700' }}
-                  />
-               )}
+               {/* DEBUG: Log image URL details */}
+               {(() => {
+                 const rawSrc = hospital?.profile_photo || hospital?.logo_path || hospital?.logo;
+                 const fullUrl = getFullImageUrl(rawSrc);
+                 console.log('[Dashboard Header] Hospital Logo:', { raw: rawSrc, full: fullUrl });
+                 
+                 if (rawSrc) {
+                   return (
+                     <Avatar.Image 
+                       size={50} 
+                       source={{ uri: fullUrl }}
+                       onError={(e) => console.log('[Dashboard Header] Image Error:', e.nativeEvent.error)}
+                       style={{ backgroundColor: '#fff', marginRight: 12 }} 
+                     />
+                   );
+                 } else {
+                   return (
+                     <Avatar.Text 
+                       size={50} 
+                       label={hospital?.name?.charAt(0)?.toUpperCase() || 'H'} 
+                       style={{ backgroundColor: '#EFF6FF', marginRight: 12 }}
+                       labelStyle={{ color: '#2563EB', fontWeight: '700' }}
+                     />
+                   );
+                 }
+               })()}
             </TouchableOpacity>
             
             <View style={styles.headerText}>
@@ -870,7 +869,7 @@ export default function HospitalDashboard() {
               onPress={() => router.push('/hospital/notifications')}
               style={styles.bellIcon}
             >
-              <Bell size={20} color="#2563EB" />
+              <Bell size={24} color="#fff" />
               {notificationCount > 0 && (
                 <View style={styles.badge}>
                   <Text style={styles.badgeText}>
@@ -883,7 +882,7 @@ export default function HospitalDashboard() {
               onPress={handleLogout}
               style={[styles.bellIcon, { marginLeft: 8 }]}
             >
-              <LogOut size={20} color="#DC2626" />
+              <LogOut size={24} color="#fff" />
             </TouchableOpacity>
           </View>
         </Surface>
@@ -1272,13 +1271,13 @@ export default function HospitalDashboard() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
+  container: { flex: 1, backgroundColor: '#EFF6FF' },
   scrollView: { flex: 1 },
   content: { 
     paddingBottom: 24,
   },
   headerSurface: {
-    backgroundColor: '#fff',
+    backgroundColor: '#2563EB',
     paddingTop: Platform.OS === 'ios' ? 60 : 50,
     paddingBottom: 20,
     paddingHorizontal: 20,
@@ -1296,13 +1295,13 @@ const styles = StyleSheet.create({
   },
   welcomeText: {
     fontSize: 13,
-    color: '#6B7280',
+    color: 'rgba(255, 255, 255, 0.8)',
     fontWeight: '400',
     marginBottom: 2,
   },
   hospitalName: {
     fontSize: 20,
-    color: '#111827',
+    color: '#fff',
     fontWeight: '600',
   },
   bellIcon: {
@@ -1540,8 +1539,8 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   formTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '700',
     color: '#111827',
   },
   inputGroup: { marginBottom: 16 },

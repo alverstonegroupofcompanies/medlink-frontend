@@ -51,36 +51,22 @@ export default function RootLayout() {
     
     async function prepare() {
       try {
-        const startTime = Date.now();
-        const minSplashTime = 5000; // Show splash for at least 5 seconds
-        
-        // Set a timeout to proceed even if fonts don't load
-        timeoutId = setTimeout(() => {
-          console.warn('Font loading timeout - proceeding with system fonts');
-          setAppIsReady(true);
-          SplashScreen.hideAsync();
-        }, 5000); // 5 second timeout
-
-        // Wait for fonts to load or error
+        // Wait for fonts to load
         if (fontsLoaded || fontError) {
-          clearTimeout(timeoutId);
-          setupNotificationListeners();
+          // Hide native splash screen immediately to show our custom animated splash
+          await SplashScreen.hideAsync();
           
-          // Calculate remaining time to show splash
-          const elapsedTime = Date.now() - startTime;
-          const remainingTime = Math.max(0, minSplashTime - elapsedTime);
-          
-          // Wait for minimum splash time
-          await new Promise(resolve => setTimeout(resolve, remainingTime));
+          // Show custom splash for a fixed duration (e.g. 3 seconds) for the animation to play
+          const customSplashDuration = 3000;
+          await new Promise(resolve => setTimeout(resolve, customSplashDuration));
           
           setAppIsReady(true);
-          await SplashScreen.hideAsync();
         }
       } catch (e) {
         console.warn('Error during app preparation:', e);
-        clearTimeout(timeoutId);
-        setAppIsReady(true);
+        // Ensure we at least show the app if something fails
         await SplashScreen.hideAsync();
+        setAppIsReady(true);
       }
     }
 

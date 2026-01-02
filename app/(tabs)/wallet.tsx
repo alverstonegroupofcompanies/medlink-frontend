@@ -8,6 +8,9 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BankingDetailsForm } from '@/components/BankingDetailsForm';
 import API from '../api';
+import echo from '@/services/echo';
+import { getDoctorInfo } from '@/utils/auth';
+import { showNotificationFromData } from '@/utils/notifications';
 
 interface WalletData {
   balance: number;
@@ -55,6 +58,40 @@ export default function WalletScreen() {
 
   useEffect(() => {
     fetchWalletData();
+
+    // Set up real-time listener
+    const setupListener = async () => {
+      const doctor = await getDoctorInfo();
+      if (doctor?.id) {
+        console.log(`🔌 Wallet subscribing to channel: App.Models.User.${doctor.id}`);
+        echo.private(`App.Models.User.${doctor.id}`)
+          .listen('.PaymentReleased', (e: any) => {
+            console.log('💰 Payment Released event received:', e);
+            
+            // Show notification
+            showNotificationFromData({
+              title: 'Payment Received',
+              message: e.message,
+              type: 'success',
+              data: { type: 'payment_received', amount: e.amount }
+            });
+
+            // Refresh wallet data immediately
+            fetchWalletData();
+          });
+      }
+    };
+
+    setupListener();
+
+    return () => {
+      // Cleanup listener
+      getDoctorInfo().then(doctor => {
+        if (doctor?.id) {
+          echo.leave(`App.Models.User.${doctor.id}`);
+        }
+      });
+    };
   }, []);
 
   const fetchWalletData = async () => {

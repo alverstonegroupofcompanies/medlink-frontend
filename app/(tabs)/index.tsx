@@ -24,6 +24,7 @@ import { showNotificationFromData, scheduleLocalNotification } from "@/utils/not
 
 import { ModernCard } from "@/components/modern-card";
 import { useLocationTracking } from "@/hooks/useLocationTracking";
+import { getFullImageUrl } from "@/utils/url-helper";
 
 const { width } = Dimensions.get('window');
 
@@ -339,6 +340,21 @@ export default function DoctorHome() {
                 loadNotifications();
                 loadJobRequirements();
                 loadJobSessions();
+            })
+            .listen('.NewJobPosted', (e: any) => {
+                console.log('🔔 New Job Posting received:', e);
+                
+                // Show system notification
+                showNotificationFromData({
+                    title: 'New Job Opportunity',
+                    message: e.message,
+                    type: 'info',
+                    data: { type: 'new_job_posting', ...e.jobRequirement }
+                });
+
+                // Refresh job requirements list
+                loadJobRequirements();
+                loadNotifications();
             });
     }
     
@@ -839,7 +855,7 @@ export default function DoctorHome() {
                         {requirement.hospital?.logo_url ? (
                           <Image
                             key={requirement.hospital.logo_url}
-                            source={{ uri: requirement.hospital.logo_url }}
+                            source={{ uri: getFullImageUrl(requirement.hospital.logo_url) }}
                             style={styles.hospitalLogo}
                             onLoad={() => console.log('🏥 [Hospital Logo] ✅ Loaded:', requirement.hospital.logo_url)}
                             onError={(error) => console.error('🏥 [Hospital Logo] ❌ Failed:', requirement.hospital.logo_url, error.nativeEvent)}  

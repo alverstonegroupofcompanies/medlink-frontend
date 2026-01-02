@@ -54,39 +54,32 @@ export default function PaymentHistoryScreen() {
 
   const renderItem = ({ item }: { item: any }) => (
     <View style={styles.card}>
-      <View style={styles.cardHeader}>
-        <View style={styles.doctorInfo}>
-            <View style={[styles.avatar, { backgroundColor: PrimaryColors.main + '15' }]}>
-               <CreditCard size={20} color={PrimaryColors.main} />
+      <View style={styles.cardTopRow}>
+        <View style={styles.doctorInfoContainer}>
+            <View style={[styles.avatar, { backgroundColor: PrimaryColors.main + '10' }]}>
+               <User size={20} color={PrimaryColors.main} />
             </View>
             <View>
-                <Text style={styles.doctorName}>Dr. {item.doctor?.name || 'Unknown Doctor'}</Text>
-                <Text style={styles.date}>{new Date(item.created_at).toLocaleDateString()}</Text>
+                <Text style={styles.doctorName}>Dr. {item.doctor?.name || 'Unknown'}</Text>
+                <Text style={styles.sessionInfo}>Session #{item.job_session_id} • {new Date(item.created_at).toLocaleDateString()}</Text>
             </View>
         </View>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
+        <Text style={styles.amountValue}>₹{item.amount}</Text>
+      </View>
+
+      <View style={styles.cardBottomRow}>
+        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '15' }]}>
             <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
                 {getStatusLabel(item.status)}
             </Text>
         </View>
-      </View>
-
-      <View style={styles.divider} />
-
-      <View style={styles.amountRow}>
-        <Text style={styles.amountLabel}>Amount Paid</Text>
-        <Text style={styles.amountValue}>₹{item.amount}</Text>
-      </View>
-
-      <View style={styles.detailsRow}>
-         <Text style={styles.sessionId}>Session #{item.job_session_id}</Text>
-         <Text style={styles.paymentMethod}>{item.payment_method ? item.payment_method.replace('_', ' ').toUpperCase() : 'WALLET'}</Text>
+        <Text style={styles.paymentMethod}>{item.payment_method?.replace('_', ' ').toUpperCase() || 'WALLET'}</Text>
       </View>
     </View>
   );
 
   return (
-    <ScreenSafeArea style={styles.container}>
+    <ScreenSafeArea style={styles.container} backgroundColor={PrimaryColors.main}>
       <StatusBar style="light" backgroundColor={PrimaryColors.main} />
       
       <View style={styles.header}>
@@ -97,31 +90,37 @@ export default function PaymentHistoryScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={PrimaryColors.main} />
-        </View>
-      ) : (
-        <FlatList
-          data={payments}
-          renderItem={renderItem}
-          keyExtractor={(item) => item.id.toString()}
-          contentContainerStyle={styles.listContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <CreditCard size={48} color="#CBD5E1" />
-              <Text style={styles.emptyText}>No payments found</Text>
+      <View style={styles.contentContainer}>
+        {loading ? (
+            <View style={styles.center}>
+            <ActivityIndicator size="large" color={PrimaryColors.main} />
             </View>
-          }
-        />
-      )}
+        ) : (
+            <FlatList
+            data={payments}
+            renderItem={renderItem}
+            keyExtractor={(item) => item.id.toString()}
+            contentContainerStyle={styles.listContent}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            ListEmptyComponent={
+                <View style={styles.emptyContainer}>
+                <CreditCard size={48} color="#CBD5E1" />
+                <Text style={styles.emptyText}>No payments found</Text>
+                </View>
+            }
+            />
+        )}
+      </View>
     </ScreenSafeArea>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+    backgroundColor: PrimaryColors.main,
+  },
+  contentContainer: {
     flex: 1,
     backgroundColor: '#F8FAFC',
   },
@@ -163,15 +162,30 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   cardHeader: {
+    // Removed
+  },
+  cardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  cardBottomRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
   },
   doctorInfo: {
+     // Removed
+  },
+  doctorInfoContainer: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 12,
+      flex: 1,
   },
   avatar: {
       width: 40, 
@@ -182,56 +196,52 @@ const styles = StyleSheet.create({
       alignItems: 'center',
   },
   doctorName: {
-      fontSize: 14,
+      fontSize: 15,
       fontWeight: '600',
       color: '#0F172A',
+      marginBottom: 2,
   },
-  date: {
+  sessionInfo: {
       fontSize: 12,
       color: '#64748B',
+  },
+  date: {
+      // Removed
   },
   statusBadge: {
       paddingHorizontal: 8,
-      paddingVertical: 4,
-      borderRadius: 8,
+      paddingVertical: 2,
+      borderRadius: 4,
   },
   statusText: {
-      fontSize: 12,
+      fontSize: 11,
       fontWeight: '600',
-      textTransform: 'capitalize',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
   },
   divider: {
-      height: 1,
-      backgroundColor: '#F1F5F9',
-      marginVertical: 12,
+      // Removed
   },
   amountRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 8,
+      // Removed
   },
   amountLabel: {
-      fontSize: 14,
-      color: '#64748B',
+      // Removed
   },
   amountValue: {
-      fontSize: 18,
+      fontSize: 16,
       fontWeight: '700',
       color: '#0F172A',
   },
   detailsRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
+      // Removed
   },
   sessionId: {
-      fontSize: 12,
-      color: '#94A3B8',
+      // Removed
   },
   paymentMethod: {
-      fontSize: 12,
-      color: '#64748B',
+      fontSize: 11,
+      color: '#94A3B8',
       fontWeight: '500',
   },
   emptyContainer: {

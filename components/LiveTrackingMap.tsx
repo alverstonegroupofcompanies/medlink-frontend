@@ -196,25 +196,25 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   markerContainer: {
-    padding: 2, // slimmer padding
+    padding: 2,
     backgroundColor: 'white',
-    borderRadius: 30,
+    borderRadius: 24, // Half of width/height
     borderWidth: 2,
     borderColor: '#E11D48',
-    elevation: 4,
+    elevation: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
     alignItems: 'center',
     justifyContent: 'center',
-    width: 40,
-    height: 40,
+    width: 48, // Increased from 40
+    height: 48, // Increased from 40
   },
   markerImage: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
+      width: 40, // Increased from 32
+      height: 40, // Increased from 32
+      borderRadius: 20, // Half of width/height
   },
   onlineBadge: {
     position: 'absolute',

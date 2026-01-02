@@ -452,8 +452,21 @@ export default function JobDetailScreen() {
                 <View style={[styles.iconBox, { backgroundColor: '#DCFCE7' }]}>
                     <DollarSign size={20} color="#16A34A" />
                 </View>
-                <Text style={styles.gridLabel}>Fees</Text>
-                <Text style={styles.gridValue}>₹{session?.payment_amount || application.job_requirement?.salary_range_min || '0'}</Text>
+                {/* 
+                   Display Logic:
+                   - Gross Amount = session.payment_amount (Full Job Value)
+                   - Doctor Earning = Gross Amount * 0.8
+                   - We show "You Earn" to be transparent.
+                */}
+                <Text style={styles.gridLabel}>You Earn</Text>
+                <Text style={styles.gridValue}>
+                  ₹
+                  {(() => {
+                    const gross = Number(session?.payment_amount || application.job_requirement?.salary_range_min || 0);
+                    const net = gross * 0.8;
+                    return net.toFixed(0);
+                  })()}
+                </Text>
             </View>
         </View>
 
@@ -574,10 +587,17 @@ export default function JobDetailScreen() {
                         <Text style={styles.statusTitle}>Work Completed</Text>
                         <Text style={styles.statusSub}>Waiting for hospital review & payment.</Text>
                         
-                        <View style={styles.paymentBox}>
-                            <DollarSign size={20} color="#D97706" />
-                            <Text style={styles.paymentText}>Payment Pending</Text>
-                        </View>
+                        {(session.payment_status === 'approved' || session.payment_status === 'released' || session.payment_status === 'paid') ? (
+                          <View style={[styles.paymentBox, { backgroundColor: '#DCFCE7', borderColor: '#86EFAC' }]}>
+                              <CheckCircle size={20} color="#16A34A" />
+                              <Text style={[styles.paymentText, { color: '#15803D' }]}>Payment Approved</Text>
+                          </View>
+                        ) : (
+                          <View style={styles.paymentBox}>
+                              <DollarSign size={20} color="#D97706" />
+                              <Text style={styles.paymentText}>Payment Pending</Text>
+                          </View>
+                        )}
                      </View>
                 ) : (
                     <TouchableOpacity 
