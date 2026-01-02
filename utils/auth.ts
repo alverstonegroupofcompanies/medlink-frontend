@@ -11,7 +11,8 @@ import API from '../app/api';
 export const STORAGE_KEYS = {
   DOCTOR_TOKEN: 'doctorToken',
   DOCTOR_INFO: 'doctorInfo',
-  // Add any other storage keys here
+  HOSPITAL_TOKEN: 'hospitalToken',
+  HOSPITAL_INFO: 'hospitalInfo',
 } as const;
 
 /**
@@ -31,6 +32,22 @@ export const saveDoctorAuth = async (token: string, doctorInfo: any) => {
 };
 
 /**
+ * Save hospital authentication data
+ */
+export const saveHospitalAuth = async (token: string, hospitalInfo: any) => {
+  try {
+    await AsyncStorage.multiSet([
+      [STORAGE_KEYS.HOSPITAL_TOKEN, token],
+      [STORAGE_KEYS.HOSPITAL_INFO, JSON.stringify(hospitalInfo)],
+    ]);
+    console.log('✅ Hospital auth data saved');
+  } catch (error) {
+    console.error('❌ Error saving hospital auth:', error);
+    throw error;
+  }
+};
+
+/**
  * Get doctor token from storage
  */
 export const getDoctorToken = async (): Promise<string | null> => {
@@ -38,6 +55,18 @@ export const getDoctorToken = async (): Promise<string | null> => {
     return await AsyncStorage.getItem(STORAGE_KEYS.DOCTOR_TOKEN);
   } catch (error) {
     console.error('❌ Error getting doctor token:', error);
+    return null;
+  }
+};
+
+/**
+ * Get hospital token from storage
+ */
+export const getHospitalToken = async (): Promise<string | null> => {
+  try {
+    return await AsyncStorage.getItem(STORAGE_KEYS.HOSPITAL_TOKEN);
+  } catch (error) {
+    console.error('❌ Error getting hospital token:', error);
     return null;
   }
 };
@@ -56,6 +85,19 @@ export const getDoctorInfo = async (): Promise<any | null> => {
 };
 
 /**
+ * Get hospital info from storage
+ */
+export const getHospitalInfo = async (): Promise<any | null> => {
+  try {
+    const info = await AsyncStorage.getItem(STORAGE_KEYS.HOSPITAL_INFO);
+    return info ? JSON.parse(info) : null;
+  } catch (error) {
+    console.error('❌ Error getting hospital info:', error);
+    return null;
+  }
+};
+
+/**
  * Check if doctor is logged in
  */
 export const isDoctorLoggedIn = async (): Promise<boolean> => {
@@ -65,6 +107,20 @@ export const isDoctorLoggedIn = async (): Promise<boolean> => {
     return !!(token && doctorInfo);
   } catch (error) {
     console.error('❌ Error checking login status:', error);
+    return false;
+  }
+};
+
+/**
+ * Check if hospital is logged in
+ */
+export const isHospitalLoggedIn = async (): Promise<boolean> => {
+  try {
+    const token = await getHospitalToken();
+    const info = await getHospitalInfo();
+    return !!(token && info);
+  } catch (error) {
+    console.error('❌ Error checking hospital login status:', error);
     return false;
   }
 };
@@ -164,7 +220,6 @@ export const logoutDoctor = async (showAlert: boolean = true): Promise<void> => 
     console.log('✅ Logout complete - redirecting to login screen');
 
     // Navigate directly to login page - use multiple attempts to ensure it works
-    // When navigating from tab navigator, we need to be more aggressive
     const navigateToLogin = () => {
       try {
         console.log('🔄 Attempting navigation to /login');
@@ -173,7 +228,6 @@ export const logoutDoctor = async (showAlert: boolean = true): Promise<void> => 
         console.log('✅ Navigation to login executed');
       } catch (navError) {
         console.error('❌ Navigation error:', navError);
-        // Try alternative navigation method
         try {
           console.log('🔄 Trying router.push to /login...');
           router.dismissAll();
@@ -184,65 +238,56 @@ export const logoutDoctor = async (showAlert: boolean = true): Promise<void> => 
       }
     };
 
-    // Try navigation immediately
     navigateToLogin();
-
-    // Also try after a short delay to ensure it works
     setTimeout(() => {
       console.log('🔄 Retry navigation to login after delay...');
       navigateToLogin();
     }, 500);
   } catch (error) {
     console.error('❌ Error during logout:', error);
-    // Still clear storage and navigate even if there's an error
     try {
-      // Aggressive cleanup on error
       await AsyncStorage.multiRemove([
         STORAGE_KEYS.DOCTOR_TOKEN,
         STORAGE_KEYS.DOCTOR_INFO,
         'doctorToken',
         'doctorInfo',
       ]);
-      // Navigate to login immediately
-      try {
-        console.log('🔄 Attempting navigation to /login (error fallback)');
-        router.dismissAll();
-        router.replace('/login');
-        console.log('✅ Navigation command executed (error fallback)');
-      } catch (navError) {
-        console.error('❌ Navigation error in fallback:', navError);
-      }
-
-      // Also retry after delay
-      setTimeout(() => {
-        try {
-          router.dismissAll();
-          router.replace('/login');
-        } catch (retryError) {
-          console.error('❌ Retry navigation failed:', retryError);
-        }
-      }, 500);
+      router.dismissAll();
+      router.replace('/login');
     } catch (clearError) {
       console.error('❌ Error clearing auth:', clearError);
-      // Force navigation even if clearing fails
-      try {
-        console.log('🔄 Force navigation attempt to /login...');
-        router.dismissAll();
-        router.replace('/login');
-      } catch (forceNavError) {
-        console.error('❌ Force navigation failed:', forceNavError);
-      }
-
-      // Retry after delay
-      setTimeout(() => {
-        try {
-          router.dismissAll();
-          router.replace('/login');
-        } catch (retryError) {
-          console.error('❌ Retry navigation failed:', retryError);
-        }
-      }, 500);
+      router.dismissAll();
+      router.replace('/login');
     }
+  }
+};
+
+/**
+ * Logout hospital
+ */
+export const logoutHospital = async (): Promise<void> => {
+  try {
+    console.log('🚪 Starting hospital logout...');
+
+    // Attempt backend logout (optional)
+    try {
+      const token = await getHospitalToken();
+      if (token) {
+        await API.post('/hospital/logout');
+      }
+    } catch (e) { console.warn('Backend logout failed', e); }
+
+    await AsyncStorage.multiRemove([
+      STORAGE_KEYS.HOSPITAL_TOKEN,
+      STORAGE_KEYS.HOSPITAL_INFO,
+    ]);
+    console.log('✅ Hospital auth cleared');
+    router.dismissAll();
+    router.replace('/login');
+  } catch (error) {
+    console.error('❌ Error logging out hospital:', error);
+    // Force nav
+    router.replace('/login');
   }
 };
 
@@ -293,7 +338,7 @@ export const getProfilePhotoUrl = (doctor: any): string => {
       finalUrl = `${BASE_BACKEND_URL}${profilePhoto}`;
       console.log('👤 [getProfilePhotoUrl] Path starts with /storage/');
     }
-    // If it's a relative path (uploads/doctors/...), add /storage/ prefix
+    // If it starts with uploads/, add /storage/ prefix
     else if (profilePhoto.startsWith('uploads/')) {
       finalUrl = `${BASE_BACKEND_URL}/storage/${profilePhoto}`;
       console.log('👤 [getProfilePhotoUrl] Path starts with uploads/');

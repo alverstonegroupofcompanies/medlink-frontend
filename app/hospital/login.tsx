@@ -61,8 +61,8 @@ export default function HospitalLoginScreen() {
       const { token, hospital } = response.data;
 
       // Save authentication data
-      await AsyncStorage.setItem(HOSPITAL_TOKEN_KEY, token);
-      await AsyncStorage.setItem(HOSPITAL_INFO_KEY, JSON.stringify(hospital));
+      const { saveHospitalAuth } = require('@/utils/auth');
+      await saveHospitalAuth(token, hospital);
 
       // Register for push notifications after successful login
       try {

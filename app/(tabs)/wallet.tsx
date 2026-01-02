@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, ScrollView, StyleSheet, RefreshControl, TouchableOpacity, Alert, TextInput, ActivityIndicator, StatusBar } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { ScreenSafeArea } from '@/components/screen-safe-area';
+
 import { DoctorPrimaryColors as PrimaryColors } from '@/constants/doctor-theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -197,56 +197,74 @@ export default function WalletScreen() {
 
   if (loading) {
     return (
-      <ScreenSafeArea>
+      <View style={styles.mainContainer}>
         <ThemedView style={styles.container}>
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={PrimaryColors.main} />
           </View>
         </ThemedView>
-      </ScreenSafeArea>
+      </View>
     );
   }
 
   return (
-    <ScreenSafeArea>
-      <StatusBar barStyle="light-content" backgroundColor={PrimaryColors.main} />
-      <ThemedView style={styles.container}>
+
+    <View style={styles.mainContainer}>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent={true} />
+      
+      {/* Premium Header Background */}
+      <LinearGradient
+        colors={[PrimaryColors.main, PrimaryColors.dark]}
+        style={styles.headerGradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <View style={{ width: '100%' }}>
+          <View style={styles.headerContent}>
+            <View>
+              <ThemedText style={styles.headerTitle}>My Wallet</ThemedText>
+              <ThemedText style={styles.headerSubtitle}>Manage your earnings & payments</ThemedText>
+            </View>
+            <View style={styles.headerIcon}>
+              <MaterialIcons name="account-balance-wallet" size={32} color="rgba(255,255,255,0.2)" />
+            </View>
+          </View>
+        </View>
+      </LinearGradient>
+
+      <ThemedView style={styles.contentContainer}>
         <ScrollView
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={PrimaryColors.main} />
           }
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
-          <View style={styles.header}>
-            <ThemedText style={styles.headerTitle}>My Wallet</ThemedText>
-            <ThemedText style={styles.headerSubtitle}>Manage your earnings</ThemedText>
-          </View>
-
-          {/* Payment Flow Stages */}
+          {/* Payment Flow Stages - Overlapping Header */}
           <View style={styles.stagesCard}>
-            <ThemedText style={styles.stagesTitle}>Payment Flow</ThemedText>
+            <ThemedText style={styles.stagesTitle}>Payment Cycle</ThemedText>
             <View style={styles.stagesContainer}>
               <View style={styles.stage}>
-                <View style={[styles.stageIcon, { backgroundColor: PrimaryColors.main + '20' }]}>
+                <View style={[styles.stageIcon, { backgroundColor: '#E3F2FD' }]}>
                   <MaterialIcons name="work" size={20} color={PrimaryColors.main} />
                 </View>
                 <ThemedText style={styles.stageLabel}>Job Done</ThemedText>
               </View>
               <View style={styles.stageArrow}>
-                <MaterialIcons name="arrow-forward" size={16} color="#ccc" />
+                <MaterialIcons name="arrow-forward" size={16} color="#E0E0E0" />
               </View>
               <View style={styles.stage}>
-                <View style={[styles.stageIcon, { backgroundColor: '#4CAF50' + '20' }]}>
+                <View style={[styles.stageIcon, { backgroundColor: '#E8F5E9' }]}>
                   <MaterialIcons name="check-circle" size={20} color="#4CAF50" />
                 </View>
                 <ThemedText style={styles.stageLabel}>Released</ThemedText>
               </View>
               <View style={styles.stageArrow}>
-                <MaterialIcons name="arrow-forward" size={16} color="#ccc" />
+                <MaterialIcons name="arrow-forward" size={16} color="#E0E0E0" />
               </View>
               <View style={styles.stage}>
-                <View style={[styles.stageIcon, { backgroundColor: PrimaryColors.dark + '20' }]}>
-                  <MaterialIcons name="account-balance" size={20} color={PrimaryColors.dark} />
+                <View style={[styles.stageIcon, { backgroundColor: '#FFF3E0' }]}>
+                  <MaterialIcons name="account-balance" size={20} color="#FF9800" />
                 </View>
                 <ThemedText style={styles.stageLabel}>Withdraw</ThemedText>
               </View>
@@ -313,7 +331,7 @@ export default function WalletScreen() {
                         {transaction.job_session.hospital.name}
                       </ThemedText>
                       <ThemedText style={styles.pendingTransactionAmount}>
-                        ₹{transaction.amount.toFixed(2)}
+                        ₹{Number(transaction.amount || 0).toFixed(2)}
                       </ThemedText>
                     </View>
                   )}
@@ -362,7 +380,7 @@ export default function WalletScreen() {
                   <View style={styles.bankingInfo}>
                     <ThemedText style={styles.bankingLabel}>Account Holder</ThemedText>
                     <ThemedText style={styles.bankingValue}>
-                      {bankingDetails.bank_account_holder_name}
+                      {bankingDetails?.bank_account_holder_name}
                     </ThemedText>
                   </View>
                 </View>
@@ -371,7 +389,7 @@ export default function WalletScreen() {
                   <View style={styles.bankingInfo}>
                     <ThemedText style={styles.bankingLabel}>Account Number</ThemedText>
                     <ThemedText style={styles.bankingValue}>
-                      ****{bankingDetails.bank_account_number?.slice(-4)}
+                      ****{bankingDetails?.bank_account_number?.slice(-4)}
                     </ThemedText>
                   </View>
                 </View>
@@ -380,17 +398,17 @@ export default function WalletScreen() {
                   <View style={styles.bankingInfo}>
                     <ThemedText style={styles.bankingLabel}>IFSC Code</ThemedText>
                     <ThemedText style={styles.bankingValue}>
-                      {bankingDetails.bank_ifsc_code}
+                      {bankingDetails?.bank_ifsc_code}
                     </ThemedText>
                   </View>
                 </View>
-                {bankingDetails.bank_name && (
+                {bankingDetails?.bank_name && (
                   <View style={styles.bankingRow}>
                     <MaterialIcons name="business" size={18} color={PrimaryColors.main} />
                     <View style={styles.bankingInfo}>
                       <ThemedText style={styles.bankingLabel}>Bank</ThemedText>
                       <ThemedText style={styles.bankingValue}>
-                        {bankingDetails.bank_name}
+                        {bankingDetails?.bank_name}
                       </ThemedText>
                     </View>
                   </View>
@@ -473,7 +491,7 @@ export default function WalletScreen() {
                       ]}
                     >
                       {transaction.type === 'release' || transaction.type === 'credit' ? '+' : transaction.type === 'hold' ? '' : '-'}
-                      ₹{transaction.amount.toFixed(2)}
+                      ₹{Number(transaction.amount || 0).toFixed(2)}
                     </ThemedText>
                     <View style={[styles.statusBadge, { backgroundColor: transaction.status === 'completed' ? '#4CAF50' + '20' : '#FF9800' + '20' }]}>
                       <ThemedText style={[styles.statusText, { color: transaction.status === 'completed' ? '#4CAF50' : '#FF9800' }]}>
@@ -546,51 +564,88 @@ export default function WalletScreen() {
           initialData={bankingDetails || undefined}
         />
       </ThemedView>
-    </ScreenSafeArea>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  mainContainer: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  safeArea: {
+    backgroundColor: 'transparent',
+  },
+  headerGradient: {
+    paddingTop: StatusBar.currentHeight || 40,
+    paddingBottom: 60, // Extra padding for overlap
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    marginBottom: -40, // Negative margin to pull content up
+    zIndex: 1,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+  },
+  headerTitle: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.5,
+  },
+  headerSubtitle: {
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.9)',
+    marginTop: 4,
+    fontWeight: '500',
+  },
+  headerIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  contentContainer: {
+    flex: 1,
+    zIndex: 2,
+  },
+  scrollContent: {
+    paddingBottom: 40,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  header: {
-    padding: 20,
-    paddingTop: 20,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 4,
-  },
   stagesCard: {
     backgroundColor: '#fff',
     marginHorizontal: 16,
-    marginBottom: 16,
-    padding: 16,
-    borderRadius: 16,
-    elevation: 2,
+    marginBottom: 20,
+    padding: 20,
+    borderRadius: 24,
+    elevation: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowRadius: 12,
   },
   stagesTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 16,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 20,
   },
   stagesContainer: {
     flexDirection: 'row',
@@ -602,20 +657,22 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   stageIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   stageLabel: {
-    fontSize: 11,
-    color: '#666',
+    fontSize: 12,
+    color: '#6B7280',
     textAlign: 'center',
+    fontWeight: '600',
   },
   stageArrow: {
-    marginHorizontal: -4,
+    marginHorizontal: -8,
+    marginTop: -20,
   },
   balanceContainer: {
     paddingHorizontal: 16,

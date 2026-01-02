@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { router } from "expo-router";
-import { LogBox, Platform } from "react-native";
+import { LogBox, Platform, View, ActivityIndicator } from "react-native";
+import { isDoctorLoggedIn, isHospitalLoggedIn } from "@/utils/auth";
+import { DoctorPrimaryColors } from "@/constants/doctor-theme";
 
 // Ignore React Native warning in mobile
 if (Platform.OS !== "web") {
@@ -16,17 +18,42 @@ if (Platform.OS !== "web") {
 
 export default function Index() {
   useEffect(() => {
-    console.log('🏠 Index page loaded');
-    // Redirect to login page when app starts
-    console.log('🔄 Redirecting to /login...');
-    try {
-      router.replace("/login");
-      console.log('✅ Redirect to /login completed');
-    } catch (error) {
-      console.error('❌ Error redirecting to /login:', error);
-      console.error('❌ Redirect error details:', JSON.stringify(error, null, 2));
-    }
+    checkLoginStatus();
   }, []);
 
-  return null;
+  const checkLoginStatus = async () => {
+    try {
+      console.log('🔍 Checking login status...');
+      
+      // Check Doctor Login
+      const doctorLoggedIn = await isDoctorLoggedIn();
+      if (doctorLoggedIn) {
+        console.log('✅ Doctor logged in, redirecting to dashboard...');
+        setTimeout(() => router.replace("/(tabs)"), 100);
+        return;
+      }
+
+      // Check Hospital Login
+      const hospitalLoggedIn = await isHospitalLoggedIn();
+      if (hospitalLoggedIn) {
+        console.log('✅ Hospital logged in, redirecting to hospital dashboard...');
+        setTimeout(() => router.replace("/hospital/dashboard"), 100);
+        return;
+      }
+
+      console.log('👤 No session found, redirecting to login...');
+      router.replace("/login");
+
+    } catch (error) {
+      console.error('❌ Error checking login status:', error);
+      // Fallback to login on error
+      router.replace("/login");
+    }
+  };
+
+  return (
+    <View style={{flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff'}}>
+        <ActivityIndicator size="large" color={DoctorPrimaryColors.primary} />
+    </View>
+  );
 }
