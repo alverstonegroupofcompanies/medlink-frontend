@@ -51,8 +51,13 @@ export const getFullImageUrl = (path?: string | null): string => {
     }
 
     // Clean path (remove leading slash if exists)
-    const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+    let cleanPath = path.startsWith('/') ? path.substring(1) : path;
     // console.log('🖼️ [getFullImageUrl] Cleaned path:', cleanPath);
+
+    // Fix for missing storage prefix in uploads path (common issue)
+    if (cleanPath.startsWith('uploads/')) {
+        cleanPath = `storage/${cleanPath}`;
+    }
 
     // Ensure base URL ends with slash
     const baseUrl = BASE_BACKEND_URL.endsWith('/') ? BASE_BACKEND_URL : `${BASE_BACKEND_URL}/`;
