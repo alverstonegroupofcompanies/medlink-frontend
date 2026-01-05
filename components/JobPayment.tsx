@@ -36,8 +36,8 @@ export const JobPayment: React.FC<JobPaymentProps> = ({
       await API.post(`/payments/${data.payment_id}/mark-paid`);
 
       Alert.alert(
-        'Payment Successful!',
-        'Your payment has been processed. The amount will be released to the doctor after job completion and approval.',
+        'Payment Secured',
+        'Your payment is now held in Escrow. Funds will only be transferred to the doctor after you review and approve their work.',
         [{ text: 'OK', onPress: onSuccess }]
       );
       

@@ -68,8 +68,8 @@ export default function ReviewSessionScreen() {
       // 2. Confirm Only (Payment will be separate)
       await API.post(`/hospital/sessions/${sessionId}/confirm`);
 
-      Alert.alert('Success', 'Work approved successfully! Please proceed to payment release.');
-      loadSession(); // Reload to show payment button
+      Alert.alert('Success', 'Work approved and payment released for admin verification.');
+      loadSession(); // Reload to show confirmed status
     } catch (error: any) {
       console.error('Approval failed:', error);
       Alert.alert('Error', error.response?.data?.message || 'Failed to approve session');
@@ -78,29 +78,7 @@ export default function ReviewSessionScreen() {
     }
   };
 
-  const handlePayment = async () => {
-      setShowPaymentModal(true);
-      setProcessingPayment(true);
-
-      // Simulate bank processing delay for "dummy payment"
-      setTimeout(async () => {
-          try {
-              // Call backend to release payment
-              await API.post(`/hospital/sessions/${sessionId}/release-payment`);
-              
-              setProcessingPayment(false);
-              setTimeout(() => {
-                  setShowPaymentModal(false);
-                  Alert.alert('Payment Successful', 'Payment has been released to the doctor.');
-                  loadSession();
-              }, 500);
-          } catch (error: any) {
-              setProcessingPayment(false);
-              setShowPaymentModal(false);
-              Alert.alert('Payment Failed', error.response?.data?.message || 'Failed to release payment');
-          }
-      }, 2000); // 2 second dummy delay
-  };
+  // handlePayment is now integrated into handleApprove via backend confirmSession logic.
 
   if (loading) {
     return (
@@ -120,37 +98,47 @@ export default function ReviewSessionScreen() {
   const hours = Math.floor(durationMs / (1000 * 60 * 60));
   const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
 
-  const shouldShowReleasePayment = session.hospital_confirmed && session.payment_status !== 'paid' && session.payment_status !== 'released';
+  const payment = session.payments && session.payments.length > 0 ? session.payments[0] : null;
+  const isHospitalApproved = payment?.hospital_approved_at != null;
+
   const isPaymentReleased = session.payment_status === 'released';
   const isPaymentCompleted = session.payment_status === 'paid';
+  const isWaitingForAdmin = isHospitalApproved && !isPaymentReleased && !isPaymentCompleted;
+
+  // Since we combined steps, we no longer need a separate release button logic
+  const shouldShowReleasePayment = false;
 
   return (
     <ScreenSafeArea style={styles.container}>
+
       <StatusBar style="dark" backgroundColor="#fff" />
       
       {/* Payment Processing Modal */}
-      {showPaymentModal && (
-        <View style={StyleSheet.absoluteFillObject}>
-             <View style={{flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', zIndex: 9999}}>
-                <View style={{backgroundColor: 'white', padding: 30, borderRadius: 24, alignItems: 'center', width: '80%', elevation: 10}}>
-                     {processingPayment ? (
-                         <>
-                            <ActivityIndicator size="large" color="#16A34A" />
-                            <Text style={{marginTop: 20, fontSize: 18, fontWeight: '700', color: '#0F172A'}}>Processing Payment...</Text>
-                            <Text style={{marginTop: 8, color: '#64748B', textAlign: 'center'}}>Releasing funds safely via Escrow...</Text>
-                         </>
-                     ) : (
-                         <>
-                            <View style={{width: 60, height: 60, borderRadius: 30, backgroundColor: '#DCFCE7', justifyContent: 'center', alignItems: 'center', marginBottom: 20}}>
-                                <Check size={32} color="#16A34A" />
-                            </View>
-                            <Text style={{fontSize: 20, fontWeight: '700', color: '#16A34A'}}>Payment Sent!</Text>
-                         </>
-                     )}
-                </View>
+      <Modal
+        visible={showPaymentModal}
+        transparent={true}
+        animationType="fade"
+      >
+        <View style={{flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center'}}>
+            <View style={{backgroundColor: 'white', padding: 30, borderRadius: 24, alignItems: 'center', width: '80%', elevation: 10}}>
+                 {processingPayment ? (
+                     <>
+                        <ActivityIndicator size="large" color="#2563EB" />
+                        <Text style={{marginTop: 20, fontSize: 18, fontWeight: '700', color: '#0F172A'}}>Processing Payment...</Text>
+                        <Text style={{marginTop: 8, color: '#64748B', textAlign: 'center'}}>Releasing funds safely via Escrow...</Text>
+                     </>
+                 ) : (
+                     <>
+                        <View style={{width: 64, height: 64, borderRadius: 32, backgroundColor: '#DCFCE7', justifyContent: 'center', alignItems: 'center', marginBottom: 20}}>
+                            <CheckCircle size={36} color="#16A34A" />
+                        </View>
+                        <Text style={{fontSize: 22, fontWeight: '800', color: '#16A34A', textAlign: 'center'}}>Payment Released!</Text>
+                        <Text style={{marginTop: 8, color: '#64748B', textAlign: 'center'}}>The doctor will receive funds shortly.</Text>
+                     </>
+                 )}
             </View>
         </View>
-      )}
+      </Modal>
       
       {/* Header */}
       <Surface style={styles.headerSurface} elevation={0}>
@@ -251,12 +239,12 @@ export default function ReviewSessionScreen() {
                  
                  <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}>
                     <Text variant="bodySmall" style={{color: '#B45309'}}>Includes platform fees</Text>
-                    <Chip 
-                        style={{backgroundColor: isPaymentCompleted ? '#DCFCE7' : isPaymentReleased ? '#FEF3C7' : '#FEF3C7'}} 
-                        textStyle={{color: isPaymentCompleted ? '#166534' : isPaymentReleased ? '#B45309' : '#B45309', fontWeight: 'bold'}}
-                        icon={isPaymentCompleted ? 'check' : 'clock'}
+                     <Chip 
+                        style={{backgroundColor: isPaymentCompleted ? '#DCFCE7' : (isHospitalApproved || isWaitingForAdmin) ? '#DBEAFE' : '#FEF3C7'}} 
+                        textStyle={{color: isPaymentCompleted ? '#166534' : (isHospitalApproved || isWaitingForAdmin) ? '#1E40AF' : '#B45309', fontWeight: 'bold'}}
+                        icon={isPaymentCompleted ? 'check' : (isHospitalApproved || isWaitingForAdmin) ? 'clock-outline' : 'clock'}
                     >
-                        {isPaymentCompleted ? 'PAID' : isPaymentReleased ? 'WAITING' : 'PENDING'}
+                        {isPaymentCompleted ? 'PAID' : isPaymentReleased ? 'RELEASED' : (isHospitalApproved || isWaitingForAdmin) ? 'WAITING APPROVAL' : 'PENDING'}
                     </Chip>
                  </View>
              </Card.Content>
@@ -270,43 +258,47 @@ export default function ReviewSessionScreen() {
                     onPress={handleApprove}
                     loading={submitting}
                     disabled={submitting || rating === 0}
-                    style={{ borderRadius: 12, backgroundColor: PrimaryColors.main }}
-                    contentStyle={{ height: 56 }}
-                    labelStyle={{ fontSize: 18, fontWeight: 'bold' }}
+                    style={{ borderRadius: 12, backgroundColor: '#16A34A' }}
+                    contentStyle={{ height: 60 }}
+                    labelStyle={{ fontSize: 18, fontWeight: '800' }}
+                    icon={() => <ArrowRight size={24} color="white" />}
                 >
-                    Approve Work
+                    Approve & Release Payment
                 </Button>
-            ) : shouldShowReleasePayment ? (
-                <View>
-                    <View style={{backgroundColor: '#EFF6FF', padding: 16, borderRadius: 12, marginBottom: 16, flexDirection: 'row', gap: 12, alignItems: 'center'}}>
-                         <CheckCircle size={24} color="#2563EB" />
-                         <View style={{flex: 1}}>
-                             <Text style={{color: '#1E40AF', fontWeight: '700', fontSize: 16}}>Work Approved</Text>
-                             <Text style={{color: '#1E40AF', fontSize: 13}}>Please release the payment to the doctor.</Text>
-                         </View>
+            ) : (isHospitalApproved || isWaitingForAdmin) ? (
+                <Surface style={{padding: 24, alignItems: 'center', backgroundColor: '#EFF6FF', borderRadius: 20, borderStyle: 'solid', borderWidth: 1, borderColor: '#BFDBFE'}} elevation={0}>
+                    <View style={{width: 60, height: 60, borderRadius: 30, backgroundColor: '#2563EB', justifyContent: 'center', alignItems: 'center', marginBottom: 16}}>
+                        <CheckCircle size={32} color="white" />
                     </View>
+                    <Text variant="headlineSmall" style={{color: '#1E40AF', fontWeight: '800', textAlign: 'center'}}>Payment Confirmed!</Text>
+                    <Text variant="bodyLarge" style={{color: '#1E40AF', marginTop: 8, textAlign: 'center', fontWeight: '600'}}>
+                        Waiting for Admin Approval
+                    </Text>
+                    <Text variant="bodyMedium" style={{color: '#3B82F6', marginTop: 4, textAlign: 'center', lineHeight: 20}}>
+                        The funds are secured in escrow and will be released to the doctor shortly.
+                    </Text>
+                    
                     <Button 
-                        mode="contained"
-                        onPress={handlePayment}
-                        style={{ borderRadius: 12, backgroundColor: '#16A34A' }}
-                        contentStyle={{ height: 56 }}
-                        labelStyle={{ fontSize: 18, fontWeight: 'bold' }}
-                        icon={() => <ArrowRight size={24} color="white" />}
+                        mode="outlined" 
+                        onPress={() => {}} 
+                        disabled={true}
+                        style={{ marginTop: 20, borderRadius: 12, borderColor: '#BFDBFE', width: '100%' }}
+                        labelStyle={{ color: '#1E40AF', fontWeight: 'bold' }}
                     >
-                        Release Payment Now
+                        Funds in Secured Escrow
                     </Button>
-                </View>
+                </Surface>
             ) : isPaymentReleased ? (
-                <Surface style={{padding: 20, alignItems: 'center', backgroundColor: '#FEF9C3', borderRadius: 16}} elevation={1}>
-                    <Clock size={48} color="#CA8A04" />
-                    <Text variant="headlineSmall" style={{color: '#CA8A04', fontWeight: 'bold', marginTop: 12}}>Payment Waiting</Text>
-                    <Text variant="bodyMedium" style={{color: '#854D0E', marginTop: 4, textAlign: 'center'}}>Funds released. Waiting for admin approval.</Text>
+                <Surface style={{padding: 24, alignItems: 'center', backgroundColor: '#DCFCE7', borderRadius: 16}} elevation={1}>
+                    <CheckCircle size={48} color="#15803D" />
+                    <Text variant="headlineSmall" style={{color: '#15803D', fontWeight: 'bold', marginTop: 12}}>Payment Released</Text>
+                    <Text variant="bodyMedium" style={{color: '#166534', marginTop: 4}}>The doctor has received the payment.</Text>
                 </Surface>
             ) : (
-                <Surface style={{padding: 20, alignItems: 'center', backgroundColor: '#DCFCE7', borderRadius: 16}} elevation={1}>
+                <Surface style={{padding: 24, alignItems: 'center', backgroundColor: '#DCFCE7', borderRadius: 16}} elevation={1}>
                     <CheckCircle size={48} color="#15803D" />
-                    <Text variant="headlineSmall" style={{color: '#15803D', fontWeight: 'bold', marginTop: 12}}>Payment Completed</Text>
-                    <Text variant="bodyMedium" style={{color: '#166534', marginTop: 4}}>Transaction ID: #PAY-{session.id}</Text>
+                    <Text variant="headlineSmall" style={{color: '#15803D', fontWeight: 'bold', marginTop: 12}}>Transaction Completed</Text>
+                    <Text variant="bodyMedium" style={{color: '#166534', marginTop: 4}}>Transaction ID: #PAY-{payment?.id || session.id}</Text>
                 </Surface>
             )}
         </View>
