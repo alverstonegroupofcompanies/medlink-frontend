@@ -121,7 +121,8 @@ export default function ReviewSessionScreen() {
   const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
 
   const shouldShowReleasePayment = session.hospital_confirmed && session.payment_status !== 'paid' && session.payment_status !== 'released';
-  const isPaid = session.payment_status === 'paid' || session.payment_status === 'released';
+  const isPaymentReleased = session.payment_status === 'released';
+  const isPaymentCompleted = session.payment_status === 'paid';
 
   return (
     <ScreenSafeArea style={styles.container}>
@@ -251,11 +252,11 @@ export default function ReviewSessionScreen() {
                  <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}>
                     <Text variant="bodySmall" style={{color: '#B45309'}}>Includes platform fees</Text>
                     <Chip 
-                        style={{backgroundColor: isPaid ? '#DCFCE7' : '#FEF3C7'}} 
-                        textStyle={{color: isPaid ? '#166534' : '#B45309', fontWeight: 'bold'}}
-                        icon={isPaid ? 'check' : 'clock'}
+                        style={{backgroundColor: isPaymentCompleted ? '#DCFCE7' : isPaymentReleased ? '#FEF3C7' : '#FEF3C7'}} 
+                        textStyle={{color: isPaymentCompleted ? '#166534' : isPaymentReleased ? '#B45309' : '#B45309', fontWeight: 'bold'}}
+                        icon={isPaymentCompleted ? 'check' : 'clock'}
                     >
-                        {isPaid ? 'PAID' : 'PENDING'}
+                        {isPaymentCompleted ? 'PAID' : isPaymentReleased ? 'WAITING' : 'PENDING'}
                     </Chip>
                  </View>
              </Card.Content>
@@ -295,6 +296,12 @@ export default function ReviewSessionScreen() {
                         Release Payment Now
                     </Button>
                 </View>
+            ) : isPaymentReleased ? (
+                <Surface style={{padding: 20, alignItems: 'center', backgroundColor: '#FEF9C3', borderRadius: 16}} elevation={1}>
+                    <Clock size={48} color="#CA8A04" />
+                    <Text variant="headlineSmall" style={{color: '#CA8A04', fontWeight: 'bold', marginTop: 12}}>Payment Waiting</Text>
+                    <Text variant="bodyMedium" style={{color: '#854D0E', marginTop: 4, textAlign: 'center'}}>Funds released. Waiting for admin approval.</Text>
+                </Surface>
             ) : (
                 <Surface style={{padding: 20, alignItems: 'center', backgroundColor: '#DCFCE7', borderRadius: 16}} elevation={1}>
                     <CheckCircle size={48} color="#15803D" />

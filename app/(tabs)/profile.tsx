@@ -12,6 +12,7 @@ import {
   Platform,
   StatusBar,
   Dimensions,
+  Modal,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -34,6 +35,7 @@ import {
   Upload,
   Eye,
   AlertCircle,
+  Check,
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -55,6 +57,8 @@ export default function ProfileScreen() {
   const [profilePhotoUri, setProfilePhotoUri] = useState<string | null>(null);
   const [originalProfilePhotoUri, setOriginalProfilePhotoUri] = useState<string | null>(null);
   const [departments, setDepartments] = useState<any[]>([]);
+  const [showDepartmentModal, setShowDepartmentModal] = useState(false);
+  const [selectedDepartmentIds, setSelectedDepartmentIds] = useState<number[]>([]);
   const safeBottomPadding = useSafeBottomPadding();
   const [documents, setDocuments] = useState<{
     degree_certificate?: { uri: string; name: string; type: string };
@@ -122,6 +126,15 @@ export default function ProfileScreen() {
             preferred_location: doctorData.preferred_location || '',
           });
           
+          // Initialize selected departments
+          if (doctorData.departments && Array.isArray(doctorData.departments) && doctorData.departments.length > 0) {
+            setSelectedDepartmentIds(doctorData.departments.map((d: any) => d.id));
+          } else if (doctorData.department_id) {
+            setSelectedDepartmentIds([doctorData.department_id]);
+          } else {
+            setSelectedDepartmentIds([]);
+          }
+          
           if (doctorData.profile_photo) {
             const photoUrl = getProfilePhotoUrl(doctorData);
             setProfilePhotoUri(photoUrl);
@@ -154,6 +167,14 @@ export default function ProfileScreen() {
           preferred_work_type: info.preferred_work_type || '',
           preferred_location: info.preferred_location || '',
         });
+
+        // Initialize selected departments from cache
+        if (info.departments && Array.isArray(info.departments) && info.departments.length > 0) {
+            setSelectedDepartmentIds(info.departments.map((d: any) => d.id));
+        } else if (info.department_id) {
+            setSelectedDepartmentIds([info.department_id]);
+        }
+        
         if (info.profile_photo) {
           const photoUrl = getProfilePhotoUrl(info);
           setProfilePhotoUri(photoUrl);
@@ -253,6 +274,10 @@ export default function ProfileScreen() {
           data.append(key, String(value));
         }
       });
+      
+      // Append selected department IDs as JSON string for robust handling
+      // This ensures empty arrays are sent correctly and bypasses some FormData array quirks
+      data.append('department_ids_json', JSON.stringify(selectedDepartmentIds));
 
       // Only send profile photo if it's a new local file (different from original)
       // Check if it's a local file: file://, content://, or not http/https
@@ -368,6 +393,24 @@ export default function ProfileScreen() {
 
   const updateField = (field: string, value: string | number | null) => {
     setFormData((prev: any) => ({ ...prev, [field]: value }));
+  };
+
+  const toggleDepartment = (id: number) => {
+    setSelectedDepartmentIds(prev => {
+      if (prev.includes(id)) {
+        return prev.filter(deptId => deptId !== id);
+      } else {
+        return [...prev, id];
+      }
+    });
+  };
+
+  const saveDepartments = () => {
+    // Update the main form data's department_id for existing logic
+    // We'll set the primary department as the first selected one, or empty
+    const primaryId = selectedDepartmentIds.length > 0 ? selectedDepartmentIds[0] : '';
+    updateField('department_id', primaryId);
+    setShowDepartmentModal(false);
   };
 
   const profileCompletion = doctor ? Math.round(calculateProfileCompletion(doctor) * 100) : 0;
@@ -701,30 +744,38 @@ export default function ProfileScreen() {
               <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
                 <Text style={styles.editSectionTitle}>Professional Information</Text>
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Department</Text>
+                  <Text style={styles.inputLabel}>Departments</Text>
                   <TouchableOpacity
                     style={styles.input}
-                    onPress={() => {
-                      Alert.alert(
-                        'Select Department',
-                        'Choose your department',
-                        [
-                          { text: 'None', onPress: () => updateField('department_id', '') },
-                          ...departments.map((dept: any) => ({
-                            text: dept.name,
-                            onPress: () => updateField('department_id', dept.id),
-                          })),
-                          { text: 'Cancel', style: 'cancel' },
-                        ]
-                      );
-                    }}
+                    onPress={() => setShowDepartmentModal(true)}
                   >
-                    <Text style={{ color: formData.department_id ? ModernColors.text.primary : ModernColors.text.tertiary }}>
-                      {formData.department_id  
-                        ? departments.find((d: any) => d.id === formData.department_id)?.name || 'Select department...'
-                        : 'Select department...'}
+                    <Text style={{ color: selectedDepartmentIds.length > 0 ? ModernColors.text.primary : ModernColors.text.tertiary }}>
+                      {selectedDepartmentIds.length > 0 
+                        ? `${selectedDepartmentIds.length} department${selectedDepartmentIds.length > 1 ? 's' : ''} selected`
+                        : 'Select departments...'}
                     </Text>
                   </TouchableOpacity>
+                  {selectedDepartmentIds.length > 0 && (
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                      {departments
+                        .filter(d => selectedDepartmentIds.includes(d.id))
+                        .map(d => (
+                          <View key={d.id} style={{
+                            backgroundColor: ModernColors.primary.light,
+                            paddingHorizontal: 10,
+                            paddingVertical: 4,
+                            borderRadius: 12,
+                          }}>
+                            <Text style={{
+                              color: ModernColors.primary.main,
+                              fontSize: 12,
+                              fontWeight: '500'
+                            }}>{d.name}</Text>
+                          </View>
+                        ))
+                      }
+                    </View>
+                  )}
                 </View>
                 <View style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Qualifications</Text>
@@ -980,6 +1031,60 @@ export default function ProfileScreen() {
           )}
         </ScrollView>
       </View>
+
+      {/* Department Selection Modal */}
+      <Modal
+        visible={showDepartmentModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowDepartmentModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Departments</Text>
+              <TouchableOpacity onPress={() => setShowDepartmentModal(false)} style={styles.closeButton}>
+                <X size={24} color={ModernColors.text.primary} />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
+              {departments.map((dept: any) => {
+                const isSelected = selectedDepartmentIds.includes(dept.id);
+                return (
+                  <TouchableOpacity
+                    key={dept.id}
+                    style={[
+                      styles.modalOption,
+                      isSelected && styles.modalOptionSelected
+                    ]}
+                    onPress={() => toggleDepartment(dept.id)}
+                  >
+                    <Text style={[
+                      styles.modalOptionText,
+                      isSelected && styles.modalOptionTextSelected
+                    ]}>
+                      {dept.name}
+                    </Text>
+                    {isSelected && (
+                      <Check size={20} color={ModernColors.primary.main} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity 
+                style={styles.modalButtonPrimary}
+                onPress={saveDepartments}
+              >
+                <Text style={styles.modalButtonText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScreenSafeArea>
   );
 }
@@ -988,6 +1093,74 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: ModernColors.background.secondary,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    height: '70%',
+    paddingBottom: 30,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: ModernColors.text.primary,
+  },
+  closeButton: {
+    padding: 4,
+  },
+  modalList: {
+    padding: 20,
+  },
+  modalOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f5f5f5',
+  },
+  modalOptionSelected: {
+    backgroundColor: '#F0F9FF',
+    marginHorizontal: -20,
+    paddingHorizontal: 20,
+  },
+  modalOptionText: {
+    fontSize: 16,
+    color: ModernColors.text.secondary,
+  },
+  modalOptionTextSelected: {
+    color: ModernColors.primary.main,
+    fontWeight: '600',
+  },
+  modalFooter: {
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  modalButtonPrimary: {
+    backgroundColor: ModernColors.primary.main,
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  modalButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
   headerGradient: {
     paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + 20 : 50,

@@ -11,6 +11,8 @@ import {
   AppState,
   Dimensions,
   Platform,
+  DeviceEventEmitter,
+  Modal,
 } from "react-native";
 import { Star, Bell, MapPin, Clock, TrendingUp, Award, Building2, CheckCircle, ArrowRight, Calendar, AlertCircle, Phone, Navigation, LogOut } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -41,6 +43,7 @@ export default function DoctorHome() {
   // Loading states
   const hasLoaded = React.useRef(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [scheduleModalVisible, setScheduleModalVisible] = useState(false);
 
 
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -320,43 +323,14 @@ export default function DoctorHome() {
       loadNotifications();
     }, 30000);
 
-    // Listen for real-time application updates
-    if (doctor?.id) {
-        console.log(`🔌 Subscribing to private channel: App.Models.User.${doctor.id}`);
-        echo.private(`App.Models.User.${doctor.id}`)
-            .listen('.ApplicationStatusUpdated', (e: any) => {
-                console.log('🔔 Real-time update received:', e);
-                
-                // Show system notification
-                showNotificationFromData({
-                    title: 'Application Update',
-                    message: e.message,
-                    type: e.data?.type || 'info', // Use type from event data
-                    data: e.data
-                });
-
-                // Refresh data
-                loadMyApplications();
-                loadNotifications();
-                loadJobRequirements();
-                loadJobSessions();
-            })
-            .listen('.NewJobPosted', (e: any) => {
-                console.log('🔔 New Job Posting received:', e);
-                
-                // Show system notification
-                showNotificationFromData({
-                    title: 'New Job Opportunity',
-                    message: e.message,
-                    type: 'info',
-                    data: { type: 'new_job_posting', ...e.jobRequirement }
-                });
-
-                // Refresh job requirements list
-                loadJobRequirements();
-                loadNotifications();
-            });
-    }
+    // Listen for global refresh events from _layout.tsx
+    const refreshSubscription = DeviceEventEmitter.addListener('REFRESH_DOCTOR_DATA', () => {
+        console.log('🔄 [Dashboard] Received global refresh event');
+        loadMyApplications();
+        loadNotifications();
+        loadJobRequirements();
+        loadJobSessions();
+    });
     
     const subscription = AppState.addEventListener("change", (nextAppState) => {
       if (nextAppState === "active") {
@@ -370,11 +344,9 @@ export default function DoctorHome() {
 
     return () => {
       subscription.remove();
+      refreshSubscription.remove();
       clearInterval(notificationInterval);
       stopTracking(); 
-      if (doctor?.id) {
-          echo.leave(`App.Models.User.${doctor.id}`);
-      }
     };
   }, [doctor?.id]); // Re-run if doctor ID changes (e.g. login)
 
@@ -427,6 +399,9 @@ export default function DoctorHome() {
 
   const upcomingApplications = myApplications.filter((app: any) => {
     if (app.status !== 'selected') return false;
+    // Exclude if already checked in
+    if (app.job_session?.check_in_time) return false;
+    
     let taskDate: Date | null = null;
     if (app.job_requirement?.work_required_date) {
       taskDate = new Date(app.job_requirement.work_required_date);
@@ -635,21 +610,26 @@ export default function DoctorHome() {
                       isToday && styles.dayCardToday,
                       isSelected && styles.dayCardSelected
                     ]}
-                    onPress={() => setSelectedDate(date)}
+                    onPress={() => {
+                        setSelectedDate(date);
+                        setScheduleModalVisible(true);
+                    }}
                     activeOpacity={0.7}
                   >
                     <Text style={[
                       styles.dayName,
-                      (isToday || isSelected) && styles.dayNameActive
+                      (isToday || isSelected) && styles.dayNameActive,
+                      isToday && !isSelected && { color: ModernColors.primary.main }
                     ]}>{dayName}</Text>
                     <Text style={[
                       styles.dayNumber,
-                      (isToday || isSelected) && styles.dayNumberActive
+                      (isToday || isSelected) && styles.dayNumberActive,
+                      isToday && !isSelected && { color: ModernColors.primary.main }
                     ]}>{dayNumber}</Text>
                     {hasSession && (
                       <View style={[
                         styles.sessionIndicator,
-                        isToday && styles.sessionIndicatorToday
+                        isSelected && { backgroundColor: '#fff' }
                       ]} />
                     )}
                   </TouchableOpacity>
@@ -703,12 +683,13 @@ export default function DoctorHome() {
           </View>
 
           {/* Attention Needed Section */}
+          {/* Action Required Section */}
           {attentionNeeded.length > 0 && (
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <View style={styles.sectionTitleContainer}>
                   <AlertCircle size={20} color={ModernColors.error.main} />
-                  <Text style={[styles.sectionTitle, { color: ModernColors.error.main }]}>Attention Needed</Text>
+                  <Text style={[styles.sectionTitle, { color: ModernColors.error.main }]}>Action Required</Text>
                 </View>
               </View>
               
@@ -728,80 +709,79 @@ export default function DoctorHome() {
                   const isUpcoming = sessionDateTime >= now;
                   
                   return (
-                    <ModernCard key={session.id} variant="elevated" padding="md" style={styles.attentionCard}>
-                      <View style={styles.attentionHeader}>
-                        <View style={styles.attentionInfo}>
-                          <View style={styles.attentionTitleRow}>
-                            <Text style={styles.attentionHospital} numberOfLines={1}>
-                              {session.job_requirement?.hospital?.name || 'Hospital'}
-                            </Text>
-                            <View style={[
-                              styles.lateBadge, 
-                              isUpcoming && styles.upcomingBadge
-                            ]}>
-                              <Text style={styles.lateBadgeText}>
-                                {isUpcoming ? "DON'T MISS OUT" : 'MISSED CHECK-IN'}
-                              </Text>
-                            </View>
+                    <ModernCard key={session.id} variant="elevated" padding="md" style={[styles.attentionCard, { borderColor: ModernColors.error.light, borderWidth: 1 }]}>
+                      
+                      {/* Minimal Header */}
+                      <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12}}>
+                          <View style={{flexDirection: 'row', alignItems: 'center', gap: 8}}>
+                             <View style={{width: 8, height: 8, borderRadius: 4, backgroundColor: ModernColors.error.main}} />
+                             <Text style={{fontSize: 14, fontWeight: '700', color: ModernColors.error.main, letterSpacing: 0.5}}>
+                                 CHECK-IN REQUIRED
+                             </Text>
                           </View>
-                          <Text style={styles.attentionDepartment} numberOfLines={1}>
-                            {session.job_requirement?.department || 'Department'}
+                          <Text style={{fontSize: 12, fontWeight: '600', color: ModernColors.text.secondary}}>
+                             {sessionDateTime.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })} • {new Date(`2000-01-01 ${session.job_requirement?.start_time || '00:00'}`).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
                           </Text>
-                          {sessionDateTime && (
-                            <View style={styles.attentionDateTimeContainer}>
-                              <View style={styles.attentionDateRow}>
-                                <Calendar size={14} color={isUpcoming ? ModernColors.warning.main : ModernColors.error.main} />
-                                <Text style={[
-                                  styles.attentionDate,
-                                  isUpcoming && styles.attentionDateUpcoming
-                                ]}>
-                                  {sessionDateTime.toLocaleDateString('en-IN', { 
-                                    day: '2-digit', 
-                                    month: 'short', 
-                                    year: 'numeric' 
-                                  })}
-                                </Text>
-                              </View>
-                              {session.job_requirement?.start_time && (
-                                <View style={styles.attentionTimeContainer}>
-                                  <Clock size={14} color={isUpcoming ? ModernColors.warning.main : ModernColors.error.main} />
-                                  <Text style={[
-                                    styles.attentionTime,
-                                    isUpcoming && styles.attentionTimeUpcoming
-                                  ]}>
-                                    {new Date(`2000-01-01 ${session.job_requirement.start_time}`).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
-                                  </Text>
-                                </View>
-                              )}
-                            </View>
-                          )}
-                        </View>
                       </View>
-                      <View style={styles.attentionActions}>
-                        <TouchableOpacity
-                          style={styles.attentionCallButton}
-                          onPress={() => {
-                            // TODO: Implement call functionality
-                            Alert.alert('Call', `Calling ${session.job_requirement?.hospital?.name}`);
-                          }}
-                        >
-                          <Phone size={16} color={ModernColors.primary.main} />
-                          <Text style={styles.attentionCallText}>Call</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.attentionViewButton}
-                          onPress={() => {
-                            if (session.application_id) {
-                              router.push(`/job-detail/${session.application_id}`);
-                            } else {
-                              console.warn("No application ID for session:", session.id);
-                            }
-                          }}
-                        >
-                          <Text style={styles.attentionViewText}>View Details</Text>
-                          <ArrowRight size={16} color="#fff" />
-                        </TouchableOpacity>
+
+                      {/* Main Info */}
+                      <Text style={{fontSize: 18, fontWeight: '700', color: ModernColors.text.primary, marginBottom: 4}}>
+                         {session.job_requirement?.hospital?.name || 'Hospital Name'}
+                      </Text>
+                      <Text style={{fontSize: 14, color: ModernColors.text.secondary, marginBottom: 16}}>
+                         {session.job_requirement?.department || 'Department'}
+                      </Text>
+
+                      {/* Trust Note */}
+                      <View style={{
+                          backgroundColor: '#FFF4E5', 
+                          padding: 12, 
+                          borderRadius: 8, 
+                          marginBottom: 16,
+                          flexDirection: 'row',
+                          gap: 10
+                      }}>
+                          <Navigation size={18} color="#F59E0B" style={{marginTop: 2}} />
+                          <View style={{flex: 1}}>
+                              <Text style={{fontSize: 13, fontWeight: '600', color: '#B45309', marginBottom: 2}}>
+                                  Live Location Mandatory
+                              </Text>
+                              <Text style={{fontSize: 12, color: '#92400E', lineHeight: 16}}>
+                                  Sharing your live location build trust with the hospital regarding your availability.
+                              </Text>
+                          </View>
                       </View>
+                      
+                      {/* Action Button */}
+                      <TouchableOpacity
+                        style={{
+                            backgroundColor: ModernColors.primary.main,
+                            paddingVertical: 12,
+                            borderRadius: 10,
+                            flexDirection: 'row',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            gap: 8,
+                            shadowColor: ModernColors.primary.main,
+                            shadowOffset: { width: 0, height: 4 },
+                            shadowOpacity: 0.2,
+                            shadowRadius: 8,
+                            elevation: 4
+                        }}
+                        onPress={() => {
+                          if (session.application_id) {
+                            router.push(`/job-detail/${session.application_id}`);
+                          } else {
+                            console.warn("No application ID for session:", session.id);
+                          }
+                        }}
+                      >
+                        <Text style={{color: '#fff', fontSize: 14, fontWeight: '700'}}>
+                            Check In & Start Tracking
+                        </Text>
+                        <ArrowRight size={16} color="#fff" />
+                      </TouchableOpacity>
+
                     </ModernCard>
                   );
                 })}
@@ -1068,6 +1048,124 @@ export default function DoctorHome() {
             )}
           </View>
         </ScrollView>
+        
+        {/* Schedule Modal */}
+        <Modal
+            animationType="fade"
+            transparent={true}
+            visible={scheduleModalVisible}
+            onRequestClose={() => setScheduleModalVisible(false)}
+        >
+            <View style={{
+                flex: 1,
+                backgroundColor: 'rgba(0,0,0,0.5)',
+                justifyContent: 'center',
+                alignItems: 'center',
+                padding: 20
+            }}>
+                <View style={{
+                    backgroundColor: '#fff',
+                    borderRadius: 20,
+                    width: '100%',
+                    maxWidth: 340,
+                    padding: 20,
+                    ...Shadows.lg
+                }}>
+                    <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16}}>
+                        <View>
+                            <Text style={{fontSize: 20, fontWeight: '700', color: ModernColors.text.primary}}>
+                                {selectedDate.toLocaleDateString('en-US', { weekday: 'long' })}
+                            </Text>
+                            <Text style={{fontSize: 14, color: ModernColors.text.secondary}}>
+                                {selectedDate.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}
+                            </Text>
+                        </View>
+                        <TouchableOpacity onPress={() => setScheduleModalVisible(false)} style={{padding: 4}}>
+                            <View style={{backgroundColor: ModernColors.neutral.gray200, borderRadius: 12, padding: 6}}>
+                                <ArrowRight size={16} color={ModernColors.text.primary} style={{transform: [{rotate: '45deg'}]}} /> 
+                                {/* Using Arrow as Close 'X' approximation or should create X component. 
+                                    Actually simplest is allow clicking outside, but close button is good.
+                                    Let's use a clear Close functionality.
+                                 */}
+                            </View>
+                        </TouchableOpacity>
+                    </View>
+
+                    {(() => {
+                        const dateSessions = jobSessions.filter((session: any) => {
+                            if (!session.session_date) return false;
+                            return new Date(session.session_date).toDateString() === selectedDate.toDateString();
+                        });
+
+                        if (dateSessions.length === 0) {
+                            return (
+                                <View style={{paddingVertical: 30, alignItems: 'center'}}>
+                                    <Clock size={40} color={ModernColors.neutral.gray300} style={{marginBottom: 12}} />
+                                    <Text style={{fontSize: 16, color: ModernColors.text.secondary, fontWeight: '500'}}>No shifts scheduled</Text>
+                                    <Text style={{fontSize: 12, color: ModernColors.text.tertiary, textAlign: 'center', marginTop: 4}}>
+                                        You don't have any work scheduled for this day.
+                                    </Text>
+                                </View>
+                            );
+                        }
+
+                        return (
+                            <View style={{gap: 12}}>
+                                {dateSessions.map((session: any, idx) => (
+                                    <TouchableOpacity 
+                                        key={idx}
+                                        style={{
+                                            padding: 12,
+                                            backgroundColor: ModernColors.background.secondary,
+                                            borderRadius: 12,
+                                            borderWidth: 1,
+                                            borderColor: ModernColors.border.light
+                                        }}
+                                        onPress={() => {
+                                            setScheduleModalVisible(false);
+                                            router.push(`/job-detail/${session.job_requirement_id}`);
+                                        }}
+                                    >
+                                        <Text style={{fontSize: 16, fontWeight: '700', color: ModernColors.text.primary, marginBottom: 4}}>
+                                            {session.job_requirement?.hospital?.name || 'Hospital'}
+                                        </Text>
+                                        <Text style={{fontSize: 13, color: ModernColors.text.secondary, marginBottom: 8}}>
+                                            {session.job_requirement?.department || 'Department'}
+                                        </Text>
+                                        <View style={{flexDirection: 'row', alignItems: 'center', gap: 6}}>
+                                            <Clock size={12} color={ModernColors.primary.main} />
+                                            <Text style={{fontSize: 12, fontWeight: '600', color: ModernColors.primary.main}}>
+                                                {new Date(`2000-01-01 ${session.job_requirement?.start_time || '00:00'}`).toLocaleTimeString('en-US', {hour: 'numeric', minute:'2-digit', hour12: true})}
+                                                 {' - '}
+                                                {new Date(`2000-01-01 ${session.job_requirement?.end_time || '00:00'}`).toLocaleTimeString('en-US', {hour: 'numeric', minute:'2-digit', hour12: true})}
+                                            </Text>
+                                        </View>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        );
+                    })()}
+
+                    <TouchableOpacity 
+                        style={{
+                            marginTop: 20,
+                            backgroundColor: ModernColors.primary.main,
+                            paddingVertical: 14,
+                            borderRadius: 12,
+                            alignItems: 'center'
+                        }}
+                        onPress={() => {
+                           setScheduleModalVisible(false);
+                           // If filtered sessions > 0, we can go to Today's Jobs or Active Jobs
+                           // router.push('/(tabs)/active-jobs');
+                        }}
+                    >
+                        <Text style={{color: '#fff', fontSize: 16, fontWeight: '700'}}>Done</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+        </Modal>
+
       </View>
     </ScreenSafeArea>
   );

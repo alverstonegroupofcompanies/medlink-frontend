@@ -781,7 +781,7 @@ export default function HospitalDashboard() {
   };
 
   return (
-    <ScreenSafeArea backgroundColor="transparent" statusBarStyle="dark-content" edges={['top', 'left', 'right']}>
+    <ScreenSafeArea backgroundColor="#2563EB" statusBarStyle="light-content" edges={['top', 'left', 'right']}>
       {/* Custom Logout Confirmation Modal - appears on top of everything */}
       <Modal
         visible={showLogoutModal}
@@ -915,6 +915,36 @@ export default function HospitalDashboard() {
 
         {!showForm ? (
           <>
+            {/* Active & Recent Work Section - MOVED TO TOP */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                 <Text style={styles.sectionTitle}>Job Sessions</Text>
+                 <TouchableOpacity onPress={() => router.push('/hospital/sessions' as any)}>
+                    <Text style={{color: '#2563EB', fontWeight: '600'}}>View All</Text>
+                 </TouchableOpacity>
+              </View>
+              
+              {loadingSessions && sessions.length === 0 ? (
+                  <View style={{padding: 20, alignItems: 'center'}}>
+                      <ActivityIndicator size="small" color={PrimaryColors.main} />
+                  </View>
+              ) : (!sessions || sessions.length === 0) ? (
+                  <Card style={styles.emptyCard} mode="outlined">
+                    <Card.Content style={styles.emptyContent}>
+                       <Clock size={40} color="#9CA3AF" />
+                       <Text style={styles.emptyTitle}>No Active Work</Text>
+                       <Text style={styles.emptySubtitle}>Approved job sessions will appear here</Text>
+                    </Card.Content>
+                  </Card>
+              ) : (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{paddingRight: 16}}>
+                      {sessions.slice(0, 5).map((session: any) => (
+                          <SessionItem key={session.id} session={session} />
+                      ))}
+                  </ScrollView>
+              )}
+            </View>
+
             {/* Quick Actions */}
             <View style={styles.actionsRow}>
               <Button
@@ -990,35 +1020,7 @@ export default function HospitalDashboard() {
               )}
             </View>
 
-            {/* Active & Recent Work Section */}
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                 <Text style={styles.sectionTitle}>Job Sessions</Text>
-                 <TouchableOpacity onPress={() => router.push('/hospital/sessions' as any)}>
-                    <Text style={{color: '#2563EB', fontWeight: '600'}}>View All</Text>
-                 </TouchableOpacity>
-              </View>
-              
-              {loadingSessions && sessions.length === 0 ? (
-                  <View style={{padding: 20, alignItems: 'center'}}>
-                      <ActivityIndicator size="small" color={PrimaryColors.main} />
-                  </View>
-              ) : (!sessions || sessions.length === 0) ? (
-                  <Card style={styles.emptyCard} mode="outlined">
-                    <Card.Content style={styles.emptyContent}>
-                       <Clock size={40} color="#9CA3AF" />
-                       <Text style={styles.emptyTitle}>No Active Work</Text>
-                       <Text style={styles.emptySubtitle}>Approved job sessions will appear here</Text>
-                    </Card.Content>
-                  </Card>
-              ) : (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{paddingRight: 16}}>
-                      {sessions.slice(0, 5).map((session: any) => (
-                          <SessionItem key={session.id} session={session} />
-                      ))}
-                  </ScrollView>
-              )}
-            </View>
+
 
             {/* Requirements Section */}
           </>
@@ -1788,25 +1790,25 @@ const styles = StyleSheet.create({
   },
   workCard: {
       backgroundColor: '#fff',
-      borderRadius: 12,
-      padding: 12,
-      marginRight: 12,
-      width: 200,
+      borderRadius: 16,
+      padding: 16,
+      marginRight: 16,
+      width: 260,
       borderWidth: 1,
       borderColor: '#E5E7EB',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.05,
-      shadowRadius: 2,
-      elevation: 2,
+      shadowColor: '#2563EB',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.08,
+      shadowRadius: 8,
+      elevation: 4,
   },
   workHeader: {
       flexDirection: 'row',
       alignItems: 'center',
-      marginBottom: 10,
+      marginBottom: 12,
   },
   workDoctorName: {
-      fontSize: 14,
+      fontSize: 15,
       fontWeight: '700',
       color: '#1F2937',
   },

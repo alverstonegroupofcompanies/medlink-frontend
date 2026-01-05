@@ -11,6 +11,7 @@ import {
   Dimensions,
   Platform,
   StatusBar,
+  DeviceEventEmitter,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -109,7 +110,16 @@ export default function ApprovedApplicationsScreen() {
       loadApplications();
     }, 30000);
     
-    return () => clearInterval(interval);
+    // Listen for global refresh events
+    const refreshSubscription = DeviceEventEmitter.addListener('REFRESH_DOCTOR_DATA', () => {
+        console.log('🔄 [ApprovedApps] Received global refresh event');
+        loadApplications();
+    });
+
+    return () => {
+        clearInterval(interval);
+        refreshSubscription.remove();
+    };
   }, []);
 
   useFocusEffect(

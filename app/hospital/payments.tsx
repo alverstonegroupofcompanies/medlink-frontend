@@ -52,39 +52,54 @@ export default function PaymentHistoryScreen() {
     }
   };
 
-  const renderItem = ({ item }: { item: any }) => (
-    <View style={styles.card}>
-      <View style={styles.cardTopRow}>
-        <View style={styles.doctorInfoContainer}>
-            <View style={[styles.avatar, { backgroundColor: PrimaryColors.main + '10' }]}>
-               <User size={20} color={PrimaryColors.main} />
-            </View>
-            <View>
-                <Text style={styles.doctorName}>Dr. {item.doctor?.name || 'Unknown'}</Text>
-                <Text style={styles.sessionInfo}>Session #{item.job_session_id} • {new Date(item.created_at).toLocaleDateString()}</Text>
-            </View>
-        </View>
-        <Text style={styles.amountValue}>₹{item.amount}</Text>
-      </View>
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'released': return <CheckCircle size={14} color="#16A34A" />;
+      case 'in_escrow': return <Clock size={14} color="#F59E0B" />;
+      case 'refunded': return <AlertCircle size={14} color="#DC2626" />;
+      default: return <AlertCircle size={14} color="#64748B" />;
+    }
+  };
 
-      <View style={styles.cardBottomRow}>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '15' }]}>
-            <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-                {getStatusLabel(item.status)}
-            </Text>
+  const renderItem = ({ item }: { item: any }) => (
+    <View style={styles.transactionItem}>
+      <View style={styles.transactionLeft}>
+        <View style={styles.iconContainer}>
+            {item.doctor?.profile_photo ? (
+                // Use Image if available, or just an icon
+                <User size={24} color={PrimaryColors.main} />
+            ) : (
+                <View style={[styles.avatarPlaceholder, { backgroundColor: '#EFF6FF' }]}>
+                    <User size={20} color={PrimaryColors.main} />
+                </View>
+            )}
         </View>
-        <Text style={styles.paymentMethod}>{item.payment_method?.replace('_', ' ').toUpperCase() || 'WALLET'}</Text>
+        <View style={styles.infoContainer}>
+            <Text style={styles.merchantName} numberOfLines={1}>Dr. {item.doctor?.name || 'Unknown Doctor'}</Text>
+            <Text style={styles.transactionDate}>{new Date(item.created_at).toLocaleDateString()} • {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+            <View style={styles.subInfoRow}>
+                 {getStatusIcon(item.status)}
+                 <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
+                    {getStatusLabel(item.status)}
+                 </Text>
+            </View>
+        </View>
+      </View>
+      
+      <View style={styles.transactionRight}>
+        <Text style={styles.amountText}>- ₹{item.amount}</Text>
+        <Text style={styles.paymentMethodText}>{item.payment_method?.replace('_', ' ').toUpperCase() || 'WALLET'}</Text>
       </View>
     </View>
   );
 
   return (
-    <ScreenSafeArea style={styles.container} backgroundColor={PrimaryColors.main}>
-      <StatusBar style="light" backgroundColor={PrimaryColors.main} />
+    <ScreenSafeArea style={styles.container} backgroundColor="#fff">
+      <StatusBar style="dark" />
       
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <ArrowLeft size={24} color="#fff" />
+          <ArrowLeft size={24} color="#0F172A" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Payment History</Text>
         <View style={{ width: 24 }} />
@@ -118,29 +133,31 @@ export default function PaymentHistoryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: PrimaryColors.main,
+    backgroundColor: '#fff', // White background for the whole screen
   },
   contentContainer: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#fff',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 20,
-    backgroundColor: PrimaryColors.main,
-    borderBottomWidth: 0,
+    paddingTop: 10, // Adjusted for safe area
+    paddingBottom: 16,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#fff',
+    fontWeight: '700',
+    color: '#0F172A',
   },
   backBtn: {
-    padding: 4,
+    padding: 8,
+    marginLeft: -8,
   },
   center: {
     flex: 1,
@@ -148,109 +165,86 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   listContent: {
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingTop: 20,
   },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  cardHeader: {
-    // Removed
-  },
-  cardTopRow: {
+  
+  // New Transaction Item Styles
+  transactionItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
+    alignItems: 'flex-start', // Align to top
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
-  cardBottomRow: {
+  transactionLeft: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flex: 1,
+    gap: 12,
+  },
+  iconContainer: {
+     marginTop: 2,
+  },
+  avatarPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 8, // Square-ish rounded
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
   },
-  doctorInfo: {
-     // Removed
+  infoContainer: {
+    justifyContent: 'space-between',
+    gap: 4,
   },
-  doctorInfoContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-      flex: 1,
+  merchantName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0F172A',
   },
-  avatar: {
-      width: 40, 
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: '#F1F5F9',
-      justifyContent: 'center',
-      alignItems: 'center',
+  transactionDate: {
+    fontSize: 12,
+    color: '#64748B',
   },
-  doctorName: {
-      fontSize: 15,
-      fontWeight: '600',
-      color: '#0F172A',
-      marginBottom: 2,
-  },
-  sessionInfo: {
-      fontSize: 12,
-      color: '#64748B',
-  },
-  date: {
-      // Removed
-  },
-  statusBadge: {
-      paddingHorizontal: 8,
-      paddingVertical: 2,
-      borderRadius: 4,
+  subInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
   },
   statusText: {
-      fontSize: 11,
-      fontWeight: '600',
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
+    fontSize: 12,
+    fontWeight: '500',
   },
-  divider: {
-      // Removed
+  
+  transactionRight: {
+    alignItems: 'flex-end',
+    gap: 4,
   },
-  amountRow: {
-      // Removed
+  amountText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
   },
-  amountLabel: {
-      // Removed
+  paymentMethodText: {
+    fontSize: 10,
+    color: '#94A3B8',
+    fontWeight: '600',
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    overflow: 'hidden',
   },
-  amountValue: {
-      fontSize: 16,
-      fontWeight: '700',
-      color: '#0F172A',
-  },
-  detailsRow: {
-      // Removed
-  },
-  sessionId: {
-      // Removed
-  },
-  paymentMethod: {
-      fontSize: 11,
-      color: '#94A3B8',
-      fontWeight: '500',
-  },
+
   emptyContainer: {
       alignItems: 'center',
-      paddingTop: 60,
+      paddingTop: 100,
   },
   emptyText: {
       marginTop: 16,
-      color: '#64748B',
+      color: '#94A3B8',
       fontSize: 16,
+      fontWeight: '500',
   },
 });

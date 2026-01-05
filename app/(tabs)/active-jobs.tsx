@@ -9,6 +9,7 @@ import {
   Image,
   Dimensions,
   StatusBar,
+  DeviceEventEmitter,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -36,6 +37,18 @@ export default function ActiveJobsScreen() {
       loadActiveJobs();
     }, [])
   );
+
+  // Listen for global real-time updates
+  useEffect(() => {
+    const refreshSubscription = DeviceEventEmitter.addListener('REFRESH_DOCTOR_DATA', () => {
+        console.log('🔄 [ActiveJobs] Received global refresh event');
+        loadActiveJobs();
+    });
+
+    return () => {
+        refreshSubscription.remove();
+    };
+  }, []);
 
   const loadActiveJobs = async () => {
     try {
