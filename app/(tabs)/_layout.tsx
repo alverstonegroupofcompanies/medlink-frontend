@@ -58,6 +58,7 @@ export default function TabLayout() {
           shadowOffset: { width: 0, height: -6 },
           shadowOpacity: 0.12,
           shadowRadius: 12,
+          zIndex: 100, // Ensure it sits above screen content
           position: 'absolute',
           bottom: 0,
           left: 0,

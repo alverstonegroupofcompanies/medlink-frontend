@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Platform,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -103,6 +104,29 @@ export default function AdminPayments() {
         return 'Refunded';
       default:
         return 'In Escrow';
+    }
+  };
+
+  const handleApprovePayment = async (paymentId: number) => {
+    try {
+      const token = await AsyncStorage.getItem('admin_token');
+      // Optimistic update
+      setLoading(true); // briefly show loading or just spinner
+      const response = await axios.post(
+        `${API_BASE_URL}/admin/payments/${paymentId}/approve`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      if (response.data.success || response.data.message) {
+        // Reload to get fresh status
+        loadPayments();
+        Alert.alert('Success', response.data.message || 'Payment approved');
+      }
+    } catch (error: any) {
+        console.error('Approval error:', error);
+        Alert.alert('Error', error.response?.data?.error || 'Failed to approve payment');
+        setLoading(false);
     }
   };
 
@@ -264,6 +288,39 @@ export default function AdminPayments() {
                 <Text style={styles.createdDate}>
                   Created: {new Date(payment.created_at).toLocaleDateString()}
                 </Text>
+
+                {/* Approval Status & Actions */}
+                {payment.status !== 'released' && payment.status !== 'refunded' && (
+                  <View style={styles.actionSection}>
+                    <View style={styles.approvalStatus}>
+                        <View style={styles.approvalStep}>
+                            <Text style={[styles.stepLabel, payment.hospital_approved_at && styles.stepLabelActive]}>Hospital</Text>
+                            {payment.hospital_approved_at ? <CheckCircle size={14} color="#10b981" /> : <Clock size={14} color="#94a3b8" />}
+                        </View>
+                        <View style={styles.approvalLine} />
+                        <View style={styles.approvalStep}>
+                            <Text style={[styles.stepLabel, payment.admin_approved_at && styles.stepLabelActive]}>Admin</Text>
+                            {payment.admin_approved_at ? <CheckCircle size={14} color="#10b981" /> : <Clock size={14} color="#94a3b8" />}
+                        </View>
+                    </View>
+
+                    {!payment.admin_approved_at && (
+                        <TouchableOpacity 
+                            style={styles.approveButton}
+                            onPress={() => handleApprovePayment(payment.id)}
+                        >
+                            <Text style={styles.approveButtonText}>
+                                {payment.hospital_approved_at ? 'Approve Release' : 'Approve Payment'}
+                            </Text>
+                        </TouchableOpacity>
+                    )}
+                    {payment.admin_approved_at && !payment.hospital_approved_at && (
+                        <View style={styles.waitingBadge}>
+                            <Text style={styles.waitingText}>Waiting for Hospital</Text>
+                        </View>
+                    )}
+                  </View>
+                )}
               </View>
             </View>
           ))
@@ -511,5 +568,57 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
   },
+  actionSection: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+  },
+  approvalStatus: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  approvalStep: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  stepLabel: {
+    fontSize: 12,
+    color: '#94a3b8',
+    fontWeight: '600',
+  },
+  stepLabelActive: {
+    color: '#1e293b',
+  },
+  approvalLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e2e8f0',
+    marginHorizontal: 12,
+  },
+  approveButton: {
+    backgroundColor: '#1e293b',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  approveButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  waitingBadge: {
+    backgroundColor: '#f1f5f9',
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  waitingText: {
+    color: '#64748b',
+    fontSize: 14,
+    fontWeight: '500',
+  },
 });
-

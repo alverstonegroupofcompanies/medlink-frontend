@@ -17,7 +17,7 @@ export function ScreenSafeArea({
   backgroundColor = '#ffffff',
   edges,
   excludeBottom = false,
-  statusBarStyle = 'dark-content',
+  statusBarStyle = 'light-content',
 }: ScreenSafeAreaProps) {
   // Configure Android status bar for proper visibility
   useEffect(() => {
@@ -30,7 +30,7 @@ export function ScreenSafeArea({
 
   // If excludeBottom is true, remove 'bottom' from edges
   // Default edges if not provided
-  const defaultEdges: Edge[] = ['top', 'right', 'bottom', 'left'];
+  const defaultEdges: Edge[] = ['top', 'bottom'];
   const finalEdges = edges 
     ? (excludeBottom ? edges.filter(e => e !== 'bottom') : edges)
     : (excludeBottom ? defaultEdges.filter(e => e !== 'bottom') : defaultEdges);

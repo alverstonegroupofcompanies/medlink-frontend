@@ -12,15 +12,28 @@ if (!BACKEND_URL) {
   `);
 }
 
+// Ensure URL has protocol
+let processedUrl = BACKEND_URL;
+if (!processedUrl.startsWith('http://') && !processedUrl.startsWith('https://')) {
+  // Default to https for production-like domains, http for localhost if user forgot
+  if (processedUrl.includes('localhost') || processedUrl.includes('127.0.0.1')) {
+    processedUrl = `http://${processedUrl}`;
+  } else {
+    processedUrl = `https://${processedUrl}`;
+  }
+}
+
+const FINAL_BACKEND_URL = processedUrl;
+
 // Export backend URL for use in image URLs (without /api)
-export const BASE_BACKEND_URL = BACKEND_URL.endsWith('/')
-  ? BACKEND_URL.slice(0, -1) // Remove trailing slash
-  : BACKEND_URL;
+export const BASE_BACKEND_URL = FINAL_BACKEND_URL.endsWith('/')
+  ? FINAL_BACKEND_URL.slice(0, -1) // Remove trailing slash
+  : FINAL_BACKEND_URL;
 
 // Ensure /api is appended
-export const API_BASE_URL = BACKEND_URL.endsWith('/api')
-  ? BACKEND_URL
-  : `${BACKEND_URL}/api`;
+export const API_BASE_URL = FINAL_BACKEND_URL.endsWith('/api')
+  ? FINAL_BACKEND_URL
+  : `${FINAL_BACKEND_URL}/api`;
 
 // Debug log (visible only in development mode)
 if (__DEV__) {

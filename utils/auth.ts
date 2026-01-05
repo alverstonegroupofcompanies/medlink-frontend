@@ -307,58 +307,31 @@ export const clearAllStorage = async (): Promise<void> => {
  * Get profile photo URL for doctor
  * Returns profile_photo if available, otherwise returns a placeholder avatar
  */
+// Import helper at top of file needed? No, imports are usually top.
+// Wait, I need to add import first or replace entire function block.
+// Let's verify imports first. I'll add the import in a separate block or check if I can do it in one go.
+// auth.ts doesn't import url-helper yet.
+
+/**
+ * Get profile photo URL for doctor
+ * Returns profile_photo if available, otherwise returns a placeholder avatar
+ */
 export const getProfilePhotoUrl = (doctor: any): string => {
-  console.log('👤 [getProfilePhotoUrl] Input doctor:', doctor?.id, doctor?.name);
+  // Use the robust helper we already have
+  const { getFullImageUrl } = require('./url-helper');
 
   if (!doctor) {
-    console.log('👤 [getProfilePhotoUrl] No doctor data, returning default avatar');
     return 'https://i.pravatar.cc/150?img=1';
   }
 
-  // Check if doctor has a profile_photo property
-  if (doctor.profile_photo && doctor.profile_photo.trim()) {
-    const profilePhoto = doctor.profile_photo.trim();
-    console.log('👤 [getProfilePhotoUrl] Raw profile_photo:', profilePhoto);
+  // Get raw path
+  const profilePhoto = doctor.profile_photo;
 
-    // If it's already a full URL (starts with http/https), return as is
-    if (profilePhoto.startsWith('http://') || profilePhoto.startsWith('https://')) {
-      console.log('👤 [getProfilePhotoUrl] ✅ Already full URL:', profilePhoto);
-      return profilePhoto;
-    }
-
-    // Import BASE_BACKEND_URL from config
-    const { BASE_BACKEND_URL } = require('@/config/api');
-    console.log('👤 [getProfilePhotoUrl] Backend URL:', BASE_BACKEND_URL);
-
-    let finalUrl = '';
-
-    // Backend uses Storage::url() which returns paths like: /storage/uploads/doctors/11/profile/...
-    // If it starts with /storage, prepend backend URL
-    if (profilePhoto.startsWith('/storage/')) {
-      finalUrl = `${BASE_BACKEND_URL}${profilePhoto}`;
-      console.log('👤 [getProfilePhotoUrl] Path starts with /storage/');
-    }
-    // If it starts with uploads/, add /storage/ prefix
-    else if (profilePhoto.startsWith('uploads/')) {
-      finalUrl = `${BASE_BACKEND_URL}/storage/${profilePhoto}`;
-      console.log('👤 [getProfilePhotoUrl] Path starts with uploads/');
-    }
-    // If it starts with storage/ (without leading slash), add leading slash
-    else if (profilePhoto.startsWith('storage/')) {
-      finalUrl = `${BASE_BACKEND_URL}/${profilePhoto}`;
-      console.log('👤 [getProfilePhotoUrl] Path starts with storage/');
-    }
-    // Otherwise, assume it's a relative path and prepend /storage/
-    else {
-      finalUrl = `${BASE_BACKEND_URL}/storage/${profilePhoto}`;
-      console.log('👤 [getProfilePhotoUrl] Using default /storage/ prefix');
-    }
-
-    console.log('👤 [getProfilePhotoUrl] ✅ Final URL:', finalUrl);
-    return finalUrl;
+  // If no photo path, return default
+  if (!profilePhoto || !profilePhoto.trim()) {
+    return 'https://i.pravatar.cc/150?img=1';
   }
 
-  // Return default avatar if no profile photo
-  console.log('👤 [getProfilePhotoUrl] No profile_photo field, returning default avatar');
-  return 'https://i.pravatar.cc/150?img=1';
+  // Use helper to process it (handles localhost fixes, storage prefixes, etc.)
+  return getFullImageUrl(profilePhoto);
 };
