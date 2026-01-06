@@ -320,18 +320,25 @@ export const getProfilePhotoUrl = (doctor: any): string => {
   // Use the robust helper we already have
   const { getFullImageUrl } = require('./url-helper');
 
+  console.log('🔍 [getProfilePhotoUrl] Doctor object:', doctor);
+
   if (!doctor) {
+    console.log('🔍 [getProfilePhotoUrl] No doctor object, returning default');
     return 'https://i.pravatar.cc/150?img=1';
   }
 
   // Get raw path
   const profilePhoto = doctor.profile_photo;
+  console.log('🔍 [getProfilePhotoUrl] Raw profile_photo from doctor:', profilePhoto);
 
   // If no photo path, return default
   if (!profilePhoto || !profilePhoto.trim()) {
+    console.log('🔍 [getProfilePhotoUrl] No profile photo or empty, returning default');
     return 'https://i.pravatar.cc/150?img=1';
   }
 
   // Use helper to process it (handles localhost fixes, storage prefixes, etc.)
-  return getFullImageUrl(profilePhoto);
+  const fullUrl = getFullImageUrl(profilePhoto);
+  console.log('🔍 [getProfilePhotoUrl] Final URL:', fullUrl);
+  return fullUrl;
 };
