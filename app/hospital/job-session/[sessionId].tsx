@@ -4,7 +4,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Image,
   Alert,
   Platform,
 } from 'react-native';
@@ -14,17 +13,20 @@ import {
   Clock,
   CheckCircle,
   MapPin,
-  Calendar,
   Timer,
   Building2,
-  ArrowRight
+  ArrowRight,
+  User,
+  Phone,
+  RefreshCw,
+  AlertCircle
 } from 'lucide-react-native';
-import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors, HospitalStatusColors as StatusColors } from '@/constants/hospital-theme';
+import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors } from '@/constants/hospital-theme';
 import API from '../../api';
 import { ScreenSafeArea } from '@/components/screen-safe-area';
 import { formatISTDateTime, formatISTDateWithWeekday } from '@/utils/timezone';
 import { getFullImageUrl } from '@/utils/url-helper';
-import { Card, Text, Button, Surface, Avatar, Chip, Divider, ActivityIndicator } from 'react-native-paper';
+import { Card, Text, Button, Surface, Avatar, Chip, ActivityIndicator } from 'react-native-paper';
 import { StatusBar } from 'expo-status-bar';
 
 export default function HospitalJobSessionScreen() {
@@ -109,6 +111,71 @@ export default function HospitalJobSessionScreen() {
   const isCompleted = session.status === 'completed';
   const isInProgress = session.status === 'in_progress' && session.check_in_time;
   const isPaid = session.payment_status === 'paid' || session.payment_status === 'released';
+  const paymentHeld = session.payment_status === 'held' || session.payment_status === 'pending';
+
+  // Check if doctor is late (15+ minutes past scheduled start time without check-in)
+  const isLate = (() => {
+    if (isCompleted || isInProgress || !session.session_date) return false;
+    
+    const sessionDate = new Date(session.session_date);
+    const now = new Date();
+    const timeDiff = now.getTime() - sessionDate.getTime();
+    const minutesLate = Math.floor(timeDiff / (1000 * 60));
+    
+    return minutesLate >= 15 && !session.check_in_time;
+  })();
+
+  const minutesLate = (() => {
+    if (!isLate || !session.session_date) return 0;
+    const sessionDate = new Date(session.session_date);
+    const now = new Date();
+    const timeDiff = now.getTime() - sessionDate.getTime();
+    return Math.floor(timeDiff / (1000 * 60));
+  })();
+
+  const handleCall = () => {
+    if (doctor?.phone_number) {
+      Alert.alert(
+        'Call Doctor',
+        `Call Dr. ${doctor.name} at ${doctor.phone_number}?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Call', 
+            onPress: () => {
+              // In a real app, use Linking.openURL(`tel:${doctor.phone_number}`)
+              Alert.alert('Calling', `Calling ${doctor.phone_number}...`);
+            }
+          }
+        ]
+      );
+    } else {
+      Alert.alert('No Phone Number', 'Doctor phone number not available.');
+    }
+  };
+
+  const handleReassign = () => {
+    Alert.alert(
+      'Reassign Shift',
+      `Are you sure you want to reassign this shift? Dr. ${doctor?.name} will be removed and you can select a new doctor.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Reassign', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await API.post(`/hospital/sessions/${sessionId}/reassign`);
+              Alert.alert('Success', 'Shift has been reassigned. You can now select a new doctor.');
+              router.back();
+            } catch (error: any) {
+              Alert.alert('Error', error.response?.data?.message || 'Failed to reassign shift');
+            }
+          }
+        }
+      ]
+    );
+  };
 
   return (
     <ScreenSafeArea style={styles.container}>
@@ -127,133 +194,187 @@ export default function HospitalJobSessionScreen() {
 
       <ScrollView contentContainerStyle={styles.content}>
         
-        {/* Doctor Info Card */}
-        <Card style={styles.card} mode="outlined">
+        {/* Status Badge */}
+        <View style={styles.statusBadgeContainer}>
+          <Text style={styles.sectionLabel}>SESSION STATUS</Text>
+        </View>
+
+        {/* Main Session Card */}
+        <Card style={[styles.card, styles.mainCard]} mode="elevated" elevation={2}>
           <Card.Content>
-             <View style={styles.doctorRow}>
-                {doctor?.profile_photo ? (
-                    <Avatar.Image 
-                        size={60} 
-                        source={{ uri: getFullImageUrl(doctor.profile_photo) }} 
-                        style={{ backgroundColor: '#F1F5F9' }}
-                    />
-                ) : (
-                    <Avatar.Text 
-                        size={60} 
-                        label={doctor?.name?.substring(0,2) || 'Dr'} 
-                        style={{ backgroundColor: '#F1F5F9' }} 
-                        color={PrimaryColors.main}
-                    />
-                )}
-                <View style={{marginLeft: 16, flex: 1}}>
-                    <Text variant="titleMedium" style={{fontWeight: '700', color: '#0F172A'}}>Dr. {doctor?.name || 'Doctor'}</Text>
-                    <Text variant="bodyMedium" style={{color: '#64748B'}}>{requirement?.department || 'Department'}</Text>
+            {/* Session Title & Status */}
+            <View style={styles.sessionHeader}>
+              <View style={{flex: 1}}>
+                <View style={{flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4}}>
+                  <Text style={styles.sessionType}>
+                    {isCompleted ? 'COMPLETED SHIFT' : isInProgress ? 'ONGOING SHIFT' : 'SCHEDULED SHIFT'}
+                  </Text>
+                  {paymentHeld && (
+                    <View style={styles.paymentHeldBadge}>
+                      <CheckCircle size={12} color="#16A34A" />
+                      <Text style={styles.paymentHeldText}>Payment Held</Text>
+                    </View>
+                  )}
+                  {isLate && (
+                    <View style={styles.lateBadge}>
+                      <Text style={styles.lateText}>LATE ({minutesLate}m)</Text>
+                    </View>
+                  )}
                 </View>
+                <Text style={styles.shiftTitle}>{requirement?.department || 'General'} Shift</Text>
+                <Text style={styles.shiftDate}>{formatISTDateWithWeekday(session.session_date)}</Text>
+              </View>
+            </View>
+
+            {/* Doctor Info */}
+            <View style={styles.doctorSection}>
+              <View style={styles.doctorRow}>
+                {doctor?.profile_photo ? (
+                  <Avatar.Image 
+                    size={48} 
+                    source={{ uri: getFullImageUrl(doctor.profile_photo) }} 
+                    style={{ backgroundColor: '#EFF6FF' }}
+                  />
+                ) : (
+                  <Avatar.Icon 
+                    size={48} 
+                    icon={() => <User size={24} color="#3B82F6" />}
+                    style={{ backgroundColor: '#EFF6FF' }} 
+                  />
+                )}
+                <View style={{marginLeft: 12, flex: 1}}>
+                  <Text style={styles.doctorName}>Dr. {doctor?.name || 'Doctor'}</Text>
+                  <Text style={styles.doctorSpecialty}>{requirement?.department || 'Department'} • {doctor?.experience || '0'} Yrs Exp</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Time Log Section */}
+            {(session.check_in_time || isInProgress) && (
+              <View style={styles.timeSection}>
+                <Text style={styles.timeLabel}>How was your experience?</Text>
+                <View style={styles.timeGrid}>
+                  <View style={styles.timeItem}>
+                    <Text style={styles.timeItemLabel}>Check In</Text>
+                    <Text style={styles.timeItemValue}>
+                      {session.check_in_time ? new Date(session.check_in_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }) : '--:--'}
+                    </Text>
+                  </View>
+                  <View style={styles.timeDivider} />
+                  <View style={styles.timeItem}>
+                    <Text style={styles.timeItemLabel}>Check Out</Text>
+                    <Text style={styles.timeItemValue}>
+                      {session.end_time ? new Date(session.end_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }) : '--:--'}
+                    </Text>
+                  </View>
+                  <View style={styles.timeDivider} />
+                  <View style={styles.timeItem}>
+                    <Text style={styles.timeItemLabel}>Duration</Text>
+                    <Text style={styles.timeItemValue}>
+                      {isInProgress ? formatTime(timeElapsed).substring(0, 5) : session.end_time && session.check_in_time ? 
+                        (() => {
+                          const duration = new Date(session.end_time).getTime() - new Date(session.check_in_time).getTime();
+                          return formatTime(duration).substring(0, 5);
+                        })() : '0h 0m'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* Late Alert & Actions */}
+            {isLate && (
+              <View style={styles.lateAlert}>
+                <View style={styles.lateAlertHeader}>
+                  <AlertCircle size={20} color="#DC2626" />
+                  <View style={{flex: 1, marginLeft: 8}}>
+                    <Text style={styles.lateAlertTitle}>Issue with this shift?</Text>
+                    <Text style={styles.lateAlertText}>
+                      If the shift wasn't completed as agreed (e.g., no-show, late arrival), raise a dispute. Payment will remain in escrow until resolved.
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.lateActions}>
+                  <Button 
+                    mode="outlined"
+                    onPress={handleCall}
+                    style={styles.callButton}
+                    icon={() => <Phone size={16} color="#3B82F6" />}
+                    labelStyle={styles.callButtonLabel}
+                  >
+                    Call
+                  </Button>
+                  <Button 
+                    mode="contained"
+                    onPress={handleReassign}
+                    style={styles.reassignButton}
+                    icon={() => <RefreshCw size={16} color="#fff" />}
+                    labelStyle={styles.reassignButtonLabel}
+                  >
+                    Reassign
+                  </Button>
+                </View>
+              </View>
+            )}
+
+            {/* Action Buttons */}
+            {isInProgress && (
+              <Button 
+                mode="contained"
+                onPress={() => router.push(`/hospital/live-tracking?sessionId=${session.id}&doctorId=${doctor?.id}`)}
+                style={styles.trackButton}
+                icon={() => <MapPin size={18} color="#fff" />}
+                labelStyle={styles.trackButtonLabel}
+              >
+                Track Live Location
+              </Button>
+            )}
+
+            {isCompleted && (
+              <Button 
+                mode="contained"
+                onPress={() => router.push(`/hospital/review-session/${session.id}`)}
+                style={[styles.actionButton, isPaid && styles.actionButtonPaid]}
+                contentStyle={{height: 56}}
+                icon={() => <ArrowRight size={20} color="#fff" />}
+                labelStyle={styles.actionButtonLabel}
+              >
+                {isPaid ? 'View Payment Details' : 'Submit Rating & Release Funds'}
+              </Button>
+            )}
+          </Card.Content>
+        </Card>
+
+        {/* Payment Summary Card */}
+        <Card style={[styles.card, styles.paymentCard]} mode="outlined">
+          <Card.Content>
+            <View style={styles.paymentHeader}>
+              <View style={{flexDirection: 'row', alignItems: 'center', gap: 8}}>
+                <Building2 size={20} color="#92400E" />
+                <Text style={styles.paymentTitle}>Total Payment</Text>
+              </View>
+            </View>
+            
+            <Text style={styles.paymentAmount}>₹{session.payment_amount || '0'}</Text>
+            
+            <View style={styles.paymentFooter}>
+              <Text style={styles.paymentNote}>Includes platform fees</Text>
+              <Chip 
+                style={{backgroundColor: isPaid ? '#DCFCE7' : paymentHeld ? '#FEF3C7' : '#F1F5F9'}} 
+                textStyle={{color: isPaid ? '#166534' : paymentHeld ? '#B45309' : '#64748B', fontWeight: 'bold', fontSize: 11}}
+                icon={isPaid ? 'check' : 'clock'}
+              >
+                {isPaid ? 'PAID' : paymentHeld ? 'HELD' : 'PENDING'}
+              </Chip>
             </View>
           </Card.Content>
         </Card>
 
-        {/* Status Card & Action */}
-        <Card style={styles.card} mode="outlined">
-          <Card.Content>
-             <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}>
-                 <View style={{flexDirection: 'row', alignItems: 'center', gap: 8}}>
-                    <CheckCircle size={24} color={isCompleted ? StatusColors.success : PrimaryColors.main} />
-                    <Text variant="titleMedium" style={{fontWeight: '600'}}>Status</Text>
-                 </View>
-                 <Chip 
-                    style={{backgroundColor: isCompleted ? '#DCFCE7' : isInProgress ? '#EFF6FF' : '#F1F5F9'}} 
-                    textStyle={{color: isCompleted ? StatusColors.success : isInProgress ? PrimaryColors.main : '#64748B', fontWeight: 'bold'}}
-                 >
-                    {isCompleted ? 'COMPLETED' : isInProgress ? 'IN PROGRESS' : 'SCHEDULED'}
-                 </Chip>
-             </View>
-
-             {(isInProgress || session.status === 'scheduled') && (
-               <Button 
-                 mode="contained"
-                 onPress={() => router.push(`/hospital/live-tracking?sessionId=${session.id}&doctorId=${doctor?.id}`)}
-                 style={{ marginTop: 16, backgroundColor: PrimaryColors.main, borderRadius: 8 }}
-                 icon={() => <MapPin size={18} color="#fff" />}
-                 labelStyle={{fontSize: 16, fontWeight: '600'}}
-               >
-                 Track Live Location
-               </Button>
-             )}
-
-             {isCompleted && (
-                 <Button 
-                    mode="contained"
-                    onPress={() => router.push(`/hospital/review-session/${session.id}`)}
-                    style={{ marginTop: 16, backgroundColor: isPaid ? '#16A34A' : PrimaryColors.main, borderRadius: 8 }}
-                    contentStyle={{height: 48}}
-                    icon={() => <ArrowRight size={18} color="#fff" />}
-                    labelStyle={{fontSize: 16, fontWeight: '600'}}
-                 >
-                    {isPaid ? 'View Payment Details' : 'Review & Release Payment'}
-                 </Button>
-             )}
-          </Card.Content>
-        </Card>
-
-        {/* Work Timer (if in progress) */}
-        {isInProgress && (
-          <Card style={styles.card} mode="outlined">
-            <Card.Content>
-               <View style={{alignItems: 'center', paddingVertical: 10}}>
-                   <Timer size={32} color={PrimaryColors.main} style={{marginBottom: 8}} />
-                   <Text variant="displayMedium" style={{fontWeight: '700', color: PrimaryColors.main, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace'}}>
-                        {formatTime(timeElapsed)}
-                   </Text>
-                   <Text variant="labelMedium" style={{color: '#64748B'}}>Time Elapsed</Text>
-               </View>
-            </Card.Content>
-          </Card>
-        )}
-
-        {/* Time Details */}
-        <Card style={styles.card} mode="outlined">
-           <Card.Content>
-               <View style={{flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12}}>
-                   <Clock size={20} color={PrimaryColors.main} />
-                   <Text variant="titleMedium" style={{fontWeight: '600'}}>Time Log</Text>
-               </View>
-               <Divider style={{marginBottom: 12}} />
-               
-               <View style={styles.infoRow}>
-                   <Text style={styles.infoLabel}>Date</Text>
-                   <Text style={styles.infoValue}>{formatISTDateWithWeekday(session.session_date)}</Text>
-               </View>
-               <View style={styles.infoRow}>
-                   <Text style={styles.infoLabel}>Check In</Text>
-                   <Text style={styles.infoValue}>
-                       {session.check_in_time ? formatISTDateTime(session.check_in_time) : '-'}
-                   </Text>
-               </View>
-               {session.end_time && (
-                 <View style={styles.infoRow}>
-                   <Text style={styles.infoLabel}>Check Out</Text>
-                   <Text style={styles.infoValue}>{formatISTDateTime(session.end_time)}</Text>
-                 </View>
-               )}
-           </Card.Content>
-        </Card>
-
-        {/* Payment Preview (if not completed or just brief info) */}
-        <Card style={styles.card} mode="outlined">
-            <Card.Content>
-                <View style={{flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12}}>
-                    <Building2 size={20} color={PrimaryColors.main} />
-                    <Text variant="titleMedium" style={{fontWeight: '600'}}>Payment Estimate</Text>
-                </View>
-                <Text style={{fontSize: 24, fontWeight: '700', color: isPaid ? '#15803D' : '#0F172A'}}>
-                    ₹{session.payment_amount || '0'}
-                </Text>
-                <Text style={{color: isPaid ? '#15803D' : '#64748B', fontSize: 13, marginTop: 4}}>
-                    {isPaid ? '• Payment Completed' : '• Payment pending approval'}
-                </Text>
-            </Card.Content>
-        </Card>
+        {/* Escrow Protection Badge */}
+        <View style={styles.escrowBadge}>
+          <CheckCircle size={16} color="#16A34A" />
+          <Text style={styles.escrowText}>All payments protected by Escrow</Text>
+        </View>
 
       </ScrollView>
     </ScreenSafeArea>
@@ -275,8 +396,6 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'ios' ? 0 : 20, 
     paddingBottom: 20,
     paddingHorizontal: 16,
-    borderBottomLeftRadius: 0,
-    borderBottomRightRadius: 0,
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
   },
@@ -299,26 +418,238 @@ const styles = StyleSheet.create({
     paddingBottom: 50,
     gap: 16,
   },
+  statusBadgeContainer: {
+    marginBottom: -8,
+  },
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94A3B8',
+    letterSpacing: 0.5,
+  },
   card: {
     backgroundColor: '#fff',
     borderRadius: 16,
+  },
+  mainCard: {
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  sessionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 20,
+  },
+  sessionType: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#3B82F6',
+    letterSpacing: 0.5,
+  },
+  paymentHeldBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+  },
+  paymentHeldText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#16A34A',
+  },
+  shiftTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 4,
+  },
+  shiftDate: {
+    fontSize: 13,
+    color: '#64748B',
+  },
+  doctorSection: {
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    marginBottom: 16,
   },
   doctorRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  infoRow: {
+  doctorName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 2,
+  },
+  doctorSpecialty: {
+    fontSize: 13,
+    color: '#64748B',
+  },
+  timeSection: {
+    backgroundColor: '#F8FAFC',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  timeLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0F172A',
+    marginBottom: 12,
+  },
+  timeGrid: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  timeItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  timeItemLabel: {
+    fontSize: 11,
+    color: '#64748B',
+    marginBottom: 4,
+  },
+  timeItemValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  timeDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: '#E2E8F0',
+  },
+  trackButton: {
+    backgroundColor: '#3B82F6',
+    borderRadius: 12,
+    marginTop: 4,
+  },
+  trackButtonLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  actionButton: {
+    backgroundColor: '#3B82F6',
+    borderRadius: 12,
+    marginTop: 4,
+  },
+  actionButtonPaid: {
+    backgroundColor: '#16A34A',
+  },
+  actionButtonLabel: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  paymentCard: {
+    borderColor: '#FDE68A',
+    backgroundColor: '#FFFBEB',
+  },
+  paymentHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    alignItems: 'center',
+    marginBottom: 12,
   },
-  infoLabel: {
-      color: '#64748B',
-      fontSize: 14,
+  paymentTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#92400E',
   },
-  infoValue: {
-      color: '#0F172A',
-      fontWeight: '600',
-      fontSize: 14,
-  }
+  paymentAmount: {
+    fontSize: 42,
+    fontWeight: '800',
+    color: '#92400E',
+    marginBottom: 12,
+  },
+  paymentFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  paymentNote: {
+    fontSize: 12,
+    color: '#B45309',
+  },
+  escrowBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#0F172A',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 24,
+    alignSelf: 'center',
+  },
+  escrowText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  lateBadge: {
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+  },
+  lateText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  lateAlert: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  lateAlertHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  lateAlertTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#DC2626',
+    marginBottom: 4,
+  },
+  lateAlertText: {
+    fontSize: 12,
+    color: '#991B1B',
+    lineHeight: 18,
+  },
+  lateActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  callButton: {
+    flex: 1,
+    borderColor: '#3B82F6',
+    borderWidth: 1.5,
+    borderRadius: 8,
+  },
+  callButtonLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#3B82F6',
+  },
+  reassignButton: {
+    flex: 1,
+    backgroundColor: '#DC2626',
+    borderRadius: 8,
+  },
+  reassignButtonLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
 });
