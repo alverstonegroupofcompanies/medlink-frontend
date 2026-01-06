@@ -447,23 +447,15 @@ export default function ApplicationsScreen() {
               key={application.id} 
               style={styles.applicationCard}
               onPress={() => {
-                setSelectedApplication(application);
-                setModalVisible(true);
+                if (application.doctor?.id) {
+                  router.push(`/hospital/doctor-profile/${application.doctor.id}`);
+                }
               }}
               activeOpacity={0.7}
             >
               <View style={styles.applicationHeader}>
-                <TouchableOpacity
-                  style={styles.doctorInfo}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    if (application.doctor?.id) {
-                      router.push(`/hospital/doctor-profile/${application.doctor.id}`);
-                    }
-                  }}
-                  activeOpacity={0.7}
-                >
-                    <Image
+                <View style={styles.doctorInfo}>
+                  <Image
                     source={{
                       uri: getFullImageUrl(application.doctor?.profile_photo),
                     }}
@@ -486,7 +478,7 @@ export default function ApplicationsScreen() {
                     )}
                     {renderStars(application.doctor?.average_rating || 0, application.doctor?.total_ratings || 0)}
                   </View>
-                </TouchableOpacity>
+                </View>
                 <View style={[styles.statusBadge, { backgroundColor: `${getStatusColor(application.status || 'pending')}20` }]}>
                   {getStatusIcon(application.status || 'pending')}
                   <Text style={[styles.statusText, { color: getStatusColor(application.status || 'pending') }]}>
