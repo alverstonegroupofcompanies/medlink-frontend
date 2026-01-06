@@ -36,17 +36,17 @@ export default function HospitalTabLayout() {
         headerShown: false,
         tabBarStyle: {
           backgroundColor: '#fff',
-          height: Platform.OS === 'ios' ? 90 + Math.max(insets.bottom - 20, 0) : 70,
+          height: Platform.OS === 'ios' ? 85 + Math.max(insets.bottom - 20, 0) : 70 + Math.max(insets.bottom - 12, 0),
           paddingBottom: Platform.OS === 'ios'
             ? Math.max(insets.bottom, 20)
             : Math.max(insets.bottom, 12),
-          paddingTop: 12,
-
-          elevation: 0,
-          shadowColor: 'transparent',
-          shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: 0,
-          shadowRadius: 0,
+          paddingTop: 8,
+          paddingHorizontal: 8,
+          elevation: 8,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.08,
+          shadowRadius: 8,
           borderTopWidth: 1,
           borderTopColor: '#E5E7EB',
           position: 'absolute',
@@ -59,8 +59,11 @@ export default function HospitalTabLayout() {
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: '700',
-          marginTop: 4,
+          marginTop: 2,
           letterSpacing: 0.2,
+        },
+        tabBarIconStyle: {
+          marginTop: 4,
         },
         tabBarShowLabel: true,
         tabBarHideOnKeyboard: true,

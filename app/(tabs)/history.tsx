@@ -20,16 +20,17 @@ import {
   CheckCircle,
   XCircle,
   LogIn,
-  LogOut,
   Wallet,
   DollarSign,
   ArrowRight,
 } from 'lucide-react-native';
+import { Image } from 'react-native';
 import { DoctorPrimaryColors as PrimaryColors, DoctorNeutralColors as NeutralColors, DoctorStatusColors as StatusColors } from '@/constants/doctor-theme';
 import { ModernColors } from '@/constants/modern-theme';
 import { useSafeBottomPadding } from '@/components/screen-safe-area';
 import API from '../api';
 import * as Location from 'expo-location';
+import { BASE_BACKEND_URL } from '@/config/api';
 
 export default function HistoryScreen() {
   const [sessions, setSessions] = useState<any[]>([]);
@@ -94,34 +95,6 @@ export default function HistoryScreen() {
     }
   };
 
-  const handleCheckOut = async (sessionId: number, hospitalLat: number, hospitalLng: number) => {
-    try {
-      // Request location permission
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Location permission is required for check-out');
-        return;
-      }
-
-      // Get current location
-      const location = await Location.getCurrentPositionAsync({});
-      const { latitude, longitude } = location.coords;
-
-      // Check out with GPS
-      const response = await API.post('/doctor/attendance/check-out', {
-        job_session_id: sessionId,
-        method: 'gps',
-        latitude,
-        longitude,
-      });
-
-      Alert.alert('Success', 'Checked out successfully!');
-      loadSessions();
-    } catch (error: any) {
-      console.error('Check-out error:', error);
-      Alert.alert('Error', error.response?.data?.message || 'Failed to check out');
-    }
-  };
 
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
     const R = 6371; // Radius of Earth in km
@@ -274,12 +247,24 @@ export default function HistoryScreen() {
 
             return (
               <View key={session.id} style={styles.sessionCard}>
-                {/* Header */}
+                {/* Header with Hospital Logo */}
                 <View style={styles.sessionHeader}>
                   <View style={styles.hospitalInfo}>
-                    <View style={styles.hospitalIconContainer}>
-                      <Building2 size={18} color={PrimaryColors.main} />
-                    </View>
+                    {hospital?.logo_url || hospital?.logo_path ? (
+                      <Image
+                        source={{
+                          uri: hospital.logo_url || `${BASE_BACKEND_URL}/app/${hospital.logo_path}`,
+                        }}
+                        style={styles.hospitalLogo}
+                        onError={() => {
+                          // Silently handle image load errors
+                        }}
+                      />
+                    ) : (
+                      <View style={styles.hospitalIconContainer}>
+                        <Building2 size={20} color={PrimaryColors.main} />
+                      </View>
+                    )}
                     <View style={styles.hospitalTextContainer}>
                       <Text style={styles.hospitalName}>{hospital?.name || 'Hospital'}</Text>
                       <View style={styles.statusBadgeContainer}>
@@ -314,14 +299,65 @@ export default function HistoryScreen() {
                       <View style={styles.detailItemContent}>
                         <Text style={styles.detailLabel}>Time</Text>
                         <Text style={styles.detailText}>
-                          {new Date(`2000-01-01 ${session.start_time}`).toLocaleTimeString('en-US', {
-                            hour: 'numeric',
-                            minute: '2-digit',
-                          })}
-                          {session.end_time && ` - ${new Date(`2000-01-01 ${session.end_time}`).toLocaleTimeString('en-US', {
-                            hour: 'numeric',
-                            minute: '2-digit',
-                          })}`}
+                          {(() => {
+                            try {
+                              // Handle different time formats
+                              let startTime = session.start_time;
+                              if (typeof startTime === 'string') {
+                                // If it's already in HH:mm format
+                                if (startTime.match(/^\d{2}:\d{2}$/)) {
+                                  const [hours, minutes] = startTime.split(':');
+                                  const date = new Date();
+                                  date.setHours(parseInt(hours), parseInt(minutes), 0);
+                                  return date.toLocaleTimeString('en-US', {
+                                    hour: 'numeric',
+                                    minute: '2-digit',
+                                    hour12: true,
+                                  });
+                                }
+                                // If it's a full datetime string
+                                const startDate = new Date(startTime);
+                                if (!isNaN(startDate.getTime())) {
+                                  return startDate.toLocaleTimeString('en-US', {
+                                    hour: 'numeric',
+                                    minute: '2-digit',
+                                    hour12: true,
+                                  });
+                                }
+                              }
+                              return startTime || 'N/A';
+                            } catch (e) {
+                              return session.start_time || 'N/A';
+                            }
+                          })()}
+                          {session.end_time && ` - ${(() => {
+                            try {
+                              let endTime = session.end_time;
+                              if (typeof endTime === 'string') {
+                                if (endTime.match(/^\d{2}:\d{2}$/)) {
+                                  const [hours, minutes] = endTime.split(':');
+                                  const date = new Date();
+                                  date.setHours(parseInt(hours), parseInt(minutes), 0);
+                                  return date.toLocaleTimeString('en-US', {
+                                    hour: 'numeric',
+                                    minute: '2-digit',
+                                    hour12: true,
+                                  });
+                                }
+                                const endDate = new Date(endTime);
+                                if (!isNaN(endDate.getTime())) {
+                                  return endDate.toLocaleTimeString('en-US', {
+                                    hour: 'numeric',
+                                    minute: '2-digit',
+                                    hour12: true,
+                                  });
+                                }
+                              }
+                              return endTime || '';
+                            } catch (e) {
+                              return session.end_time || '';
+                            }
+                          })()}`}
                         </Text>
                       </View>
                     </View>
@@ -340,19 +376,23 @@ export default function HistoryScreen() {
                   )}
                 </View>
 
-                {/* Payment & Status Row */}
-                <View style={styles.infoRow}>
+                {/* Payment Status */}
+                <View style={styles.paymentStatusRow}>
                   <View style={styles.paymentInfo}>
+                    <DollarSign size={16} color={PrimaryColors.main} />
                     <View style={styles.paymentAmountContainer}>
-                      <Text style={styles.paymentLabel}>Payment</Text>
+                      <Text style={styles.paymentLabel}>Payment Amount</Text>
                       <Text style={styles.paymentAmount}>₹{parseFloat(session.payment_amount || 0).toFixed(2)}</Text>
                     </View>
                   </View>
                   {session.payments && session.payments.length > 0 && (
-                    <View style={styles.paymentStatusContainer}>
-                      <View style={[styles.paymentStatusDot, { backgroundColor: getPaymentStatusColor(session.payments[0].status) }]} />
-                      <Text style={[styles.paymentStatusText, { color: getPaymentStatusColor(session.payments[0].status) }]}>
-                        {session.payments[0].status.replace('_', ' ')}
+                    <View style={[styles.paymentStatusBadge, { backgroundColor: `${getPaymentStatusColor(session.payments[0].payment_status || session.payments[0].status)}15` }]}>
+                      <View style={[styles.paymentStatusDot, { backgroundColor: getPaymentStatusColor(session.payments[0].payment_status || session.payments[0].status) }]} />
+                      <Text style={[styles.paymentStatusText, { color: getPaymentStatusColor(session.payments[0].payment_status || session.payments[0].status) }]}>
+                        {(() => {
+                          const paymentStatus = session.payments[0].payment_status || session.payments[0].status || 'pending';
+                          return paymentStatus.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+                        })()}
                       </Text>
                     </View>
                   )}
@@ -363,30 +403,60 @@ export default function HistoryScreen() {
                   <View style={styles.attendanceContainer}>
                     {hasCheckedIn && (
                       <View style={styles.attendanceItem}>
-                        <CheckCircle size={14} color={StatusColors.success} />
+                        <LogIn size={14} color={StatusColors.success} />
+                        <Text style={styles.attendanceLabel}>Check In:</Text>
                         <Text style={styles.attendanceText}>
-                          In: {new Date(session.check_in_time || session.attendance?.check_in_time).toLocaleTimeString('en-US', {
-                            hour: 'numeric',
-                            minute: '2-digit',
-                          })}
+                          {(() => {
+                            try {
+                              const checkInTime = session.check_in_time || session.attendance?.check_in_time;
+                              if (checkInTime) {
+                                const date = new Date(checkInTime);
+                                if (!isNaN(date.getTime())) {
+                                  return date.toLocaleTimeString('en-US', {
+                                    hour: 'numeric',
+                                    minute: '2-digit',
+                                    hour12: true,
+                                  });
+                                }
+                              }
+                              return 'N/A';
+                            } catch (e) {
+                              return 'N/A';
+                            }
+                          })()}
                         </Text>
                       </View>
                     )}
                     {hasCheckedOut && (
                       <View style={styles.attendanceItem}>
-                        <CheckCircle size={14} color={StatusColors.success} />
+                        <LogIn size={14} color={StatusColors.success} style={{ transform: [{ rotate: '180deg' }] }} />
+                        <Text style={styles.attendanceLabel}>Check Out:</Text>
                         <Text style={styles.attendanceText}>
-                          Out: {new Date(session.attendance.check_out_time).toLocaleTimeString('en-US', {
-                            hour: 'numeric',
-                            minute: '2-digit',
-                          })}
+                          {(() => {
+                            try {
+                              const checkOutTime = session.attendance?.check_out_time || session.check_out_time;
+                              if (checkOutTime) {
+                                const date = new Date(checkOutTime);
+                                if (!isNaN(date.getTime())) {
+                                  return date.toLocaleTimeString('en-US', {
+                                    hour: 'numeric',
+                                    minute: '2-digit',
+                                    hour12: true,
+                                  });
+                                }
+                              }
+                              return 'N/A';
+                            } catch (e) {
+                              return 'N/A';
+                            }
+                          })()}
                         </Text>
                       </View>
                     )}
                   </View>
                 )}
 
-                {/* Action Buttons */}
+                {/* Action Button */}
                 <View style={styles.actionButtons}>
                   {canCheckIn && (
                     <TouchableOpacity
@@ -401,22 +471,13 @@ export default function HistoryScreen() {
                       <Text style={styles.actionButtonText}>Check In</Text>
                     </TouchableOpacity>
                   )}
-                  {canCheckOut && (
-                    <TouchableOpacity
-                      style={[styles.actionButton, styles.checkOutButton]}
-                      onPress={() => handleCheckOut(
-                        session.id, 
-                        Number(session.job_requirement?.latitude || hospital?.latitude), 
-                        Number(session.job_requirement?.longitude || hospital?.longitude)
-                      )}
-                    >
-                      <LogOut size={16} color="#fff" />
-                      <Text style={styles.actionButtonText}>Check Out</Text>
-                    </TouchableOpacity>
-                  )}
                   <TouchableOpacity
-                    style={[styles.actionButton, styles.detailsButton]}
-                    onPress={() => router.push(`/job-detail/${session.application_id}`)}
+                    style={[styles.actionButton, styles.detailsButton, !canCheckIn && styles.detailsButtonFull]}
+                    onPress={() => {
+                      if (session.application_id) {
+                        router.push(`/job-detail/${session.application_id}`);
+                      }
+                    }}
                   >
                     <Text style={styles.detailsButtonText}>View Details</Text>
                     <ArrowRight size={16} color={PrimaryColors.main} />
@@ -524,12 +585,18 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   hospitalIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
+    width: 48,
+    height: 48,
+    borderRadius: 12,
     backgroundColor: '#f0f4ff',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  hospitalLogo: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#f0f4ff',
   },
   hospitalTextContainer: {
     flex: 1,
@@ -585,7 +652,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     lineHeight: 20,
   },
-  infoRow: {
+  paymentStatusRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -596,6 +663,9 @@ const styles = StyleSheet.create({
   },
   paymentInfo: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   paymentAmountContainer: {
     gap: 4,
@@ -613,10 +683,13 @@ const styles = StyleSheet.create({
     color: PrimaryColors.main,
     letterSpacing: -0.5,
   },
-  paymentStatusContainer: {
+  paymentStatusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
   },
   paymentStatusDot: {
     width: 6,
@@ -641,10 +714,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
+  attendanceLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontWeight: '500',
+    marginRight: 4,
+  },
   attendanceText: {
     fontSize: 12,
     color: '#059669',
-    fontWeight: '500',
+    fontWeight: '600',
   },
   actionButtons: {
     flexDirection: 'row',
@@ -673,6 +752,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: '#e5e7eb',
+  },
+  detailsButtonFull: {
+    flex: 1,
   },
   actionButtonText: {
     color: '#ffffff',

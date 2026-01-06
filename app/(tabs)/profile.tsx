@@ -71,10 +71,11 @@ export default function ProfileScreen() {
     loadDepartments();
   }, []);
 
-  // Reload profile when screen comes into focus to get fresh departments data
+  // Reload profile when screen comes into focus to get fresh data (including profile photo updates)
   useFocusEffect(
     React.useCallback(() => {
       console.log('🔄 Profile screen focused - reloading doctor data');
+      // Force reload to get latest profile photo if updated by admin
       loadDoctor();
     }, [])
   );
@@ -136,9 +137,13 @@ export default function ProfileScreen() {
           }
           
           if (doctorData.profile_photo) {
+            // Add cache busting timestamp to force image reload
             const photoUrl = getProfilePhotoUrl(doctorData);
-            setProfilePhotoUri(photoUrl);
-            setOriginalProfilePhotoUri(photoUrl);
+            const cacheBustedUrl = photoUrl.includes('?') 
+              ? photoUrl.split('?')[0] + '?t=' + Date.now()
+              : photoUrl + '?t=' + Date.now();
+            setProfilePhotoUri(cacheBustedUrl);
+            setOriginalProfilePhotoUri(cacheBustedUrl);
           }
           return;
         }
@@ -176,9 +181,13 @@ export default function ProfileScreen() {
         }
         
         if (info.profile_photo) {
+          // Add cache busting for cached data too
           const photoUrl = getProfilePhotoUrl(info);
-          setProfilePhotoUri(photoUrl);
-          setOriginalProfilePhotoUri(photoUrl);
+          const cacheBustedUrl = photoUrl.includes('?') 
+            ? photoUrl.split('?')[0] + '?t=' + Date.now()
+            : photoUrl + '?t=' + Date.now();
+          setProfilePhotoUri(cacheBustedUrl);
+          setOriginalProfilePhotoUri(cacheBustedUrl);
         }
       }
     } catch (error) {
@@ -329,14 +338,27 @@ export default function ProfileScreen() {
         
         setDoctor(updatedDoctor);
         
-        // Clear cached photo URIs to force reload
-        setProfilePhotoUri(null);
-        setOriginalProfilePhotoUri(null);
+        // Immediately update profile photo URI from response with cache-busting
+        if (updatedDoctor.profile_photo) {
+          const photoUrl = getProfilePhotoUrl(updatedDoctor);
+          const cacheBustedUrl = photoUrl.includes('?') 
+            ? photoUrl.split('?')[0] + '?t=' + Date.now()
+            : photoUrl + '?t=' + Date.now();
+          setProfilePhotoUri(cacheBustedUrl);
+          setOriginalProfilePhotoUri(cacheBustedUrl);
+        } else {
+          // Clear if no photo
+          setProfilePhotoUri(null);
+          setOriginalProfilePhotoUri(null);
+        }
         
         setIsEditing(false);
         
-        // Force reload doctor data from API to get fresh photo URL
-        await loadDoctor();
+        // Force reload doctor data from API to get fresh data
+        // Add small delay to ensure backend has processed the update
+        setTimeout(async () => {
+          await loadDoctor();
+        }, 500);
         
         const completion = calculateProfileCompletion(response.data.doctor);
         const percentage = Math.round(completion * 100);
@@ -459,11 +481,16 @@ export default function ProfileScreen() {
             <View style={styles.profileImageSection}>
               <View style={styles.profileImageContainer}>
                 <Image
-                  key={`${profilePhotoUri || getProfilePhotoUrl(doctor)}-${Date.now()}`}
+                  key={`profile-${doctor?.id || 'unknown'}-${profilePhotoUri || getProfilePhotoUrl(doctor)}-${Date.now()}`}
                   source={{
-                    uri: `${profilePhotoUri || getProfilePhotoUrl(doctor)}?t=${Date.now()}`,
+                    uri: profilePhotoUri 
+                      ? (profilePhotoUri.includes('?') ? profilePhotoUri : `${profilePhotoUri}?t=${Date.now()}`)
+                      : `${getProfilePhotoUrl(doctor)}?t=${Date.now()}`,
                   }}
                   style={styles.profileImage}
+                  onError={(e) => {
+                    console.error('Image load error:', e.nativeEvent.error);
+                  }}
                 />
                 {isEditing && (
                   <TouchableOpacity

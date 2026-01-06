@@ -97,21 +97,23 @@ export default function TabLayout() {
           height: Platform.OS === 'web' 
             ? 70 
             : Platform.OS === 'ios' 
-            ? 90 + Math.max(insets.bottom - 20, 0) 
-            : 75 + Math.max(insets.bottom - 12, 0),
+            ? 85 + Math.max(insets.bottom - 20, 0) 
+            : 70 + Math.max(insets.bottom - 12, 0),
           paddingBottom: Platform.OS === 'web' 
             ? 8 
             : Platform.OS === 'ios'
             ? Math.max(insets.bottom, 20)
             : Math.max(insets.bottom, 12),
-          paddingTop: Platform.OS === 'web' ? 8 : 12,
-          borderTopWidth: 0,
-          elevation: 20,
+          paddingTop: 8,
+          paddingHorizontal: 8,
+          borderTopWidth: 1,
+          borderTopColor: '#E5E7EB',
+          elevation: 8,
           shadowColor: '#000',
-          shadowOffset: { width: 0, height: -6 },
-          shadowOpacity: 0.12,
-          shadowRadius: 12,
-          zIndex: 100, // Ensure it sits above screen content
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.08,
+          shadowRadius: 8,
+          zIndex: 100,
           position: 'absolute',
           bottom: 0,
           left: 0,
@@ -122,8 +124,11 @@ export default function TabLayout() {
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: '700',
-          marginTop: 4,
+          marginTop: 2,
           letterSpacing: 0.2,
+        },
+        tabBarIconStyle: {
+          marginTop: 4,
         },
         tabBarShowLabel: true,
         tabBarHideOnKeyboard: true,

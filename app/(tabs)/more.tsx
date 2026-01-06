@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Alert, ScrollView, TouchableOpacity, ActivityIndicator, Modal, Keyboard, Platform, StatusBar } from 'react-native';
-import { LogOut, User, Shield, HelpCircle, Info } from 'lucide-react-native';
+import { LogOut, User, Shield, HelpCircle, Info, Building2 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { DoctorPrimaryColors as PrimaryColors, DoctorNeutralColors as NeutralColors, DoctorStatusColors as StatusColors } from '@/constants/doctor-theme';
 import { ModernColors } from '@/constants/modern-theme';
-import { logoutDoctor, getDoctorInfo } from '@/utils/auth';
+import { logoutDoctor, getDoctorInfo, isHospitalLoggedIn } from '@/utils/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import API from '../api';
 import { router } from 'expo-router';
@@ -19,10 +19,12 @@ export default function MoreScreen() {
   const [loading, setLoading] = useState(false);
   const [doctor, setDoctor] = useState<any>(null);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [hasHospitalAccess, setHasHospitalAccess] = useState(false);
   const safeBottomPadding = useSafeBottomPadding();
 
   useEffect(() => {
     loadDoctorInfo();
+    checkHospitalAccess();
   }, []);
 
   const loadDoctorInfo = async () => {
@@ -33,6 +35,39 @@ export default function MoreScreen() {
       }
     } catch (error) {
       console.error('Error loading doctor info:', error);
+    }
+  };
+
+  const checkHospitalAccess = async () => {
+    try {
+      const hospitalLoggedIn = await isHospitalLoggedIn();
+      setHasHospitalAccess(hospitalLoggedIn);
+    } catch (error) {
+      console.error('Error checking hospital access:', error);
+    }
+  };
+
+  const handleSwitchToHospital = async () => {
+    try {
+      const hospitalLoggedIn = await isHospitalLoggedIn();
+      if (hospitalLoggedIn) {
+        router.replace('/hospital/dashboard');
+      } else {
+        Alert.alert(
+          'Hospital Login Required',
+          'You need to login as a hospital to access the hospital portal.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Go to Login', 
+              onPress: () => router.push('/hospital/login')
+            }
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Error switching to hospital:', error);
+      Alert.alert('Error', 'Failed to switch to hospital view');
     }
   };
 
@@ -245,6 +280,28 @@ export default function MoreScreen() {
               )}
             </View>
           </View>
+
+          {/* Switch Account Section */}
+          {hasHospitalAccess && (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Building2 size={20} color={PrimaryColors.main} />
+                <Text style={[styles.sectionTitle, { color: PrimaryColors.dark }]}>Switch Account</Text>
+              </View>
+              <View style={styles.sectionContent}>
+                <TouchableOpacity 
+                  style={styles.switchButton}
+                  onPress={handleSwitchToHospital}
+                >
+                  <Building2 size={20} color="#7B61FF" />
+                  <Text style={styles.switchButtonText}>Switch to Hospital Portal</Text>
+                </TouchableOpacity>
+                <Text style={styles.switchHint}>
+                  Access your hospital dashboard and manage staff.
+                </Text>
+              </View>
+            </View>
+          )}
 
           {/* Security Section */}
           <View style={styles.section}>
@@ -471,6 +528,31 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: NeutralColors.textPrimary,
     fontWeight: '500',
+  },
+  switchButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F3F4F6',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 16,
+    gap: 10,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  switchButtonText: {
+    color: '#7B61FF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  switchHint: {
+    fontSize: 12,
+    color: NeutralColors.textTertiary,
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 18,
   },
 });
 

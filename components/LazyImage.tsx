@@ -30,7 +30,7 @@ export const LazyImage: React.FC<Props> = ({ uri, width, height, borderRadius = 
       return path;
     }
     
-    // Handle relative paths (e.g. /storage/...)
+    // Handle relative paths (e.g. /app/...)
     const cleanPath = path.startsWith('/') ? path.substring(1) : path;
     const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL : `${API_BASE_URL}/`;
     const fullUrl = `${baseUrl}${cleanPath}`;

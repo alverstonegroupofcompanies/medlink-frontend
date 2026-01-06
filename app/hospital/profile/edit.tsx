@@ -56,6 +56,8 @@ export default function HospitalProfileEditScreen() {
   });
   const [logoUri, setLogoUri] = useState<string | null>(null);
   const [selectedLogo, setSelectedLogo] = useState<string | null>(null);
+  const [hospitalPictureUri, setHospitalPictureUri] = useState<string | null>(null);
+  const [selectedHospitalPicture, setSelectedHospitalPicture] = useState<string | null>(null);
   const [licenseDocument, setLicenseDocument] = useState<{ uri: string; name: string; type: string } | null>(null);
 
   useFocusEffect(
@@ -82,17 +84,26 @@ export default function HospitalProfileEditScreen() {
       });
 
       if (hospitalData.logo_url || hospitalData.logo_path) {
-        const logoUrl = hospitalData.logo_url || `${BASE_BACKEND_URL}/storage/${hospitalData.logo_path}`;
+        const logoUrl = hospitalData.logo_url || `${BASE_BACKEND_URL}/app/${hospitalData.logo_path}`;
         // Add cache buster to force fresh image load
         const cacheBuster = `?t=${Date.now()}`;
         setLogoUri(logoUrl + cacheBuster);
       }
 
+      if (hospitalData.hospital_picture_url || hospitalData.hospital_picture) {
+        const pictureUrl = hospitalData.hospital_picture_url || `${BASE_BACKEND_URL}/app/${hospitalData.hospital_picture}`;
+        const cacheBuster = `?t=${Date.now()}`;
+        setHospitalPictureUri(pictureUrl + cacheBuster);
+      }
+
       // Update stored hospital info
       await AsyncStorage.setItem(HOSPITAL_INFO_KEY, JSON.stringify(hospitalData));
     } catch (error: any) {
-      console.error('Error loading hospital profile:', error);
-      Alert.alert('Error', error.response?.data?.message || 'Failed to load profile');
+      if (__DEV__) {
+        console.error('Error loading hospital profile:', error);
+      }
+      const message = error?.userFriendlyMessage || error?.response?.data?.message || 'Unable to load profile. Please try again.';
+      Alert.alert('Unable to Load', message);
       router.back();
     } finally {
       setLoading(false);
@@ -119,8 +130,10 @@ export default function HospitalProfileEditScreen() {
         setLogoUri(result.assets[0].uri);
       }
     } catch (error) {
-      console.error('Error picking logo:', error);
-      Alert.alert('Error', 'Failed to pick logo image');
+      if (__DEV__) {
+        console.error('Error picking logo:', error);
+      }
+      Alert.alert('Unable to Select Image', 'Please try selecting the image again.');
     }
   };
 
@@ -139,8 +152,10 @@ export default function HospitalProfileEditScreen() {
         });
       }
     } catch (error) {
-      console.error('Error picking license document:', error);
-      Alert.alert('Error', 'Failed to pick license document');
+      if (__DEV__) {
+        console.error('Error picking license document:', error);
+      }
+      Alert.alert('Unable to Select Document', 'Please try selecting the document again.');
     }
   };
 
@@ -305,14 +320,66 @@ export default function HospitalProfileEditScreen() {
         
         // Update logo URI if exists with cache buster to force image refresh
         if (hospitalData.logo_url || hospitalData.logo_path) {
-          const logoUrl = hospitalData.logo_url || `${BASE_BACKEND_URL}/storage/${hospitalData.logo_path}`;
+          const logoUrl = hospitalData.logo_url || `${BASE_BACKEND_URL}/app/${hospitalData.logo_path}`;
           // Add cache buster to force fresh image load
           const cacheBuster = `?t=${Date.now()}`;
           setLogoUri(logoUrl + cacheBuster);
         }
         
-        // Clear selected logo/document after successful upload
+        // Upload hospital picture separately if selected
+        if (selectedHospitalPicture) {
+          try {
+            const pictureFormData = new FormData();
+            let uri = selectedHospitalPicture;
+            const filename = uri.split('/').pop() || 'hospital_picture.jpg';
+            const match = /\.(\w+)$/i.exec(filename);
+            const extension = match ? match[1].toLowerCase() : 'jpg';
+            const mimeTypes: Record<string, string> = {
+              jpg: 'image/jpeg',
+              jpeg: 'image/jpeg',
+              png: 'image/png',
+              webp: 'image/webp',
+            };
+            const type = mimeTypes[extension] || 'image/jpeg';
+
+            if (Platform.OS === 'android') {
+              if (!uri.startsWith('file://')) {
+                uri = `file://${uri}`;
+              }
+            } else if (Platform.OS === 'ios') {
+              uri = uri.replace('file://', '');
+            }
+
+            pictureFormData.append('hospital_picture', {
+              uri: uri,
+              name: filename,
+              type: type,
+            } as any);
+
+            await API.post('/hospital/upload/picture', pictureFormData, {
+              headers: {
+                'Content-Type': 'multipart/form-data',
+              },
+            });
+
+            // Update hospital picture URI
+            const pictureResponse = await API.get('/hospital/profile');
+            if (pictureResponse.data?.hospital?.hospital_picture_url || pictureResponse.data?.hospital?.hospital_picture) {
+              const pictureUrl = pictureResponse.data.hospital.hospital_picture_url || 
+                `${BASE_BACKEND_URL}/app/${pictureResponse.data.hospital.hospital_picture}`;
+              setHospitalPictureUri(pictureUrl + `?t=${Date.now()}`);
+            }
+          } catch (error: any) {
+            if (__DEV__) {
+              console.error('Error uploading hospital picture:', error);
+            }
+            Alert.alert('Upload Incomplete', 'Profile saved but hospital picture upload failed. Please try uploading it again.');
+          }
+        }
+
+        // Clear selected logo/document/picture after successful upload
         setSelectedLogo(null);
+        setSelectedHospitalPicture(null);
         setLicenseDocument(null);
         
         Alert.alert('Success', 'Profile updated successfully!', [
@@ -336,48 +403,21 @@ export default function HospitalProfileEditScreen() {
           } : null,
         });
       }
-
-      // Handle validation errors with specific field messages
-      if (error.response?.status === 422) {
-        const errors = error.response.data?.errors || {};
-        const errorMessages = Object.values(errors).flat();
-        
-        // Show first error or general message
-        const firstError = errorMessages[0] || error.response.data?.message || 'Please check your input and try again.';
-        
-        Alert.alert(
-          'Validation Error',
-          typeof firstError === 'string' ? firstError : JSON.stringify(firstError),
-          [{ text: 'OK' }]
-        );
-        return;
-      }
-
-      // Handle other errors
-      const friendlyError = getUserFriendlyError(error);
-      let errorTitle = 'Update Failed';
       
-      if (!error.response) {
+      // Use user-friendly error message
+      const friendlyMessage = error?.userFriendlyMessage || getUserFriendlyError(error);
+      
+      // Determine appropriate title
+      let errorTitle = 'Unable to Update';
+      if (error.response?.status === 422) {
+        errorTitle = 'Please Check Your Input';
+      } else if (!error.response) {
         errorTitle = 'Connection Problem';
-        if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-          Alert.alert(
-            errorTitle,
-            'The request took too long. This might happen if files are large. Please try again or use smaller files.',
-            [{ text: 'OK' }]
-          );
-        } else if (error.code === 'ERR_NETWORK' || error.message?.includes('Network Error')) {
-          Alert.alert(
-            errorTitle,
-            'Unable to connect to server. Please check your internet connection and try again.',
-            [{ text: 'OK' }]
-          );
-        } else {
-          Alert.alert(errorTitle, friendlyError, [{ text: 'OK' }]);
-        }
-      } else {
-        const errorMessage = error.response.data?.message || friendlyError;
-        Alert.alert(errorTitle, errorMessage, [{ text: 'OK' }]);
+      } else if (error.response.status >= 500) {
+        errorTitle = 'Server Error';
       }
+      
+      Alert.alert(errorTitle, friendlyMessage, [{ text: 'OK' }]);
     }
   };
 
@@ -441,6 +481,32 @@ export default function HospitalProfileEditScreen() {
             <TouchableOpacity style={styles.logoButton} onPress={handlePickLogo}>
               <Camera size={18} color={PrimaryColors.main} />
               <Text style={styles.logoButtonText}>Change Logo</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Hospital Picture Section */}
+          <View style={styles.logoSection}>
+            <Text style={styles.sectionLabel}>Hospital Picture</Text>
+            <Text style={styles.sectionHint}>This picture will appear in job opportunity cards for doctors</Text>
+            <View style={styles.hospitalPictureContainer}>
+              {hospitalPictureUri ? (
+                <Image 
+                  source={{ uri: hospitalPictureUri }} 
+                  style={styles.hospitalPicture}
+                  key={`hospital-picture-${hospitalPictureUri || Date.now()}`}
+                />
+              ) : (
+                <View style={styles.hospitalPicturePlaceholder}>
+                  <Camera size={48} color={PrimaryColors.main} />
+                  <Text style={styles.placeholderText}>No Picture</Text>
+                </View>
+              )}
+            </View>
+            <TouchableOpacity style={styles.logoButton} onPress={handlePickHospitalPicture}>
+              <Camera size={18} color={PrimaryColors.main} />
+              <Text style={styles.logoButtonText}>
+                {hospitalPictureUri ? 'Change Picture' : 'Upload Hospital Picture'}
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -651,6 +717,46 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: PrimaryColors.main,
+  },
+  sectionLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: PrimaryColors.dark,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  sectionHint: {
+    fontSize: 12,
+    color: NeutralColors.textSecondary,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  hospitalPictureContainer: {
+    marginBottom: 16,
+    width: '100%',
+    alignItems: 'center',
+  },
+  hospitalPicture: {
+    width: '100%',
+    height: 200,
+    borderRadius: 12,
+    backgroundColor: NeutralColors.backgroundSecondary,
+  },
+  hospitalPicturePlaceholder: {
+    width: '100%',
+    height: 200,
+    borderRadius: 12,
+    backgroundColor: NeutralColors.backgroundSecondary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: NeutralColors.border,
+    borderStyle: 'dashed',
+  },
+  placeholderText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: NeutralColors.textSecondary,
   },
   section: {
     backgroundColor: NeutralColors.cardBackground,

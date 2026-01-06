@@ -26,12 +26,14 @@ import {
   Shield,
   Lock,
   Calendar,
+  User,
 } from 'lucide-react-native';
 import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors, HospitalStatusColors as StatusColors } from '@/constants/hospital-theme';
 import API from '../api';
 import { ScreenSafeArea } from '@/components/screen-safe-area';
 import { BASE_BACKEND_URL } from '@/config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { isDoctorLoggedIn } from '@/utils/auth';
 
 const HOSPITAL_INFO_KEY = 'hospitalInfo';
 
@@ -39,6 +41,11 @@ export default function HospitalProfileScreen() {
   const [hospital, setHospital] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [hasDoctorAccess, setHasDoctorAccess] = useState(false);
+
+  useEffect(() => {
+    checkDoctorAccess();
+  }, []);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -67,6 +74,39 @@ export default function HospitalProfileScreen() {
   const onRefresh = () => {
     setRefreshing(true);
     loadProfile();
+  };
+
+  const checkDoctorAccess = async () => {
+    try {
+      const doctorLoggedIn = await isDoctorLoggedIn();
+      setHasDoctorAccess(doctorLoggedIn);
+    } catch (error) {
+      console.error('Error checking doctor access:', error);
+    }
+  };
+
+  const handleSwitchToDoctor = async () => {
+    try {
+      const doctorLoggedIn = await isDoctorLoggedIn();
+      if (doctorLoggedIn) {
+        router.replace('/(tabs)');
+      } else {
+        Alert.alert(
+          'Doctor Login Required',
+          'You need to login as a doctor to access the doctor portal.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Go to Login', 
+              onPress: () => router.push('/login')
+            }
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Error switching to doctor:', error);
+      Alert.alert('Error', 'Failed to switch to doctor view');
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -149,7 +189,7 @@ export default function HospitalProfileScreen() {
               {hospital.logo_url || hospital.logo_path ? (
                 <Image
                   source={{
-                    uri: hospital.logo_url || `${BASE_BACKEND_URL}/storage/${hospital.logo_path}`,
+                    uri: hospital.logo_url || `${BASE_BACKEND_URL}/app/${hospital.logo_path}`,
                   }}
                   style={styles.logo}
                 />
@@ -264,6 +304,27 @@ export default function HospitalProfileScreen() {
             </View>
           )}
 
+          {/* Switch Account Section */}
+          {hasDoctorAccess && (
+            <View style={styles.card}>
+              <View style={styles.cardHeader}>
+                <User size={24} color={PrimaryColors.main} />
+                <Text style={styles.cardTitle}>Switch Account</Text>
+              </View>
+              
+              <TouchableOpacity 
+                style={styles.switchButton}
+                onPress={handleSwitchToDoctor}
+              >
+                <User size={18} color="#0066FF" />
+                <Text style={styles.switchButtonText}>Switch to Doctor Portal</Text>
+              </TouchableOpacity>
+              <Text style={styles.switchHint}>
+                Access your doctor dashboard and view job opportunities.
+              </Text>
+            </View>
+          )}
+
           {/* Quick Access Section */}
           <View style={styles.card}>
             <View style={styles.cardHeader}>
@@ -297,7 +358,7 @@ export default function HospitalProfileScreen() {
             
             <TouchableOpacity 
               style={styles.actionButton}
-              onPress={() => router.push('/hospital/profile/password')}
+              onPress={() => Alert.alert('Change Password', 'Password change feature coming soon.')}
             >
               <Lock size={18} color={PrimaryColors.main} />
               <Text style={styles.actionButtonText}>Change Password</Text>
@@ -483,6 +544,31 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: PrimaryColors.main,
+  },
+  switchButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F3F4F6',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 16,
+    gap: 10,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  switchButtonText: {
+    color: '#0066FF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  switchHint: {
+    fontSize: 12,
+    color: NeutralColors.textSecondary,
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 18,
   },
 });
 

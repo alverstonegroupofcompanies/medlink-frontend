@@ -235,7 +235,11 @@ export default function ApplicationsScreen() {
       
       // Show success message
       setTimeout(() => {
-        Alert.alert('Success', 'Payment completed and doctor accepted successfully!');
+        Alert.alert(
+          'Doctor Accepted Successfully',
+          'Payment has been held in escrow. The full payment will be transferred to the doctor only after work completion and your approval.',
+          [{ text: 'OK' }]
+        );
       }, 300);
       
     } catch (error: any) {

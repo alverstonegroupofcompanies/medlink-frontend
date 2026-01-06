@@ -1,6 +1,22 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../config/api';
+import { getUserFriendlyError } from '../utils/errorMessages';
+
+// Disable console errors in production
+if (!__DEV__) {
+  const originalError = console.error;
+  const originalWarn = console.warn;
+  
+  console.error = (...args) => {
+    // Only log critical errors silently in production
+    // Don't show to users
+  };
+  
+  console.warn = (...args) => {
+    // Suppress warnings in production
+  };
+}
 
 // Create Axios instance with configurable base URL
 const API = axios.create({
@@ -66,7 +82,10 @@ API.interceptors.request.use(
         console.warn('⚠️ No token found for route:', url);
       }
     } catch (error) {
-      console.error('Error getting token:', error);
+      // Silently handle token errors - don't log in production
+      if (__DEV__) {
+        console.error('Error getting token:', error);
+      }
     }
     
     // Don't override Content-Type if it's multipart/form-data (for file uploads)
@@ -94,7 +113,10 @@ API.interceptors.request.use(
     return config;
   },
   (error) => {
-    console.error('❌ Request error:', error);
+    // Only log in development
+    if (__DEV__) {
+      console.error('❌ Request error:', error);
+    }
     return Promise.reject(error);
   }
 );
@@ -109,59 +131,70 @@ API.interceptors.response.use(
     return response;
   },
   async (error) => {
-    // Handle network errors (common on mobile)
-    if (!error.response) {
-      // Network error - backend not reachable
-      if (error.code === 'ECONNREFUSED' || error.message?.includes('Network Error') || error.message?.includes('Network request failed') || error.message?.includes('Failed to connect')) {
-        // Construct full URL for better debugging
-        const relativePath = error.config?.url || 'Unknown';
-        const fullUrl = error.config?.baseURL 
-          ? `${error.config.baseURL}${relativePath.startsWith('/') ? '' : '/'}${relativePath}`
-          : `${API_BASE_URL}${relativePath.startsWith('/') ? '' : '/'}${relativePath}`;
+    // Convert technical errors to user-friendly messages
+    const friendlyMessage = getUserFriendlyError(error);
+    
+    // Only log technical details in development
+    if (__DEV__) {
+      if (!error.response) {
+        // Network error - backend not reachable
+        if (error.code === 'ECONNREFUSED' || error.message?.includes('Network Error') || error.message?.includes('Network request failed') || error.message?.includes('Failed to connect')) {
+          const relativePath = error.config?.url || 'Unknown';
+          const fullUrl = error.config?.baseURL 
+            ? `${error.config.baseURL}${relativePath.startsWith('/') ? '' : '/'}${relativePath}`
+            : `${API_BASE_URL}${relativePath.startsWith('/') ? '' : '/'}${relativePath}`;
+          
+          console.warn('═══════════════════════════════════════');
+          console.warn('❌ NETWORK ERROR: Cannot connect to backend');
+          console.warn('═══════════════════════════════════════');
+          console.warn('📍 Relative Path:', relativePath);
+          console.warn('🔗 Base URL:', error.config?.baseURL || API_BASE_URL);
+          console.warn('🌐 Full URL Attempted:', fullUrl);
+          console.warn('═══════════════════════════════════════');
+        } else {
+          console.warn('❌ Request Error:', error.message);
+        }
+      } else if (error.response) {
+        // Server responded with error status
+        console.error(`❌ API Error ${error.response.status}:`, error.response.data);
         
-        // Use console.warn instead of console.error to avoid LogBox error display
-        console.warn('═══════════════════════════════════════');
-        console.warn('❌ NETWORK ERROR: Cannot connect to backend');
-        console.warn('═══════════════════════════════════════');
-        console.warn('📍 Relative Path:', relativePath);
-        console.warn('🔗 Base URL:', error.config?.baseURL || API_BASE_URL);
-        console.warn('🌐 Full URL Attempted:', fullUrl);
-        console.warn('💡 Troubleshooting Steps:');
-        console.warn('   1. Verify backend is running: php artisan serve --host=0.0.0.0 --port=8000');
-        console.warn('   2. Check IP address matches your network interface');
-        console.warn('   3. If using mobile hotspot, ensure correct IP is set in .env');
-        console.warn('   4. Allow port 8000 in Windows Firewall (Run as Administrator)');
-        console.warn('   5. Test connection from phone browser: http://YOUR_IP:8000/api/test');
-        console.warn('═══════════════════════════════════════');
-        error.message = `Cannot connect to server at ${fullUrl}. Please check your internet connection.`;
-      } else {
-        console.warn('❌ Request Error:', error.message);
+        // Handle 401 Unauthorized - token expired or invalid
+        if (error.response.status === 401) {
+          console.warn('⚠️ Unauthorized - clearing auth data');
+          try {
+            const url = error.config?.url || '';
+            if (url.includes('/hospital/')) {
+              await AsyncStorage.multiRemove(['hospitalToken', 'hospitalInfo']);
+              console.warn('🏥 Cleared hospital auth data');
+            } else {
+              await AsyncStorage.multiRemove(['doctorToken', 'doctorInfo']);
+              console.warn('👨‍⚕️ Cleared doctor auth data');
+            }
+          } catch (clearError) {
+            console.error('Error clearing auth data:', clearError);
+          }
+        }
       }
-    } else if (error.response) {
-      // Server responded with error status
-      console.error(`❌ API Error ${error.response.status}:`, error.response.data);
-      
-      // Handle 401 Unauthorized - token expired or invalid
-      if (error.response.status === 401) {
-        console.warn('⚠️ Unauthorized - clearing auth data');
+    } else {
+      // Production: Only handle auth silently, no logging
+      if (error.response?.status === 401) {
         try {
-          // Clear auth data directly to avoid circular dependency
           const url = error.config?.url || '';
           if (url.includes('/hospital/')) {
-            // Hospital route - clear hospital auth
             await AsyncStorage.multiRemove(['hospitalToken', 'hospitalInfo']);
-            console.warn('🏥 Cleared hospital auth data');
           } else {
-            // Doctor route - clear doctor auth
             await AsyncStorage.multiRemove(['doctorToken', 'doctorInfo']);
-            console.warn('👨‍⚕️ Cleared doctor auth data');
           }
         } catch (clearError) {
-          console.error('Error clearing auth data:', clearError);
+          // Silently handle - no logging in production
         }
-        // Don't redirect here, let the component handle it
       }
     }
+    
+    // Replace error message with user-friendly version
+    error.userFriendlyMessage = friendlyMessage;
+    error.message = friendlyMessage;
+    
     return Promise.reject(error);
   }
 );

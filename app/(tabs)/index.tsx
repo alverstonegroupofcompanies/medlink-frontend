@@ -95,7 +95,9 @@ export default function DoctorHome() {
         router.replace('/login');
       }
     } catch (error) {
-      console.error("Error loading doctor:", error);
+      if (__DEV__) {
+        console.error("Error loading doctor:", error);
+      }
       router.replace('/login');
     }
   };
@@ -127,7 +129,9 @@ export default function DoctorHome() {
       ).length;
       setActiveJobsCount(active);
     } catch (error) {
-      console.error("Error loading applications:", error);
+      if (__DEV__) {
+        console.error("Error loading applications:", error);
+      }
     } finally {
       if (!silent) setLoadingApplications(false);
     }
@@ -139,7 +143,9 @@ export default function DoctorHome() {
       const unreadCount = response.data.notifications?.filter((n: any) => !n.read_at).length || 0;
       setNotificationCount(unreadCount);
     } catch (error) {
-      console.error("Error loading notifications:", error);
+      if (__DEV__) {
+        console.error("Error loading notifications:", error);
+      }
     }
   };
 
@@ -158,7 +164,9 @@ export default function DoctorHome() {
       }
       setJobSessions(response.data.sessions || []);
     } catch (error) {
-      console.error("Error loading job sessions:", error);
+      if (__DEV__) {
+        console.error("Error loading job sessions:", error);
+      }
       setJobSessions([]);
     } finally {
       if (!silent) setLoadingSessions(false);
@@ -541,9 +549,15 @@ export default function DoctorHome() {
                   source={{ uri: getProfilePhotoUrl(doctor) }}
                   style={styles.profileImage}
                 />
-                <View style={styles.verifiedBadge}>
-                  <Award size={12} color="#fff" fill="#fff" />
-                </View>
+                {doctor?.verification_status === 'approved' ? (
+                  <View style={styles.verifiedBadge}>
+                    <CheckCircle size={14} color="#fff" fill="#fff" />
+                  </View>
+                ) : (
+                  <View style={styles.unverifiedBadge}>
+                    <AlertCircle size={14} color="#fff" fill="#fff" />
+                  </View>
+                )}
               </View>
               <View style={styles.profileInfo}>
                 <Text style={styles.greetingText}>{getGreeting()}</Text>
@@ -772,7 +786,9 @@ export default function DoctorHome() {
                           if (session.application_id) {
                             router.push(`/job-detail/${session.application_id}`);
                           } else {
-                            console.warn("No application ID for session:", session.id);
+                            if (__DEV__) {
+                              console.warn("No application ID for session:", session.id);
+                            }
                           }
                         }}
                       >
@@ -829,51 +845,66 @@ export default function DoctorHome() {
                   const isJobCompleted = application?.job_session?.status === 'completed';
                   const isExpired = requirement.is_expired || false;
                   
+                  const hospitalPicture = requirement.hospital?.hospital_picture_url || requirement.hospital?.logo_url;
+                  const hospitalRating = requirement.hospital?.average_rating || 0;
+                  const totalRatings = requirement.hospital?.total_ratings || 0;
+                  const matchPercentage = requirement.match_percentage || 0;
+                  const hourlyRate = requirement.payment_amount || requirement.salary_range_max || 0;
+                  const estimatedTotal = hourlyRate * (requirement.duration_hours || 8) * (requirement.required_sessions || 1);
+                  
                   return (
-                    <ModernCard key={requirement.id} variant="elevated" style={styles.openingCard}>
-                      <View style={styles.openingHeader}>
-                        {requirement.hospital?.logo_url ? (
+                    <View key={requirement.id} style={styles.openingCard}>
+                      {/* Hospital Image */}
+                      <View style={styles.hospitalImageContainer}>
+                        {hospitalPicture ? (
                           <Image
-                            key={requirement.hospital.logo_url}
-                            source={{ uri: getFullImageUrl(requirement.hospital.logo_url) }}
-                            style={styles.hospitalLogo}
-                            onLoad={() => console.log('🏥 [Hospital Logo] ✅ Loaded:', requirement.hospital.logo_url)}
-                            onError={(error) => console.error('🏥 [Hospital Logo] ❌ Failed:', requirement.hospital.logo_url, error.nativeEvent)}  
+                            source={{ uri: getFullImageUrl(hospitalPicture) }}
+                            style={styles.hospitalImage}
+                            resizeMode="cover"
                           />
                         ) : (
-                          <View style={[styles.hospitalLogoPlaceholder, { backgroundColor: ModernColors.primary.light }]}>
-                            <Building2 size={20} color={ModernColors.primary.main} />
+                          <View style={[styles.hospitalImage, styles.hospitalImagePlaceholder]}>
+                            <Building2 size={40} color={ModernColors.primary.main} />
                           </View>
                         )}
-                        <View style={styles.openingHeaderText}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                            <Text style={styles.hospitalName} numberOfLines={1}>
-                              {requirement.hospital?.name || 'Hospital'}
-                            </Text>
-                            {isExpired && (
-                              <View style={styles.expiredBadge}>
-                                <Text style={styles.expiredBadgeText}>EXPIRED</Text>
-                              </View>
-                            )}
+                        
+                        {/* Rating Badge - Top Left */}
+                        {hospitalRating > 0 && (
+                          <View style={styles.ratingBadge}>
+                            <Star size={14} color="#FFB800" fill="#FFB800" />
+                            <Text style={styles.ratingText}>{hospitalRating.toFixed(1)}</Text>
                           </View>
-                          <Text style={styles.departmentName} numberOfLines={1}>
-                            {requirement.department}
-                          </Text>
-                        </View>
+                        )}
+                        
+                        {/* Match Badge - Top Right */}
+                        {matchPercentage > 0 && (
+                          <View style={styles.matchBadge}>
+                            <Text style={styles.matchText}>{matchPercentage}% Match</Text>
+                          </View>
+                        )}
                       </View>
                       
-                      <View style={styles.openingDetails}>
-                        <View style={styles.detailRow}>
-                          <Clock size={14} color={ModernColors.text.secondary} />
-                          <Text style={styles.detailText}>{requirement.required_sessions} sessions</Text>
-                        </View>
-                          <View style={styles.requirementInfoRow}>
-                            <MapPin size={14} color={ModernColors.text.secondary} />
-                            <Text style={styles.requirementInfoText} numberOfLines={1}>
-                            {requirement.address || (requirement.latitude ? "Custom Location" : requirement.location || requirement.hospital?.address || 'Location not specified')}
+                      {/* Card Content */}
+                      <View style={styles.openingCardContent}>
+                        {/* Hospital Name */}
+                        <Text style={styles.hospitalNameCard} numberOfLines={1}>
+                          {requirement.hospital?.name || 'Hospital'}
+                        </Text>
+                        
+                        {/* Specialties */}
+                        <Text style={styles.specialtiesText} numberOfLines={1}>
+                          {requirement.department || 'General Practice'}
+                        </Text>
+                        
+                        {/* Hourly Rate */}
+                        <View style={styles.rateContainer}>
+                          <Text style={styles.hourlyRate}>₹{Number(hourlyRate).toLocaleString('en-IN')}/hr</Text>
+                          {estimatedTotal > 0 && (
+                            <Text style={styles.estimatedTotal}>
+                              Est. ₹{Number(estimatedTotal).toLocaleString('en-IN')} total
                             </Text>
-                          </View>
-                      </View>
+                          )}
+                        </View>
 
                       {hasApplied ? (
                         <View style={{ marginTop: 8 }}>
@@ -968,7 +999,8 @@ export default function DoctorHome() {
                           <ArrowRight size={16} color="#fff" />
                         </TouchableOpacity>
                       )}
-                    </ModernCard>
+                      </View>
+                    </View>
                   );
                 })}
               </ScrollView>
@@ -1123,7 +1155,20 @@ export default function DoctorHome() {
                                         }}
                                         onPress={() => {
                                             setScheduleModalVisible(false);
-                                            router.push(`/job-detail/${session.job_requirement_id}`);
+                                            // Use application_id if available, otherwise find it from myApplications
+                                            if (session.application_id) {
+                                                router.push(`/job-detail/${session.application_id}`);
+                                            } else {
+                                                // Find application by job_requirement_id
+                                                const application = myApplications.find(
+                                                    (app: any) => app.job_requirement_id === session.job_requirement_id
+                                                );
+                                                if (application) {
+                                                    router.push(`/job-detail/${application.id}`);
+                                                } else {
+                                                    Alert.alert('Error', 'Application not found for this session');
+                                                }
+                                            }
                                         }}
                                     >
                                         <Text style={{fontSize: 16, fontWeight: '700', color: ModernColors.text.primary, marginBottom: 4}}>
@@ -1209,7 +1254,20 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     right: 0,
-    backgroundColor: ModernColors.success.main,
+    backgroundColor: '#16A34A', // Green for verified
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  unverifiedBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#F59E0B', // Amber for unverified
     borderRadius: 12,
     width: 24,
     height: 24,
@@ -1386,8 +1444,113 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   openingCard: {
-    width: width * 0.75,
-    minWidth: 280,
+    width: width * 0.85,
+    minWidth: 300,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginRight: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  hospitalImageContainer: {
+    width: '100%',
+    height: 180,
+    position: 'relative',
+  },
+  hospitalImage: {
+    width: '100%',
+    height: '100%',
+  },
+  hospitalImagePlaceholder: {
+    backgroundColor: ModernColors.primary.light,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  ratingBadge: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  ratingText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  matchBadge: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    backgroundColor: ModernColors.primary.main,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  matchText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  openingCardContent: {
+    padding: 16,
+  },
+  hospitalNameCard: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginBottom: 4,
+  },
+  specialtiesText: {
+    fontSize: 14,
+    color: '#64748B',
+    marginBottom: 12,
+  },
+  rateContainer: {
+    marginBottom: 16,
+  },
+  hourlyRate: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginBottom: 4,
+  },
+  estimatedTotal: {
+    fontSize: 13,
+    color: '#64748B',
+  },
+  applyButton: {
+    backgroundColor: ModernColors.primary.main,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  applyButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  appliedButton: {
+    backgroundColor: ModernColors.success.light,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  appliedButtonText: {
+    color: ModernColors.success.main,
+    fontSize: 16,
+    fontWeight: '700',
   },
   openingHeader: {
     flexDirection: 'row',

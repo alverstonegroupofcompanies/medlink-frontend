@@ -16,7 +16,7 @@ export const getFullImageUrl = (path?: string | null): string => {
     // Check if already a full URL
     if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('file://')) {
 
-        // Fix for double-wrapped URLs (e.g. https://domain/storage/https://domain/...)
+        // Fix for double-wrapped URLs (e.g. https://domain/app/https://domain/...)
         // This happens if backend blindly wraps an existing URL
         const lastProtocolIndex = path.lastIndexOf('http');
         if (lastProtocolIndex > 0) {
@@ -46,18 +46,20 @@ export const getFullImageUrl = (path?: string | null): string => {
             }
         }
 
-        console.log('🖼️ [getFullImageUrl] Already full URL:', path);
-        return path;
+        // Replace /storage/ with /app/ if present in the URL
+        const fixedPath = path.replace('/storage/', '/app/');
+        console.log('🖼️ [getFullImageUrl] Already full URL:', fixedPath);
+        return fixedPath;
     }
 
     // Clean path (remove leading slash if exists)
     let cleanPath = path.startsWith('/') ? path.substring(1) : path;
     console.log('🖼️ [getFullImageUrl] Cleaned path:', cleanPath);
 
-    // Fix for missing storage prefix in uploads path (common issue)
+    // Fix for missing app prefix in uploads path (common issue)
     if (cleanPath.startsWith('uploads/')) {
-        cleanPath = `storage/${cleanPath}`;
-        console.log('🖼️ [getFullImageUrl] Added storage prefix:', cleanPath);
+        cleanPath = `app/${cleanPath}`;
+        console.log('🖼️ [getFullImageUrl] Added app prefix:', cleanPath);
     }
 
     // Ensure base URL ends with slash

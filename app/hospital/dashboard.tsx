@@ -19,7 +19,7 @@ import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as Neutra
 import API from '../api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect } from 'expo-router';
-import { Plus, MapPin, Building2, Clock, X, Navigation, Bell, LogOut, CreditCard } from 'lucide-react-native';
+import { Plus, MapPin, Building2, Clock, X, Navigation, Bell, LogOut, CreditCard, Users, CheckCircle2 } from 'lucide-react-native';
 import { ScreenSafeArea, useSafeBottomPadding } from '@/components/screen-safe-area';
 import * as Location from 'expo-location';
 import { DepartmentPicker } from '@/components/department-picker';
@@ -183,49 +183,144 @@ const RequirementItem = React.memo(({ req, onDelete }: { req: any, onDelete: (id
 });
 
 const SessionItem = React.memo(({ session }: { session: any }) => {
+    const getStatusColor = () => {
+        if (session.status === 'completed') {
+            return session.hospital_confirmed ? '#16A34A' : '#F59E0B';
+        }
+        if (session.status === 'in_progress') return '#2563EB';
+        if (session.status === 'scheduled') return '#64748B';
+        return '#9CA3AF';
+    };
+
+    const getStatusBg = () => {
+        if (session.status === 'completed') {
+            return session.hospital_confirmed ? '#DCFCE7' : '#FEF3C7';
+        }
+        if (session.status === 'in_progress') return '#DBEAFE';
+        if (session.status === 'scheduled') return '#F3F4F6';
+        return '#F9FAFB';
+    };
+
+    const getStatusText = () => {
+        if (session.status === 'completed') {
+            return session.hospital_confirmed ? 'Approved' : 'Review Needed';
+        }
+        if (session.status === 'in_progress') return 'In Progress';
+        if (session.status === 'scheduled') return 'Scheduled';
+        return session.status?.replace('_', ' ') || 'Unknown';
+    };
+
+    const getPaymentStatus = () => {
+        const payment = session.payments?.[0] || session.payment;
+        if (!payment) return null;
+        
+        if (payment.payment_status === 'released' || payment.payment_status === 'paid') {
+            return { text: 'Paid', color: '#16A34A', bg: '#DCFCE7' };
+        }
+        if (payment.payment_status === 'held' || payment.payment_status === 'in_escrow') {
+            return { text: 'Held', color: '#F59E0B', bg: '#FEF3C7' };
+        }
+        return { text: payment.payment_status || 'Pending', color: '#64748B', bg: '#F3F4F6' };
+    };
+
+    const paymentStatus = getPaymentStatus();
+    const formatTime = (time: string) => {
+        if (!time) return '';
+        try {
+            const [hours, minutes] = time.split(':');
+            const hour = parseInt(hours);
+            const ampm = hour >= 12 ? 'PM' : 'AM';
+            const displayHour = hour % 12 || 12;
+            return `${displayHour}:${minutes} ${ampm}`;
+        } catch {
+            return time;
+        }
+    };
+
     return (
         <TouchableOpacity 
-        style={styles.workCard}
-        onPress={() => {
-            if (session.status === 'completed' && !session.hospital_confirmed) {
-                router.push(`/hospital/review-session/${session.id}` as any);
-            } else {
-                router.push(`/hospital/job-session/${session.id}` as any);
-            }
-        }}
+            style={styles.workCard}
+            onPress={() => {
+                if (session.status === 'completed' && !session.hospital_confirmed) {
+                    router.push(`/hospital/review-session/${session.id}` as any);
+                } else {
+                    router.push(`/hospital/job-session/${session.id}` as any);
+                }
+            }}
         >
+            {/* Header with Doctor Info */}
             <View style={styles.workHeader}>
-            {session.doctor?.profile_photo ? (
-                <Avatar.Image 
-                    size={40} 
-                    source={{ uri: getFullImageUrl(session.doctor.profile_photo) }}
-                />
-            ) : (
-                <Avatar.Icon size={40} icon="account" style={{backgroundColor: '#F1F5F9'}} color="#64748B" />
-            )}
-            <View style={{marginLeft: 10, flex: 1}}>
-                <Text style={styles.workDoctorName} numberOfLines={1}>{session.doctor?.name}</Text>
-                <Text style={styles.workDept} numberOfLines={1}>{session.job_requirement?.department}</Text>
+                {session.doctor?.profile_photo ? (
+                    <Avatar.Image 
+                        size={48} 
+                        source={{ uri: getFullImageUrl(session.doctor.profile_photo) }}
+                        style={styles.workAvatar}
+                    />
+                ) : (
+                    <Avatar.Icon 
+                        size={48} 
+                        icon="account" 
+                        style={[styles.workAvatar, {backgroundColor: '#F1F5F9'}]} 
+                        color="#64748B" 
+                    />
+                )}
+                <View style={styles.workDoctorInfo}>
+                    <Text style={styles.workDoctorName} numberOfLines={1}>
+                        Dr. {session.doctor?.name || 'Unknown Doctor'}
+                    </Text>
+                    <View style={styles.workMetaRow}>
+                        <Building2 size={12} color="#64748B" />
+                        <Text style={styles.workDept} numberOfLines={1}>
+                            {session.job_requirement?.department || 'N/A'}
+                        </Text>
+                    </View>
+                </View>
             </View>
-            </View>
-            
+
+            {/* Status Badge */}
             <View style={styles.workStatusRow}>
-            <View style={[
-                styles.workStatusBadge, 
-                { backgroundColor: session.status === 'completed' ? '#DCFCE7' : '#DBEAFE' }
-            ]}>
-                <Text style={{
-                    color: session.status === 'completed' ? '#166534' : '#1E40AF',
-                    fontSize: 10, fontWeight: '700'
-                }}>
-                    {session.status === 'completed' ? (session.hospital_confirmed ? 'APPROVED' : 'REVIEW NEEDED') : 'IN PROGRESS'}
-                </Text>
+                <View style={[styles.workStatusBadge, { backgroundColor: getStatusBg() }]}>
+                    <View style={[styles.statusDot, { backgroundColor: getStatusColor() }]} />
+                    <Text style={[styles.workStatusText, { color: getStatusColor() }]}>
+                        {getStatusText()}
+                    </Text>
+                </View>
+                {paymentStatus && (
+                    <View style={[styles.paymentBadge, { backgroundColor: paymentStatus.bg }]}>
+                        <Text style={[styles.paymentBadgeText, { color: paymentStatus.color }]}>
+                            {paymentStatus.text}
+                        </Text>
+                    </View>
+                )}
             </View>
+
+            {/* Date and Time */}
+            <View style={styles.workDetails}>
+                <View style={styles.workDetailRow}>
+                    <Clock size={14} color="#64748B" />
+                    <Text style={styles.workDetailText}>
+                        {formatISTDateOnly(session.session_date)}
+                    </Text>
+                </View>
+                {(session.start_time || session.end_time) && (
+                    <View style={styles.workDetailRow}>
+                        <Clock size={14} color="#64748B" />
+                        <Text style={styles.workDetailText}>
+                            {session.start_time ? formatTime(session.start_time) : ''}
+                            {session.start_time && session.end_time ? ' - ' : ''}
+                            {session.end_time ? formatTime(session.end_time) : ''}
+                        </Text>
+                    </View>
+                )}
+                {session.payment_amount && (
+                    <View style={styles.workDetailRow}>
+                        <CreditCard size={14} color="#64748B" />
+                        <Text style={styles.workDetailText}>
+                            ₹{parseFloat(session.payment_amount || 0).toFixed(2)}
+                        </Text>
+                    </View>
+                )}
             </View>
-            
-            <Text style={styles.workDate}>
-            {formatISTDateOnly(session.session_date)}
-            </Text>
         </TouchableOpacity>
     );
 }, (prev, next) => {
@@ -507,7 +602,7 @@ export default function HospitalDashboard() {
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`,
         {
           headers: {
-            'User-Agent': 'AlverstoneMedLink/1.0', // Required by Nominatim
+            'User-Agent': 'AlverConnect/1.0', // Required by Nominatim
           },
         }
       );
@@ -887,8 +982,8 @@ export default function HospitalDashboard() {
           </View>
         </Surface>
 
-        {/* Statistics Cards */}
-        <View style={styles.statsRow}>
+        {/* Statistics Cards - 2x2 Grid */}
+        <View style={styles.statsGrid}>
           <Card style={styles.statCard} mode="outlined">
             <Card.Content style={styles.statContent}>
               <View style={[styles.statIcon, { backgroundColor: '#EFF6FF' }]}>
@@ -908,6 +1003,30 @@ export default function HospitalDashboard() {
               <View style={styles.statText}>
                 <Text style={styles.statValue}>{notificationCount}</Text>
                 <Text style={styles.statLabel}>Notifications</Text>
+              </View>
+            </Card.Content>
+          </Card>
+          <Card style={styles.statCard} mode="outlined">
+            <Card.Content style={styles.statContent}>
+              <View style={[styles.statIcon, { backgroundColor: '#FEF3C7' }]}>
+                <Users size={20} color="#F59E0B" />
+              </View>
+              <View style={styles.statText}>
+                <Text style={styles.statValue}>{sessions.length}</Text>
+                <Text style={styles.statLabel}>Total Sessions</Text>
+              </View>
+            </Card.Content>
+          </Card>
+          <Card style={styles.statCard} mode="outlined">
+            <Card.Content style={styles.statContent}>
+              <View style={[styles.statIcon, { backgroundColor: '#FEE2E2' }]}>
+                <CheckCircle2 size={20} color="#DC2626" />
+              </View>
+              <View style={styles.statText}>
+                <Text style={styles.statValue}>
+                  {sessions.filter((s: any) => s.status === 'completed' && !s.hospital_confirmed).length}
+                </Text>
+                <Text style={styles.statLabel}>Pending Reviews</Text>
               </View>
             </Card.Content>
           </Card>
@@ -1329,15 +1448,16 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
   },
-  statsRow: {
+  statsGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
     paddingHorizontal: 20,
     marginTop: 20,
     marginBottom: 24,
   },
   statCard: {
-    flex: 1,
+    width: '47%',
     borderRadius: 12,
   },
   statContent: {
@@ -1793,7 +1913,7 @@ const styles = StyleSheet.create({
       borderRadius: 16,
       padding: 16,
       marginRight: 16,
-      width: 260,
+      width: 300,
       borderWidth: 1,
       borderColor: '#E5E7EB',
       shadowColor: '#2563EB',
@@ -1804,29 +1924,83 @@ const styles = StyleSheet.create({
   },
   workHeader: {
       flexDirection: 'row',
-      alignItems: 'center',
-      marginBottom: 12,
+      alignItems: 'flex-start',
+      marginBottom: 14,
+      gap: 12,
+  },
+  workAvatar: {
+      borderWidth: 2,
+      borderColor: '#E5E7EB',
+  },
+  workDoctorInfo: {
+      flex: 1,
+      gap: 6,
   },
   workDoctorName: {
-      fontSize: 15,
+      fontSize: 16,
       fontWeight: '700',
       color: '#1F2937',
+      marginBottom: 4,
+  },
+  workMetaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
   },
   workDept: {
-      fontSize: 12,
-      color: '#6B7280',
+      fontSize: 13,
+      color: '#64748B',
+      fontWeight: '500',
   },
   workStatusRow: {
-      marginBottom: 8,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginBottom: 14,
+      flexWrap: 'wrap',
   },
   workStatusBadge: {
-      alignSelf: 'flex-start',
-      paddingHorizontal: 8,
-      paddingVertical: 2,
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 8,
+      gap: 6,
+  },
+  statusDot: {
+      width: 8,
+      height: 8,
       borderRadius: 4,
   },
-  workDate: {
+  workStatusText: {
       fontSize: 12,
-      color: '#9CA3AF',
+      fontWeight: '600',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+  },
+  paymentBadge: {
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 6,
+  },
+  paymentBadgeText: {
+      fontSize: 11,
+      fontWeight: '600',
+  },
+  workDetails: {
+      gap: 8,
+      paddingTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: '#F3F4F6',
+  },
+  workDetailRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+  },
+  workDetailText: {
+      fontSize: 13,
+      color: '#374151',
+      fontWeight: '500',
   },
 });

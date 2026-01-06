@@ -80,8 +80,11 @@ export default function JobDetailScreen() {
       }
 
     } catch (error: any) {
-      console.error('Error loading application:', error);
-      Alert.alert('Error', 'Failed to load job details');
+      if (__DEV__) {
+        console.error('Error loading application:', error);
+      }
+      const message = error?.userFriendlyMessage || error?.message || 'Unable to load job details. Please try again.';
+      Alert.alert('Unable to Load', message);
     } finally {
       setLoading(false);
     }

@@ -75,7 +75,7 @@ export default function EditDoctor() {
         if (doctorData.profile_photo) {
           const photoUrl = doctorData.profile_photo.startsWith('http')
             ? doctorData.profile_photo
-            : `${BASE_BACKEND_URL}/storage/${doctorData.profile_photo}`;
+            : `${BASE_BACKEND_URL}/app/${doctorData.profile_photo}`;
           setProfilePhotoUri(photoUrl);
         }
       }

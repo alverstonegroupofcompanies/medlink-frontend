@@ -115,24 +115,29 @@ export default function LoginScreen() {
         <View style={styles.bgCircle1} />
         <View style={styles.bgCircle2} />
         
-        <SafeAreaView style={styles.safeArea}>
+        <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
           <KeyboardAvoidingView 
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.keyboardView}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
           >
             <ScrollView 
               contentContainerStyle={styles.scrollContent}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
+              bounces={false}
             >
             <View style={[styles.card, isTablet && styles.cardTablet]}>
               
               {/* Header Icon */}
               <View style={styles.headerIconContainer}>
                 <View style={styles.iconCircle}>
-                   <Stethoscope size={24} color="#FFF" />
+                   <Stethoscope size={24} color="#2563EB" />
                 </View>
-                <ThemedText style={styles.headerTitle}>Verified Doctor Network</ThemedText>
+                <View style={styles.headerTitleContainer}>
+                  <ThemedText style={styles.headerTitle}>AlverConnect</ThemedText>
+                  <ThemedText style={styles.headerTagline}>The digital bridge for medical professionals</ThemedText>
+                </View>
               </View>
 
               {/* Login/Signup Toggle */}
@@ -270,11 +275,14 @@ const styles = StyleSheet.create({
   },
   keyboardView: {
     flex: 1,
+    width: '100%',
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
     padding: 24,
+    paddingBottom: 40,
+    paddingTop: 40,
   },
   card: {
     backgroundColor: 'rgba(255, 255, 255, 0.98)',
@@ -480,6 +488,7 @@ const styles = StyleSheet.create({
   },
   hospitalLoginBtn: {
     marginTop: 8,
+    marginBottom: 20,
     paddingVertical: 14,
     paddingHorizontal: 24,
     backgroundColor: 'rgba(100, 116, 139, 0.08)',

@@ -7,6 +7,7 @@ import { DoctorPrimaryColors as PrimaryColors } from '@/constants/doctor-theme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BankingDetailsForm } from '@/components/BankingDetailsForm';
+import { PaymentStatusCard } from '@/components/PaymentStatusCard';
 import API from '../api';
 import echo from '@/services/echo';
 import { getDoctorInfo } from '@/utils/auth';
@@ -32,6 +33,15 @@ interface Transaction {
       name: string;
     };
   };
+  payment_approval_status?: {
+    hospital_approved_at: string | null;
+    admin_approved_at: string | null;
+    approval_status: string;
+    payment_status: string;
+    is_hospital_approved: boolean;
+    is_admin_approved: boolean;
+    is_ready_for_release: boolean;
+  };
 }
 
 interface BankingDetails {
@@ -55,6 +65,7 @@ export default function WalletScreen() {
   const [showWithdrawal, setShowWithdrawal] = useState(false);
   const [withdrawalAmount, setWithdrawalAmount] = useState('');
   const [withdrawing, setWithdrawing] = useState(false);
+  const [transactionFilter, setTransactionFilter] = useState<'all' | 'pending' | 'completed' | 'withdrawals'>('all');
 
   useEffect(() => {
     fetchWalletData();
@@ -105,9 +116,12 @@ export default function WalletScreen() {
       setWallet(walletRes.data.wallet);
       setTransactions(transactionsRes.data.transactions.data || transactionsRes.data.transactions);
       setBankingDetails(bankingRes.data.banking_details);
-    } catch (error) {
-      console.error('Failed to fetch wallet data:', error);
-      Alert.alert('Error', 'Failed to load wallet information');
+    } catch (error: any) {
+      if (__DEV__) {
+        console.error('Failed to fetch wallet data:', error);
+      }
+      const message = error?.userFriendlyMessage || error?.message || 'Unable to load wallet information. Please try again.';
+      Alert.alert('Unable to Load', message);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -151,11 +165,11 @@ export default function WalletScreen() {
         fetchWalletData();
       }
     } catch (error: any) {
-      console.error('Withdrawal error:', error);
-      Alert.alert(
-        'Error',
-        error.response?.data?.message || 'Failed to process withdrawal'
-      );
+      if (__DEV__) {
+        console.error('Withdrawal error:', error);
+      }
+      const message = error?.userFriendlyMessage || error?.response?.data?.message || 'Unable to process withdrawal. Please try again.';
+      Alert.alert('Withdrawal Failed', message);
     } finally {
       setWithdrawing(false);
     }
@@ -322,7 +336,7 @@ export default function WalletScreen() {
               <ThemedText style={styles.pendingAmount}>
                 ₹{wallet?.pending_balance.toFixed(2) || '0.00'}
               </ThemedText>
-              {transactions.filter(t => t.type === 'hold' && t.status === 'pending').map((transaction) => (
+              {transactions.filter(t => (t.type === 'credit' || t.type === 'hold') && t.status === 'pending').slice(0, 3).map((transaction) => (
                 <View key={transaction.id} style={styles.pendingTransactionItem}>
                   {transaction.job_session?.hospital && (
                     <View style={styles.pendingHospitalRow}>
@@ -335,27 +349,53 @@ export default function WalletScreen() {
                       </ThemedText>
                     </View>
                   )}
+                  {transaction.payment_approval_status && (
+                    <View style={styles.approvalBadges}>
+                      {transaction.payment_approval_status.is_hospital_approved && (
+                        <View style={[styles.approvalBadge, { backgroundColor: '#E3F2FD' }]}>
+                          <MaterialIcons name="check-circle" size={12} color="#2196F3" />
+                          <ThemedText style={[styles.approvalBadgeText, { color: '#2196F3' }]}>Hospital</ThemedText>
+                        </View>
+                      )}
+                      {transaction.payment_approval_status.is_admin_approved && (
+                        <View style={[styles.approvalBadge, { backgroundColor: '#F3E5F5' }]}>
+                          <MaterialIcons name="verified" size={12} color="#9C27B0" />
+                          <ThemedText style={[styles.approvalBadgeText, { color: '#9C27B0' }]}>Admin</ThemedText>
+                        </View>
+                      )}
+                      {!transaction.payment_approval_status.is_hospital_approved && (
+                        <View style={[styles.approvalBadge, { backgroundColor: '#FFF3E0' }]}>
+                          <MaterialIcons name="schedule" size={12} color="#FF9800" />
+                          <ThemedText style={[styles.approvalBadgeText, { color: '#FF9800' }]}>Waiting</ThemedText>
+                        </View>
+                      )}
+                    </View>
+                  )}
                 </View>
               ))}
               <ThemedText style={styles.pendingNote}>
-                Released after hospital approval
+                Released after hospital & admin approval
               </ThemedText>
             </View>
           </View>
 
           {/* Stats */}
           <View style={styles.statsContainer}>
-            <View style={styles.statCard}>
-              <MaterialIcons name="trending-up" size={28} color="#4CAF50" />
-              <ThemedText style={styles.statValue}>
+            <View style={[styles.statCard, { backgroundColor: '#F0FDF4', borderColor: '#D1FAE5' }]}>
+              <View style={[styles.statIconContainer, { backgroundColor: '#D1FAE5' }]}>
+                <MaterialIcons name="trending-up" size={24} color="#10B981" />
+              </View>
+              <ThemedText style={[styles.statValue, { color: '#10B981', marginTop: 12 }]}>
                 ₹{wallet?.total_earned.toFixed(2) || '0.00'}
               </ThemedText>
               <ThemedText style={styles.statLabel}>Total Earned</ThemedText>
             </View>
 
-            <View style={styles.statCard}>
-              <MaterialIcons name="account-balance" size={28} color={PrimaryColors.dark} />
-              <ThemedText style={styles.statValue}>
+            <View style={[styles.statCard, { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' }]}>
+              <View style={[styles.statIconContainer, { backgroundColor: '#FDE68A' }]}>
+                <MaterialIcons name="account-balance" size={24} color={PrimaryColors.dark} />
+              </View>
+              <ThemedText style={[styles.statValue, { color: PrimaryColors.dark, marginTop: 12 }]}>
                 ₹{wallet?.total_withdrawn.toFixed(2) || '0.00'}
               </ThemedText>
               <ThemedText style={styles.statLabel}>Total Withdrawn</ThemedText>
@@ -363,7 +403,7 @@ export default function WalletScreen() {
           </View>
 
           {/* Banking Details */}
-          <View style={styles.section}>
+          <View style={[styles.section, { backgroundColor: '#FFFFFF', padding: 20, borderRadius: 20, marginHorizontal: 16, marginBottom: 20, borderWidth: 1, borderColor: '#E5E7EB' }]}>
             <View style={styles.sectionHeader}>
               <ThemedText style={styles.sectionTitle}>Banking Details</ThemedText>
               <TouchableOpacity onPress={() => setShowBankingForm(true)}>
@@ -431,8 +471,33 @@ export default function WalletScreen() {
           </View>
 
           {/* Transactions */}
-          <View style={styles.section}>
-            <ThemedText style={styles.sectionTitle}>Transaction History</ThemedText>
+          <View style={[styles.section, { backgroundColor: '#FFFFFF', padding: 20, borderRadius: 20, marginHorizontal: 16, marginBottom: 20, borderWidth: 1, borderColor: '#E5E7EB' }]}>
+            <View style={styles.sectionHeader}>
+              <ThemedText style={styles.sectionTitle}>Transaction History</ThemedText>
+            </View>
+
+            {/* Filter Buttons */}
+            <View style={styles.filterContainer}>
+              {(['all', 'pending', 'completed', 'withdrawals'] as const).map((filter) => (
+                <TouchableOpacity
+                  key={filter}
+                  style={[
+                    styles.filterButton,
+                    transactionFilter === filter && styles.filterButtonActive,
+                  ]}
+                  onPress={() => setTransactionFilter(filter)}
+                >
+                  <ThemedText
+                    style={[
+                      styles.filterButtonText,
+                      transactionFilter === filter && styles.filterButtonTextActive,
+                    ]}
+                  >
+                    {filter.charAt(0).toUpperCase() + filter.slice(1)}
+                  </ThemedText>
+                </TouchableOpacity>
+              ))}
+            </View>
 
             {transactions.length === 0 ? (
               <View style={styles.emptyState}>
@@ -443,64 +508,113 @@ export default function WalletScreen() {
                 </ThemedText>
               </View>
             ) : (
-              transactions.map((transaction) => (
-                <View key={transaction.id} style={styles.transactionCard}>
-                  <View style={styles.transactionLeft}>
-                    <View
-                      style={[
-                        styles.transactionIcon,
-                        { backgroundColor: getTransactionColor(transaction.type) + '15' },
-                      ]}
-                    >
-                      <MaterialIcons
-                        name={getTransactionIcon(transaction.type) as any}
-                        size={22}
-                        color={getTransactionColor(transaction.type)}
-                      />
-                    </View>
-                    <View style={styles.transactionInfo}>
-                      <ThemedText style={styles.transactionDescription}>
-                        {transaction.description}
-                      </ThemedText>
-                      {transaction.job_session?.hospital && (
-                        <View style={styles.hospitalBadge}>
-                          <MaterialIcons name="local-hospital" size={12} color="#2196F3" />
-                          <ThemedText style={styles.hospitalName}>
-                            {transaction.job_session.hospital.name}
-                          </ThemedText>
+              transactions
+                .filter((t) => {
+                  if (transactionFilter === 'all') return true;
+                  if (transactionFilter === 'pending') return t.status === 'pending';
+                  if (transactionFilter === 'completed') return t.status === 'completed';
+                  if (transactionFilter === 'withdrawals') return t.type === 'debit';
+                  return true;
+                })
+                .map((transaction) => {
+                  // Show PaymentStatusCard for pending payments with approval status
+                  const showPaymentStatus = transaction.payment_approval_status && 
+                    transaction.status === 'pending' && 
+                    (transaction.type === 'credit' || transaction.type === 'hold');
+
+                  return (
+                    <View key={transaction.id}>
+                      <View style={styles.transactionCard}>
+                        <View style={styles.transactionLeft}>
+                          <View
+                            style={[
+                              styles.transactionIcon,
+                              { backgroundColor: getTransactionColor(transaction.type) + '15' },
+                            ]}
+                          >
+                            <MaterialIcons
+                              name={getTransactionIcon(transaction.type) as any}
+                              size={22}
+                              color={getTransactionColor(transaction.type)}
+                            />
+                          </View>
+                          <View style={styles.transactionInfo}>
+                            <ThemedText style={styles.transactionDescription}>
+                              {transaction.description}
+                            </ThemedText>
+                            {transaction.job_session?.hospital && (
+                              <View style={styles.hospitalBadge}>
+                                <MaterialIcons name="local-hospital" size={12} color="#2196F3" />
+                                <ThemedText style={styles.hospitalName}>
+                                  {transaction.job_session.hospital.name}
+                                </ThemedText>
+                              </View>
+                            )}
+                            {transaction.payment_approval_status && (
+                              <View style={styles.approvalBadges}>
+                                {transaction.payment_approval_status.is_hospital_approved && (
+                                  <View style={[styles.approvalBadge, { backgroundColor: '#E3F2FD' }]}>
+                                    <MaterialIcons name="check-circle" size={12} color="#2196F3" />
+                                    <ThemedText style={[styles.approvalBadgeText, { color: '#2196F3' }]}>Hospital</ThemedText>
+                                  </View>
+                                )}
+                                {transaction.payment_approval_status.is_admin_approved && (
+                                  <View style={[styles.approvalBadge, { backgroundColor: '#F3E5F5' }]}>
+                                    <MaterialIcons name="verified" size={12} color="#9C27B0" />
+                                    <ThemedText style={[styles.approvalBadgeText, { color: '#9C27B0' }]}>Admin</ThemedText>
+                                  </View>
+                                )}
+                                {!transaction.payment_approval_status.is_hospital_approved && (
+                                  <View style={[styles.approvalBadge, { backgroundColor: '#FFF3E0' }]}>
+                                    <MaterialIcons name="schedule" size={12} color="#FF9800" />
+                                    <ThemedText style={[styles.approvalBadgeText, { color: '#FF9800' }]}>Waiting</ThemedText>
+                                  </View>
+                                )}
+                              </View>
+                            )}
+                            <ThemedText style={styles.transactionDate}>
+                              {new Date(transaction.created_at).toLocaleDateString('en-IN', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </ThemedText>
+                          </View>
                         </View>
+                        <View style={styles.transactionRight}>
+                          <ThemedText
+                            style={[
+                              styles.transactionAmount,
+                              {
+                                color: getTransactionColor(transaction.type),
+                              },
+                            ]}
+                          >
+                            {transaction.type === 'release' || transaction.type === 'credit' ? '+' : transaction.type === 'hold' ? '' : '-'}
+                            ₹{Number(transaction.amount || 0).toFixed(2)}
+                          </ThemedText>
+                          <View style={[styles.statusBadge, { backgroundColor: transaction.status === 'completed' ? '#4CAF50' + '20' : '#FF9800' + '20' }]}>
+                            <ThemedText style={[styles.statusText, { color: transaction.status === 'completed' ? '#4CAF50' : '#FF9800' }]}>
+                              {transaction.status}
+                            </ThemedText>
+                          </View>
+                        </View>
+                      </View>
+                      {showPaymentStatus && transaction.payment_approval_status && (
+                        <PaymentStatusCard
+                          hospitalApprovedAt={transaction.payment_approval_status.hospital_approved_at}
+                          adminApprovedAt={transaction.payment_approval_status.admin_approved_at}
+                          approvalStatus={transaction.payment_approval_status.approval_status}
+                          paymentStatus={transaction.payment_approval_status.payment_status}
+                          amount={transaction.amount != null ? Number(transaction.amount) : 0}
+                          hospitalName={transaction.job_session?.hospital?.name}
+                        />
                       )}
-                      <ThemedText style={styles.transactionDate}>
-                        {new Date(transaction.created_at).toLocaleDateString('en-IN', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </ThemedText>
                     </View>
-                  </View>
-                  <View style={styles.transactionRight}>
-                    <ThemedText
-                      style={[
-                        styles.transactionAmount,
-                        {
-                          color: getTransactionColor(transaction.type),
-                        },
-                      ]}
-                    >
-                      {transaction.type === 'release' || transaction.type === 'credit' ? '+' : transaction.type === 'hold' ? '' : '-'}
-                      ₹{Number(transaction.amount || 0).toFixed(2)}
-                    </ThemedText>
-                    <View style={[styles.statusBadge, { backgroundColor: transaction.status === 'completed' ? '#4CAF50' + '20' : '#FF9800' + '20' }]}>
-                      <ThemedText style={[styles.statusText, { color: transaction.status === 'completed' ? '#4CAF50' : '#FF9800' }]}>
-                        {transaction.status}
-                      </ThemedText>
-                    </View>
-                  </View>
-                </View>
-              ))
+                  );
+                })
             )}
           </View>
 
@@ -571,11 +685,11 @@ export default function WalletScreen() {
 const styles = StyleSheet.create({
   mainContainer: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F8FAFC',
   },
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F8FAFC',
   },
   safeArea: {
     backgroundColor: 'transparent',
@@ -630,16 +744,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   stagesCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#FFFFFF',
     marginHorizontal: 16,
+    marginTop: 20,
     marginBottom: 20,
-    padding: 20,
-    borderRadius: 24,
-    elevation: 8,
+    padding: 24,
+    borderRadius: 20,
+    elevation: 3,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   stagesTitle: {
     fontSize: 16,
@@ -676,7 +793,8 @@ const styles = StyleSheet.create({
   },
   balanceContainer: {
     paddingHorizontal: 16,
-    marginBottom: 16,
+    marginBottom: 20,
+    gap: 16,
   },
   balanceCard: {
     paddingHorizontal: 24,
@@ -726,16 +844,21 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   pendingCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#FFFFFF',
     padding: 20,
-    borderRadius: 16,
+    borderRadius: 18,
     borderLeftWidth: 4,
     borderLeftColor: '#FF9800',
     elevation: 2,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+    borderRightWidth: 1,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
   },
   pendingHeader: {
     flexDirection: 'row',
@@ -786,47 +909,103 @@ const styles = StyleSheet.create({
   statsContainer: {
     flexDirection: 'row',
     paddingHorizontal: 16,
-    marginBottom: 16,
+    marginBottom: 20,
+    gap: 12,
   },
   statCard: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#FFFFFF',
     padding: 20,
-    borderRadius: 16,
-    marginHorizontal: 6,
+    borderRadius: 18,
     alignItems: 'center',
     elevation: 2,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  statIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   statValue: {
     fontSize: 20,
     fontWeight: 'bold',
-    marginTop: 12,
     marginBottom: 4,
     color: '#333',
   },
   statLabel: {
     fontSize: 12,
-    color: '#666',
+    color: '#6B7280',
     textAlign: 'center',
+    fontWeight: '500',
   },
   section: {
-    paddingHorizontal: 16,
-    marginBottom: 24,
+    marginBottom: 20,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    gap: 8,
+  },
+  filterButton: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  filterButtonActive: {
+    backgroundColor: PrimaryColors.main,
+    borderColor: PrimaryColors.main,
+  },
+  filterButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
+  },
+  filterButtonTextActive: {
+    color: '#fff',
+  },
+  approvalBadges: {
+    flexDirection: 'row',
+    marginTop: 6,
+    gap: 6,
+  },
+  approvalBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  approvalBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    marginLeft: 4,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1F2937',
+    letterSpacing: -0.3,
   },
   editLink: {
     color: PrimaryColors.main,
@@ -834,14 +1013,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   bankingCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#F9FAFB',
     padding: 20,
     borderRadius: 16,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   bankingRow: {
     flexDirection: 'row',
@@ -865,7 +1041,7 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   addBankingButton: {
-    backgroundColor: '#fff',
+    backgroundColor: '#F9FAFB',
     padding: 32,
     borderRadius: 16,
     alignItems: 'center',
@@ -887,8 +1063,10 @@ const styles = StyleSheet.create({
   emptyState: {
     alignItems: 'center',
     padding: 48,
-    backgroundColor: '#fff',
+    backgroundColor: '#F9FAFB',
     borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   emptyText: {
     color: '#666',
@@ -905,15 +1083,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#F9FAFB',
     padding: 16,
     borderRadius: 14,
     marginBottom: 10,
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   transactionLeft: {
     flexDirection: 'row',

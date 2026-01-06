@@ -132,7 +132,7 @@ export default function DoctorDetails() {
                 source={{
                   uri: doctor.profile_photo.startsWith('http')
                     ? doctor.profile_photo
-                    : `${BASE_BACKEND_URL}/storage/${doctor.profile_photo}`,
+                    : `${BASE_BACKEND_URL}/app/${doctor.profile_photo}`,
                 }}
                 style={styles.profileImage}
               />

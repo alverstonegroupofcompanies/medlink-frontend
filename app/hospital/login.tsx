@@ -2,14 +2,14 @@ import { ThemedButton } from '@/components/themed-button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedTextInput } from '@/components/themed-text-input';
 import { ThemedView } from '@/components/themed-view';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Link, router } from 'expo-router';
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TouchableOpacity, View, StatusBar, useWindowDimensions } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TouchableOpacity, View, StatusBar, useWindowDimensions, Image, TextInput } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors } from '@/constants/hospital-theme';
 import API from '../api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Eye, EyeOff, Mail, Lock, ArrowLeft } from 'lucide-react-native';
 
 const HOSPITAL_TOKEN_KEY = 'hospitalToken';
 const HOSPITAL_INFO_KEY = 'hospitalInfo';
@@ -17,6 +17,7 @@ const HOSPITAL_INFO_KEY = 'hospitalInfo';
 export default function HospitalLoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -103,109 +104,131 @@ export default function HospitalLoginScreen() {
 
   return (
     <View style={styles.mainContainer}>
-      <StatusBar barStyle="light-content" backgroundColor="#1e40af" />
-      <LinearGradient
-        colors={['#1e40af', '#3b82f6', '#60a5fa']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      >
-        {/* Animated background circles */}
-        <View style={styles.bgCircle1} />
-        <View style={styles.bgCircle2} />
-        
-        <SafeAreaView style={safeAreaStyle} edges={['top', 'right', 'left']}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={styles.keyboardView}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
+      <SafeAreaView style={safeAreaStyle} edges={['top', 'right', 'left', 'bottom']}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardView}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+          <ScrollView
+            contentContainerStyle={scrollContentStyle}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
           >
-            <ScrollView
-              contentContainerStyle={scrollContentStyle}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-            >
-              <View style={styles.header}>
-                <ThemedText style={styles.helloText}>Hello Hospital!</ThemedText>
-                <ThemedText style={styles.welcomeText}>Welcome to Alverstone MedLink</ThemedText>
-              </View>
-
-          <View style={formStyle}>
-            <ThemedText type="title" style={styles.loginHeading}>
-              Hospital Login
-            </ThemedText>
-
-            <View style={styles.inputGroup}>
-              <ThemedTextInput
-                placeholder="Email"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoComplete="email"
-                leftIcon="email"
-                style={styles.input}
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <ThemedTextInput
-                placeholder="Password"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                autoCapitalize="none"
-                autoComplete="password"
-                leftIcon="lock"
-                style={styles.input}
-              />
-            </View>
-
-            <TouchableOpacity 
-              style={styles.loginButton}
-              onPress={handleLogin}
-              activeOpacity={0.8}
-              disabled={loading}
-            >
-              <LinearGradient
-                colors={['#2563EB', '#3B82F6']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.loginBtnGradient}
-              >
-                {loading ? (
-                  <ThemedText style={{ color: '#FFFFFF', fontWeight: '600' }}>Logging in...</ThemedText>
-                ) : (
-                  <ThemedText style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 17 }}>Login</ThemedText>
-                )}
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <View style={styles.signupContainer}>
-              <ThemedText style={styles.signupText}>Don't have an account?{' '}</ThemedText>
-              <Link href="/hospital/register" asChild>
-                <ThemedText
-                  type="link"
-                  style={styles.signupLink}
-                  lightColor={PrimaryColors.main}
-                  darkColor={PrimaryColors.light}
-                >
-                  Register
-                </ThemedText>
-              </Link>
-            </View>
-
+            {/* Back Button */}
             <TouchableOpacity 
               style={styles.backButton}
               onPress={() => router.push('/login')}
             >
-              <ThemedText style={styles.backButtonText}>← Back to Doctor Login</ThemedText>
+              <ArrowLeft size={24} color="#60A5FA" />
             </TouchableOpacity>
-          </View>
+
+            {/* Hospital Image at Top */}
+            <View style={styles.imageContainer}>
+              <Image
+                source={{
+                  uri: 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=800&h=400&fit=crop'
+                }}
+                style={styles.hospitalImage}
+                resizeMode="cover"
+              />
+            </View>
+
+            {/* White Card Container */}
+            <View style={formStyle}>
+            {/* Welcome Text */}
+            <View style={styles.welcomeHeaderContainer}>
+              <ThemedText style={styles.welcomeHeading}>
+                Welcome Back
+              </ThemedText>
+              <ThemedText style={styles.appTagline}>
+                AlverConnect - The digital bridge for medical professionals
+              </ThemedText>
+            </View>
+            <ThemedText style={styles.welcomeSubtitle}>
+              Access verified shifts & manage staff.
+            </ThemedText>
+
+              {/* Email Input */}
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.inputLabel}>Work Email or Phone</ThemedText>
+                <View style={styles.inputContainer}>
+                  <Mail size={20} color="#94A3B8" style={styles.inputIcon} />
+                  <TextInput
+                    placeholder="admin@hospital.com"
+                    placeholderTextColor="#94A3B8"
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoComplete="email"
+                    style={styles.textInput}
+                  />
+                </View>
+              </View>
+
+              {/* Password Input */}
+              <View style={styles.inputGroup}>
+                <View style={styles.passwordLabelRow}>
+                  <ThemedText style={styles.inputLabel}>Password</ThemedText>
+                  <TouchableOpacity onPress={() => Alert.alert('Forgot Password', 'Please contact support to reset your password.')}>
+                    <ThemedText style={styles.forgotPasswordText}>Forgot Password?</ThemedText>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.inputContainer}>
+                  <Lock size={20} color="#94A3B8" style={styles.inputIcon} />
+                  <TextInput
+                    placeholder="Enter your password"
+                    placeholderTextColor="#94A3B8"
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                    autoComplete="password"
+                    style={styles.textInput}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowPassword(!showPassword)}
+                    style={styles.eyeIcon}
+                  >
+                    {showPassword ? (
+                      <EyeOff size={20} color="#94A3B8" />
+                    ) : (
+                      <Eye size={20} color="#94A3B8" />
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Login Button */}
+              <TouchableOpacity 
+                style={[styles.loginButton, loading && styles.loginButtonDisabled]}
+                onPress={handleLogin}
+                activeOpacity={0.8}
+                disabled={loading}
+              >
+                <ThemedText style={styles.loginButtonText}>
+                  {loading ? 'Logging in...' : 'Secure Login'}
+                </ThemedText>
+                {!loading && (
+                  <ThemedText style={styles.loginButtonArrow}>→</ThemedText>
+                )}
+              </TouchableOpacity>
+
+              {/* Register Link */}
+              <View style={styles.signupContainer}>
+                <ThemedText style={styles.signupText}>New Partner?{' '}</ThemedText>
+                <Link href="/hospital/register" asChild>
+                  <ThemedText style={styles.signupLink}>
+                    Register Facility
+                  </ThemedText>
+                </Link>
+              </View>
+            </View>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
-      </LinearGradient>
     </View>
   );
 }
@@ -213,132 +236,179 @@ export default function HospitalLoginScreen() {
 const styles = StyleSheet.create({
   mainContainer: {
     flex: 1,
-  },
-  bgCircle1: {
-    position: 'absolute',
-    width: 400,
-    height: 400,
-    borderRadius: 200,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    top: -200,
-    right: -100,
-  },
-  bgCircle2: {
-    position: 'absolute',
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    bottom: -150,
-    left: -100,
+    backgroundColor: '#F8FAFC',
   },
   safeArea: {
     flex: 1,
   },
-  keyboardView: { flex: 1 },
+  keyboardView: { 
+    flex: 1 
+  },
   scrollContent: { 
-    flexGrow: 1, 
+    flexGrow: 1,
     justifyContent: 'center',
-    padding: 24,
+    paddingBottom: 32,
+    paddingTop: 60,
+    paddingHorizontal: 20,
   },
-  scrollContentTablet: { paddingHorizontal: 48, paddingBottom: 32 },
-  header: {
-    paddingTop: Platform.OS === 'ios' ? 12 : 12,
-    paddingBottom: 28,
+  scrollContentTablet: { 
+    paddingHorizontal: 48, 
+    paddingBottom: 32 
+  },
+  backButton: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 16 : 12,
+    left: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#EFF6FF',
+    justifyContent: 'center',
     alignItems: 'center',
-    justifyContent: 'center',
+    zIndex: 10,
   },
-  helloText: { 
-    fontSize: 32, 
-    fontWeight: '800', 
-    color: '#FFFFFF', 
-    marginBottom: 8,
-    textAlign: 'center',
-    letterSpacing: -0.5,
+  imageContainer: {
+    width: '100%',
+    height: 200,
+    marginBottom: -20,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    overflow: 'hidden',
   },
-  welcomeText: { 
-    fontSize: 16, 
-    color: 'rgba(255, 255, 255, 0.9)', 
-    marginTop: 0,
-    fontWeight: '500',
-    textAlign: 'center',
+  hospitalImage: {
+    width: '100%',
+    height: '100%',
   },
   form: {
-    backgroundColor: 'rgba(255, 255, 255, 0.98)',
-    borderRadius: 32,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
     padding: 28,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 0.25,
-    shadowRadius: 40,
-    elevation: 20,
     width: '100%',
     maxWidth: 420,
     alignSelf: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.8)',
+    marginTop: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
   },
   formTablet: {
     alignSelf: 'center',
     width: '70%',
     maxWidth: 500,
   },
-  loginHeading: { 
-    fontSize: 24, 
-    fontWeight: '800', 
-    marginBottom: 20, 
-    textAlign: 'center',
-    color: '#1E3A8A'
+  welcomeHeaderContainer: {
+    marginBottom: 8,
   },
-  inputGroup: { marginBottom: 16 },
-  input: { 
-    width: '100%', 
-    borderRadius: 16, 
-    paddingHorizontal: 16, 
-    height: 56,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    fontSize: 16,
+  welcomeHeading: {
+    fontSize: 28,
+    fontWeight: '700',
+    marginBottom: 4,
+    color: '#1E293B',
+    textAlign: 'left',
   },
-  loginButton: { 
-    marginTop: 4, 
-    borderRadius: 16, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
+  appTagline: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#64748B',
+    marginBottom: 8,
+    textAlign: 'left',
+    letterSpacing: 0.3,
+    fontStyle: 'italic',
+  },
+  welcomeSubtitle: {
+    fontSize: 15,
+    color: '#64748B',
+    marginBottom: 32,
+    textAlign: 'left',
+  },
+  inputGroup: {
     marginBottom: 20,
-    overflow: 'hidden',
   },
-  loginBtnGradient: {
-    paddingVertical: 18,
-    paddingHorizontal: 24,
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1E293B',
+    marginBottom: 8,
+  },
+  passwordLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-    borderRadius: 16,
+    marginBottom: 8,
   },
-  signupContainer: { 
-    flexDirection: 'row', 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    marginTop: 16, 
-  },
-  signupText: { fontSize: 15, color: '#64748B' },
-  signupLink: { fontSize: 15, fontWeight: '700', color: '#2563EB' },
-  backButton: {
-    marginTop: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    backgroundColor: 'rgba(100, 116, 139, 0.08)',
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(100, 116, 139, 0.15)',
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 16,
+    height: 56,
   },
-  backButtonText: {
+  inputIcon: {
+    marginRight: 12,
+  },
+  textInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#1E293B',
+    paddingVertical: 0,
+  },
+  eyeIcon: {
+    padding: 4,
+  },
+  forgotPasswordText: {
+    fontSize: 14,
+    color: '#2563EB',
+    fontWeight: '600',
+  },
+  loginButton: {
+    backgroundColor: '#2563EB',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    marginTop: 8,
+    marginBottom: 24,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  loginButtonDisabled: {
+    opacity: 0.6,
+  },
+  loginButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+    marginRight: 8,
+  },
+  loginButtonArrow: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  signupContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  signupText: {
     fontSize: 14,
     color: '#64748B',
+  },
+  signupLink: {
+    fontSize: 14,
     fontWeight: '600',
-    textAlign: 'center',
+    color: '#2563EB',
   },
 });
 
