@@ -329,17 +329,13 @@ export default function ProfileScreen() {
         
         setDoctor(updatedDoctor);
         
-        // Update profile photo URI with the full URL from response
-        if (updatedDoctor.profile_photo) {
-          const newPhotoUrl = getProfilePhotoUrl(updatedDoctor);
-          console.log('✅ Profile photo updated:', newPhotoUrl);
-          setProfilePhotoUri(newPhotoUrl);
-          setOriginalProfilePhotoUri(newPhotoUrl);
-        }
+        // Clear cached photo URIs to force reload
+        setProfilePhotoUri(null);
+        setOriginalProfilePhotoUri(null);
         
         setIsEditing(false);
         
-        // Reload doctor data to get fresh departments data with proper relationships
+        // Force reload doctor data from API to get fresh photo URL
         await loadDoctor();
         
         const completion = calculateProfileCompletion(response.data.doctor);
@@ -463,9 +459,9 @@ export default function ProfileScreen() {
             <View style={styles.profileImageSection}>
               <View style={styles.profileImageContainer}>
                 <Image
-                  key={profilePhotoUri || getProfilePhotoUrl(doctor)}
+                  key={`${profilePhotoUri || getProfilePhotoUrl(doctor)}-${Date.now()}`}
                   source={{
-                    uri: profilePhotoUri || getProfilePhotoUrl(doctor),
+                    uri: `${profilePhotoUri || getProfilePhotoUrl(doctor)}?t=${Date.now()}`,
                   }}
                   style={styles.profileImage}
                 />
