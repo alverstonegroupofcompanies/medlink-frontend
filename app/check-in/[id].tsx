@@ -195,7 +195,7 @@ export default function CheckInScreen() {
   return (
     <ScreenSafeArea backgroundColor="#fff">
       <View style={styles.container}>
-        <StatusBar barStyle="dark-content" />
+        <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
         
         {/* Header */}
         <View style={styles.header}>

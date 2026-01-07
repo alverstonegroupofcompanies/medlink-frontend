@@ -19,7 +19,8 @@ import {
   User,
   Phone,
   RefreshCw,
-  AlertCircle
+  AlertCircle,
+  Star
 } from 'lucide-react-native';
 import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors } from '@/constants/hospital-theme';
 import API from '../../api';
@@ -179,7 +180,7 @@ export default function HospitalJobSessionScreen() {
 
   return (
     <ScreenSafeArea style={styles.container}>
-      <StatusBar style="dark" backgroundColor="#fff" />
+      <StatusBar style="light" backgroundColor="#0066FF" />
       
       {/* Header */}
       <Surface style={styles.headerSurface} elevation={0}>
@@ -331,16 +332,30 @@ export default function HospitalJobSessionScreen() {
             )}
 
             {isCompleted && (
-              <Button 
-                mode="contained"
-                onPress={() => router.push(`/hospital/review-session/${session.id}`)}
-                style={[styles.actionButton, isPaid && styles.actionButtonPaid]}
-                contentStyle={{height: 56}}
-                icon={() => <ArrowRight size={20} color="#fff" />}
-                labelStyle={styles.actionButtonLabel}
-              >
-                {isPaid ? 'View Payment Details' : 'Submit Rating & Release Funds'}
-              </Button>
+              <>
+                <Button 
+                  mode="contained"
+                  onPress={() => router.push(`/hospital/review-session/${session.id}`)}
+                  style={[styles.actionButton, isPaid && styles.actionButtonPaid]}
+                  contentStyle={{height: 56}}
+                  icon={() => <ArrowRight size={20} color="#fff" />}
+                  labelStyle={styles.actionButtonLabel}
+                >
+                  {isPaid ? 'View Payment Details' : 'Submit Rating & Release Funds'}
+                </Button>
+                {requirement && (
+                  <Button 
+                    mode="contained"
+                    onPress={() => router.push(`/hospital/applications/${requirement.id}`)}
+                    style={[styles.actionButton, { marginTop: 12, backgroundColor: '#3B82F6' }]}
+                    contentStyle={{height: 48}}
+                    icon={() => <Building2 size={18} color="#FFFFFF" />}
+                    labelStyle={[styles.actionButtonLabel, { color: '#FFFFFF' }]}
+                  >
+                    View Job Details
+                  </Button>
+                )}
+              </>
             )}
           </Card.Content>
         </Card>
@@ -369,6 +384,44 @@ export default function HospitalJobSessionScreen() {
             </View>
           </Card.Content>
         </Card>
+
+        {/* Reviews Section - Show after completion */}
+        {isCompleted && session?.ratings && session.ratings.length > 0 && (
+          <Card style={styles.card} mode="elevated" elevation={2}>
+            <Card.Content>
+              <Text style={styles.reviewSectionTitle}>Reviews</Text>
+              {session.ratings.map((rating: any, index: number) => (
+                <View key={index} style={styles.reviewCard}>
+                  <View style={styles.reviewHeader}>
+                    <View style={styles.starRating}>
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Star
+                          key={star}
+                          size={18}
+                          color={star <= rating.rating ? '#FCD34D' : '#E5E7EB'}
+                          fill={star <= rating.rating ? '#FCD34D' : 'transparent'}
+                        />
+                      ))}
+                    </View>
+                    <Text style={styles.reviewRatedBy}>
+                      Rated by: {rating.rated_by === 'hospital' ? 'Hospital' : 'Doctor'}
+                    </Text>
+                  </View>
+                  {rating.review && (
+                    <Text style={styles.reviewText}>{rating.review}</Text>
+                  )}
+                  <Text style={styles.reviewDate}>
+                    {new Date(rating.created_at).toLocaleDateString('en-US', { 
+                      year: 'numeric', 
+                      month: 'short', 
+                      day: 'numeric' 
+                    })}
+                  </Text>
+                </View>
+              ))}
+            </Card.Content>
+          </Card>
+        )}
 
         {/* Escrow Protection Badge */}
         <View style={styles.escrowBadge}>
@@ -651,5 +704,44 @@ const styles = StyleSheet.create({
   reassignButtonLabel: {
     fontSize: 14,
     fontWeight: '700',
+  },
+  reviewSectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 16,
+  },
+  reviewCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  reviewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  starRating: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  reviewRatedBy: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  reviewText: {
+    fontSize: 14,
+    color: '#0F172A',
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  reviewDate: {
+    fontSize: 12,
+    color: '#94A3B8',
   },
 });

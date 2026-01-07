@@ -31,11 +31,28 @@ export default function NotificationsScreen() {
 
   const loadNotifications = async () => {
     try {
-      const response = await API.get('/doctor/notifications');
+      // Try new endpoint first, fallback to old one
+      let response;
+      try {
+        response = await API.get('/doctor/notifications/list');
+      } catch (newError: any) {
+        // Fallback to old endpoint if new one fails
+        if (newError.response?.status === 404) {
+          response = await API.get('/doctor/notifications');
+        } else {
+          throw newError;
+        }
+      }
       setNotifications(response.data.notifications || []);
     } catch (error: any) {
       console.error('Error loading notifications:', error);
-      Alert.alert('Error', 'Failed to load notifications');
+      // Only show alert if it's not a 404 (route not found - might be server config issue)
+      if (error.response?.status !== 404) {
+        Alert.alert('Error', 'Failed to load notifications');
+      } else {
+        // 404 means route doesn't exist - set empty array silently
+        setNotifications([]);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -100,7 +117,7 @@ export default function NotificationsScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={PrimaryColors.main} />
+      <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
       
       {/* Header */}
       <View style={styles.header}>

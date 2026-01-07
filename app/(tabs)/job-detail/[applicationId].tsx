@@ -26,7 +26,8 @@ import {
   Share2,
   Calendar,
   AlertTriangle,
-  Check
+  Check,
+  Star
 } from 'lucide-react-native';
 import { DoctorPrimaryColors as PrimaryColors, DoctorStatusColors as StatusColors, DoctorNeutralColors as NeutralColors } from '@/constants/doctor-theme';
 import { ModernColors } from '@/constants/modern-theme';
@@ -169,9 +170,43 @@ export default function JobDetailScreen() {
     }
 
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
+      // Check if permission is already granted
+      const { status: currentStatus } = await Location.getForegroundPermissionsAsync();
+      
+      // Only request permission if not already granted
+      let status = currentStatus;
       if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Location permission is required to start tracking.');
+        // Check if GPS is enabled
+        const locationEnabled = await Location.hasServicesEnabledAsync();
+        if (!locationEnabled) {
+          Alert.alert(
+            'GPS Required',
+            'Please enable GPS/Location Services in your device settings to share your live location.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { 
+                text: 'Open Settings', 
+                onPress: () => {
+                  if (Platform.OS === 'ios') {
+                    Location.requestForegroundPermissionsAsync();
+                  }
+                }
+              }
+            ]
+          );
+          return;
+        }
+        
+        // Request permission
+        const { status: requestedStatus } = await Location.requestForegroundPermissionsAsync();
+        status = requestedStatus;
+      }
+      
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission Required', 
+          'Location permission is mandatory to share your live location with the hospital. Please enable it in your device settings.'
+        );
         return;
       }
 
@@ -336,7 +371,7 @@ export default function JobDetailScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar style="light" backgroundColor={ModernColors.primary.main} />
+      <StatusBar style="light" backgroundColor="#0066FF" />
       {/* Header */}
       <LinearGradient
           colors={ModernColors.primary.gradient as [string, string]}
@@ -621,6 +656,41 @@ export default function JobDetailScreen() {
                     </TouchableOpacity>
                 )}
             </View>
+        )}
+
+        {/* Reviews Section - Show after completion */}
+        {session?.status === 'completed' && session?.ratings && session.ratings.length > 0 && (
+          <View style={styles.reviewSection}>
+            <Text style={styles.reviewSectionTitle}>Hospital Review</Text>
+            {session.ratings
+              .filter((rating: any) => rating.rated_by === 'hospital')
+              .map((rating: any, index: number) => (
+                <View key={index} style={styles.reviewCard}>
+                  <View style={styles.reviewHeader}>
+                    <View style={styles.starRating}>
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Star
+                          key={star}
+                          size={20}
+                          color={star <= rating.rating ? '#FCD34D' : '#E5E7EB'}
+                          fill={star <= rating.rating ? '#FCD34D' : 'transparent'}
+                        />
+                      ))}
+                    </View>
+                    <Text style={styles.reviewDate}>
+                      {new Date(rating.created_at).toLocaleDateString('en-US', { 
+                        year: 'numeric', 
+                        month: 'short', 
+                        day: 'numeric' 
+                      })}
+                    </Text>
+                  </View>
+                  {rating.review && (
+                    <Text style={styles.reviewText}>{rating.review}</Text>
+                  )}
+                </View>
+              ))}
+          </View>
         )}
 
       </ScrollView>
@@ -1003,5 +1073,46 @@ const styles = StyleSheet.create({
       color: '#D97706',
       fontWeight: '600',
       fontSize: 14,
+  },
+  reviewSection: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 24,
+  },
+  reviewSectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 12,
+  },
+  reviewCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  reviewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  starRating: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  reviewDate: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  reviewText: {
+    fontSize: 14,
+    color: '#0F172A',
+    lineHeight: 20,
   },
 });

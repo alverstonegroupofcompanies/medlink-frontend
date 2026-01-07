@@ -137,6 +137,33 @@ export default function HospitalProfileEditScreen() {
     }
   };
 
+  const handlePickHospitalPicture = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please grant camera roll permissions to upload a hospital picture.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [16, 9], // Landscape aspect ratio for hospital picture
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setSelectedHospitalPicture(result.assets[0].uri);
+        setHospitalPictureUri(result.assets[0].uri);
+      }
+    } catch (error) {
+      if (__DEV__) {
+        console.error('Error picking hospital picture:', error);
+      }
+      Alert.alert('Unable to Select Image', 'Please try selecting the image again.');
+    }
+  };
+
   const handlePickLicenseDocument = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -441,7 +468,7 @@ export default function HospitalProfileEditScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
-        <StatusBar barStyle="light-content" backgroundColor={PrimaryColors.dark} />
+        <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
         
         {/* Header */}
         <View style={styles.header}>

@@ -210,9 +210,43 @@ export default function ApprovedApplicationsScreen() {
     }
 
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
+      // Check if permission is already granted
+      const { status: currentStatus } = await Location.getForegroundPermissionsAsync();
+      
+      // Only request permission if not already granted
+      let status = currentStatus;
       if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Location permission is required to start tracking.');
+        // Check if GPS is enabled
+        const locationEnabled = await Location.hasServicesEnabledAsync();
+        if (!locationEnabled) {
+          Alert.alert(
+            'GPS Required',
+            'Please enable GPS/Location Services in your device settings to share your live location.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { 
+                text: 'Open Settings', 
+                onPress: () => {
+                  if (Platform.OS === 'ios') {
+                    Location.requestForegroundPermissionsAsync();
+                  }
+                }
+              }
+            ]
+          );
+          return;
+        }
+        
+        // Request permission
+        const { status: requestedStatus } = await Location.requestForegroundPermissionsAsync();
+        status = requestedStatus;
+      }
+      
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission Required', 
+          'Location permission is mandatory to share your live location with the hospital. Please enable it in your device settings.'
+        );
         return;
       }
 
@@ -256,7 +290,7 @@ export default function ApprovedApplicationsScreen() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={ModernColors.primary.main} />
+        <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
         <LinearGradient
             colors={ModernColors.primary.gradient as [string, string]}
             start={{ x: 0, y: 0 }}
@@ -279,7 +313,7 @@ export default function ApprovedApplicationsScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={ModernColors.primary.main} />
+      <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
       <LinearGradient
           colors={ModernColors.primary.gradient as [string, string]}
           start={{ x: 0, y: 0 }}

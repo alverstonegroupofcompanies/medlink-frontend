@@ -98,7 +98,7 @@ export default function ActiveJobsScreen() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={ModernColors.primary.main} />
+        <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
         <LinearGradient
             colors={ModernColors.primary.gradient as [string, string]}
             start={{ x: 0, y: 0 }}
@@ -121,7 +121,7 @@ export default function ActiveJobsScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={ModernColors.primary.main} />
+      <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
       <LinearGradient
           colors={ModernColors.primary.gradient as [string, string]}
           start={{ x: 0, y: 0 }}

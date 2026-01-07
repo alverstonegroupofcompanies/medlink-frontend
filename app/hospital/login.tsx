@@ -104,7 +104,7 @@ export default function HospitalLoginScreen() {
 
   return (
     <View style={styles.mainContainer}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
+      <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
       <SafeAreaView style={safeAreaStyle} edges={['top', 'right', 'left', 'bottom']}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

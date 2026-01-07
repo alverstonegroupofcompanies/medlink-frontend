@@ -141,7 +141,7 @@ export default function HospitalSessionsScreen() {
   return (
     <ScreenSafeArea backgroundColor={PrimaryColors.dark} statusBarStyle="light-content">
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={PrimaryColors.dark} />
+      <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
       
       {/* Header */}
       <View style={styles.header}>

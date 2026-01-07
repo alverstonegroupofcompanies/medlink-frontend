@@ -104,7 +104,7 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#1e40af" />
+      <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
       <LinearGradient
         colors={['#1e40af', '#3b82f6', '#60a5fa']}
         start={{ x: 0, y: 0 }}

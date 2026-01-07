@@ -351,7 +351,7 @@ export default function ApplicationsScreen() {
     return (
       <ScreenSafeArea backgroundColor={PrimaryColors.dark}>
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={PrimaryColors.dark} />
+        <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
         <View style={styles.header}>
           <TouchableOpacity 
             onPress={() => {
@@ -381,7 +381,7 @@ export default function ApplicationsScreen() {
   return (
     <ScreenSafeArea backgroundColor={NeutralColors.background}>
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={PrimaryColors.dark} />
+      <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
       
       {/* Header */}
       <View style={styles.header}>

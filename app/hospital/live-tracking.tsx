@@ -75,13 +75,16 @@ export default function LiveTrackingScreen() {
     }
   };
 
-  // Filter unique doctors logic
+  // Filter unique doctors logic - Only show doctors who have enabled location sharing
   const uniqueDoctors = doctors
     .filter(d => {
       // 1. Basic status filter
       if (d.status === 'completed' || d.status === 'cancelled' || d.status === 'rejected') return false;
       
-      // 2. Focused tracking filter: if doctorId param exists, ONLY show that doctor
+      // 2. Only show doctors who have enabled location sharing
+      if (d.location_sharing_status !== 'active') return false;
+      
+      // 3. Focused tracking filter: if doctorId param exists, ONLY show that doctor
       if (doctorId && String(d.doctor_id) !== String(doctorId)) return false;
       
       return true;
@@ -190,6 +193,7 @@ export default function LiveTrackingScreen() {
                   name: hospital?.name || 'Hospital',
                 }}
                 doctors={uniqueDoctors.filter(d => 
+                  d.location_sharing_status === 'active' &&
                   d.latitude && d.longitude && 
                   !isNaN(parseFloat(d.latitude)) && !isNaN(parseFloat(d.longitude))
                 ).map(d => ({
@@ -236,9 +240,9 @@ export default function LiveTrackingScreen() {
                     <View style={styles.emptyIconContainer}>
                         <User size={48} color={NeutralColors.textTertiary} />
                     </View>
-                    <Text style={styles.emptyTitle}>No Active Doctors</Text>
+                    <Text style={styles.emptyTitle}>No Doctors Sharing Location</Text>
                     <Text style={styles.emptyText}>
-                    Doctors with active sessions will appear here with their live locations.
+                    Doctors will appear here only after they enable live location sharing. Location is only shown when doctors actively share it.
                     </Text>
                 </View>
                 ) : (

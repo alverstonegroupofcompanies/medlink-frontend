@@ -77,7 +77,7 @@ export default function AdminLogin() {
 
   return (
     <SafeAreaView style={safeAreaStyle} edges={['top', 'right', 'left']}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}

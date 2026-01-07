@@ -151,12 +151,58 @@ API.interceptors.response.use(
           console.warn('🔗 Base URL:', error.config?.baseURL || API_BASE_URL);
           console.warn('🌐 Full URL Attempted:', fullUrl);
           console.warn('═══════════════════════════════════════');
+          
+          // Log network errors
+          try {
+            const { logConsoleError } = require('@/utils/error-logger');
+            logConsoleError(
+              `Network Error: Cannot connect to ${fullUrl}`,
+              'network',
+              {
+                endpoint: relativePath,
+                method: error.config?.method?.toUpperCase(),
+              }
+            );
+          } catch (logError) {
+            // Silently fail
+          }
         } else {
           console.warn('❌ Request Error:', error.message);
+          
+          // Log other request errors
+          try {
+            const { logConsoleError } = require('@/utils/error-logger');
+            logConsoleError(
+              error.message || 'Request Error',
+              'api',
+              {
+                endpoint: error.config?.url,
+                method: error.config?.method?.toUpperCase(),
+              }
+            );
+          } catch (logError) {
+            // Silently fail
+          }
         }
       } else if (error.response) {
         // Server responded with error status
         console.error(`❌ API Error ${error.response.status}:`, error.response.data);
+        
+        // Log API errors to backend
+        try {
+          const { logConsoleError } = require('@/utils/error-logger');
+          logConsoleError(
+            error.response.data?.message || error.message || 'API Error',
+            'api',
+            {
+              endpoint: error.config?.url,
+              method: error.config?.method?.toUpperCase(),
+              trace: JSON.stringify(error.response.data),
+            }
+          );
+        } catch (logError) {
+          // Silently fail
+        }
         
         // Handle 401 Unauthorized - token expired or invalid
         if (error.response.status === 401) {

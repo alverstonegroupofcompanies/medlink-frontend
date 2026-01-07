@@ -925,7 +925,7 @@ export default function HospitalDashboard() {
         {/* Minimal Header */}
         <Surface style={styles.headerSurface} elevation={0}>
           <View style={styles.headerContent}>
-            <TouchableOpacity onPress={() => router.push('/hospital/profile' as any)}>
+            <TouchableOpacity onPress={() => router.push('/hospital/profile')}>
                {/* DEBUG: Log image URL details */}
                {(() => {
                  const rawSrc = hospital?.profile_photo || hospital?.logo_path || hospital?.logo;
@@ -984,21 +984,23 @@ export default function HospitalDashboard() {
 
         {/* Statistics Cards - 2x2 Grid */}
         <View style={styles.statsGrid}>
-          <Card style={styles.statCard} mode="outlined">
+          <Card style={styles.statCard} mode="elevated" elevation={2}>
             <Card.Content style={styles.statContent}>
-              <View style={[styles.statIcon, { backgroundColor: '#EFF6FF' }]}>
-                <Building2 size={20} color="#2563EB" />
+              <View style={[styles.statIcon, { backgroundColor: '#DBEAFE' }]}>
+                <Building2 size={24} color="#2563EB" />
               </View>
               <View style={styles.statText}>
-                <Text style={styles.statValue}>{requirements.length}</Text>
+                <Text style={styles.statValue}>
+                  {sessions.filter((s: any) => s.status === 'in_progress').length}
+                </Text>
                 <Text style={styles.statLabel}>Active Jobs</Text>
               </View>
             </Card.Content>
           </Card>
-          <Card style={styles.statCard} mode="outlined">
+          <Card style={styles.statCard} mode="elevated" elevation={2}>
             <Card.Content style={styles.statContent}>
               <View style={[styles.statIcon, { backgroundColor: '#ECFDF5' }]}>
-                <Bell size={20} color="#10B981" />
+                <Bell size={24} color="#10B981" />
               </View>
               <View style={styles.statText}>
                 <Text style={styles.statValue}>{notificationCount}</Text>
@@ -1006,27 +1008,29 @@ export default function HospitalDashboard() {
               </View>
             </Card.Content>
           </Card>
-          <Card style={styles.statCard} mode="outlined">
+          <Card style={styles.statCard} mode="elevated" elevation={2}>
             <Card.Content style={styles.statContent}>
               <View style={[styles.statIcon, { backgroundColor: '#FEF3C7' }]}>
-                <Users size={20} color="#F59E0B" />
+                <CheckCircle2 size={24} color="#F59E0B" />
               </View>
               <View style={styles.statText}>
-                <Text style={styles.statValue}>{sessions.length}</Text>
-                <Text style={styles.statLabel}>Total Sessions</Text>
+                <Text style={styles.statValue}>
+                  {sessions.filter((s: any) => s.status === 'completed').length}
+                </Text>
+                <Text style={styles.statLabel}>Completed Services</Text>
               </View>
             </Card.Content>
           </Card>
-          <Card style={styles.statCard} mode="outlined">
+          <Card style={styles.statCard} mode="elevated" elevation={2}>
             <Card.Content style={styles.statContent}>
               <View style={[styles.statIcon, { backgroundColor: '#FEE2E2' }]}>
-                <CheckCircle2 size={20} color="#DC2626" />
+                <Clock size={24} color="#DC2626" />
               </View>
               <View style={styles.statText}>
                 <Text style={styles.statValue}>
                   {sessions.filter((s: any) => s.status === 'completed' && !s.hospital_confirmed).length}
                 </Text>
-                <Text style={styles.statLabel}>Pending Reviews</Text>
+                <Text style={styles.statLabel}>Pending Review</Text>
               </View>
             </Card.Content>
           </Card>
@@ -1458,18 +1462,20 @@ const styles = StyleSheet.create({
   },
   statCard: {
     width: '47%',
-    borderRadius: 12,
+    borderRadius: 16,
+    borderWidth: 0,
+    backgroundColor: '#FFFFFF',
   },
   statContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingVertical: 4,
+    gap: 14,
+    padding: 16,
   },
   statIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
+    width: 56,
+    height: 56,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1477,15 +1483,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   statValue: {
-    fontSize: 24,
-    fontWeight: '600',
+    fontSize: 28,
+    fontWeight: '700',
     color: '#111827',
     marginBottom: 2,
+    letterSpacing: -0.5,
   },
   statLabel: {
     fontSize: 12,
     color: '#6B7280',
-    fontWeight: '400',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   actionsRow: {
     flexDirection: 'row',

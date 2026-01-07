@@ -14,7 +14,7 @@ import {
   DeviceEventEmitter,
   Modal,
 } from "react-native";
-import { Star, Bell, MapPin, Clock, TrendingUp, Award, Building2, CheckCircle, ArrowRight, Calendar, AlertCircle, Phone, Navigation, LogOut } from "lucide-react-native";
+import { Star, Bell, MapPin, Clock, TrendingUp, Award, Building2, CheckCircle, ArrowRight, Calendar, AlertCircle, Phone, Navigation, LogOut, DollarSign } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
 import { ModernColors, Spacing, BorderRadius, Shadows, Typography } from "@/constants/modern-theme";
@@ -29,6 +29,7 @@ import { useLocationTracking } from "@/hooks/useLocationTracking";
 import { getFullImageUrl } from "@/utils/url-helper";
 
 const { width } = Dimensions.get('window');
+const isTablet = width >= 768; // 11 inch tablet is typically 768px or more
 
 export default function DoctorHome() {
   const [doctor, setDoctor] = useState<any>(null);
@@ -139,13 +140,31 @@ export default function DoctorHome() {
 
   const loadNotifications = async () => {
     try {
-      const response = await API.get('/doctor/notifications');
+      // Try new endpoint first, fallback to old one
+      let response;
+      try {
+        response = await API.get('/doctor/notifications/list');
+      } catch (newError: any) {
+        // Fallback to old endpoint if new one fails
+        if (newError.response?.status === 404) {
+          response = await API.get('/doctor/notifications');
+        } else {
+          throw newError;
+        }
+      }
       const unreadCount = response.data.notifications?.filter((n: any) => !n.read_at).length || 0;
       setNotificationCount(unreadCount);
-    } catch (error) {
+    } catch (error: any) {
+      // Silently handle 404 and other errors - don't show to user
       if (__DEV__) {
-        console.error("Error loading notifications:", error);
+        if (error.response?.status === 404) {
+          console.warn("Notifications endpoint not found - route may need to be registered");
+        } else {
+          console.error("Error loading notifications:", error);
+        }
       }
+      // Set count to 0 on error to prevent UI issues
+      setNotificationCount(0);
     }
   };
 
@@ -532,7 +551,7 @@ export default function DoctorHome() {
       statusBarStyle="light-content"
     >
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={ModernColors.primary.main} />
+        <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
         
         {/* Modern Header with Gradient */}
         <LinearGradient
@@ -812,7 +831,7 @@ export default function DoctorHome() {
                 <TrendingUp size={20} color={ModernColors.primary.main} />
                 <Text style={styles.sectionTitle}>New Opportunities</Text>
               </View>
-              <TouchableOpacity>
+              <TouchableOpacity onPress={() => router.push('/all-openings')}>
                 <Text style={styles.seeAllText}>See All</Text>
               </TouchableOpacity>
             </View>
@@ -829,14 +848,108 @@ export default function DoctorHome() {
                     : 'No job openings available. Please set your department in your profile to see relevant jobs.'}
                 </Text>
               </ModernCard>
+            ) : isTablet ? (
+              <View style={styles.openingsGrid}>
+                {jobRequirements
+                  .filter((req: any) => {
+                    const isExpired = req.is_expired || false;
+                    const isFilled = req.is_filled || false;
+                    const hasApplied = myApplications.some((app: any) => app.job_requirement_id === req.id);
+                    return !isExpired && !isFilled && !hasApplied;
+                  })
+                  .slice(0, 4)
+                  .map((requirement) => {
+                    const application = myApplications.find(
+                      (app: any) => app.job_requirement_id === requirement.id
+                    );
+                    const hasApplied = !!application;
+                    const applicationStatus = application?.status || null;
+                    const isJobCompleted = application?.job_session?.status === 'completed';
+                    const isExpired = requirement.is_expired || false;
+                    const session = application?.job_session;
+                    
+                    const hospitalPicture = requirement.hospital?.hospital_picture_url || null;
+                    const hospitalRating = requirement.hospital?.average_rating || 0;
+                    const matchPercentage = requirement.match_percentage || 0;
+                    const paymentAmount = requirement.payment_amount || 0; // Only show actual posted amount
+                    
+                    const workDate = requirement.work_required_date 
+                      ? new Date(requirement.work_required_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                      : 'Date TBD';
+                    const startTime = requirement.start_time 
+                      ? new Date(`2000-01-01 ${requirement.start_time}`).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+                      : 'Time TBD';
+                    const location = requirement.location_name || requirement.address || requirement.hospital?.address || 'Location TBD';
+                    
+                    return (
+                      <View key={requirement.id} style={styles.openingCard}>
+                        <View style={styles.hospitalImageContainer}>
+                          {hospitalPicture ? (
+                            <Image source={{ uri: getFullImageUrl(hospitalPicture) }} style={styles.hospitalImage} resizeMode="cover" />
+                          ) : (
+                            <View style={[styles.hospitalImage, styles.hospitalImagePlaceholder]}>
+                              <Building2 size={40} color={ModernColors.primary.main} />
+                            </View>
+                          )}
+                          {hospitalRating > 0 && (
+                            <View style={styles.ratingBadge}>
+                              <Star size={14} color="#FFB800" fill="#FFB800" />
+                              <Text style={styles.ratingText}>{hospitalRating.toFixed(1)}</Text>
+                            </View>
+                          )}
+                        </View>
+                        <View style={styles.openingCardContent}>
+                          <Text style={styles.hospitalNameCard} numberOfLines={1}>{requirement.hospital?.name || 'Hospital'}</Text>
+                          <Text style={styles.specialtiesText} numberOfLines={1}>{requirement.department || 'General Practice'}</Text>
+                          <View style={styles.infoRow}>
+                            <MapPin size={14} color={ModernColors.text.secondary} />
+                            <Text style={styles.infoText} numberOfLines={1}>{location}</Text>
+                          </View>
+                          <View style={styles.infoRow}>
+                            <Calendar size={14} color={ModernColors.text.secondary} />
+                            <Text style={styles.infoText}>{workDate}</Text>
+                          </View>
+                          <View style={styles.infoRow}>
+                            <Clock size={14} color={ModernColors.text.secondary} />
+                            <Text style={styles.infoText}>{startTime}</Text>
+                          </View>
+                          <View style={styles.paymentRow}>
+                            <Text style={styles.paymentLabel}>Payment:</Text>
+                            <Text style={styles.paymentAmount}>₹{Number(paymentAmount).toLocaleString('en-IN')}</Text>
+                          </View>
+                          {!hasApplied && !requirement.is_filled && !isExpired && (
+                            <TouchableOpacity
+                              style={[styles.applyButton, { backgroundColor: ModernColors.primary.main }]}
+                              onPress={() => handleApply(requirement.id)}
+                              activeOpacity={0.8}
+                            >
+                              <Text style={styles.applyButtonText}>Apply Now</Text>
+                              <ArrowRight size={16} color="#fff" />
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      </View>
+                    );
+                  })}
+              </View>
             ) : (
               <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false} 
-                style={styles.openingsScroll}
-                contentContainerStyle={styles.openingsScrollContent}
-              >
-                {jobRequirements.slice(0, 5).map((requirement) => {
+                  horizontal 
+                  showsHorizontalScrollIndicator={false} 
+                  style={styles.openingsScroll}
+                  contentContainerStyle={styles.openingsScrollContent}
+                >
+                {jobRequirements
+                  .filter((req: any) => {
+                    // Filter out expired and filled jobs from "New Opportunities"
+                    const isExpired = req.is_expired || false;
+                    const isFilled = req.is_filled || false;
+                    const hasApplied = myApplications.some((app: any) => app.job_requirement_id === req.id);
+                    // Show only active, available jobs that haven't been applied to
+                    return !isExpired && !isFilled && !hasApplied;
+                  })
+                  .slice(0, 5)
+                  .map((requirement) => {
                   const application = myApplications.find(
                     (app: any) => app.job_requirement_id === requirement.id
                   );
@@ -844,13 +957,31 @@ export default function DoctorHome() {
                   const applicationStatus = application?.status || null;
                   const isJobCompleted = application?.job_session?.status === 'completed';
                   const isExpired = requirement.is_expired || false;
+                  const session = application?.job_session;
                   
-                  const hospitalPicture = requirement.hospital?.hospital_picture_url || requirement.hospital?.logo_url;
+                  const hospitalPicture = requirement.hospital?.hospital_picture_url || null; // Only use hospital_picture, not logo
                   const hospitalRating = requirement.hospital?.average_rating || 0;
                   const totalRatings = requirement.hospital?.total_ratings || 0;
                   const matchPercentage = requirement.match_percentage || 0;
                   const hourlyRate = requirement.payment_amount || requirement.salary_range_max || 0;
                   const estimatedTotal = hourlyRate * (requirement.duration_hours || 8) * (requirement.required_sessions || 1);
+                  
+                  // Format date and time
+                  const workDate = requirement.work_required_date 
+                    ? new Date(requirement.work_required_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                    : 'Date TBD';
+                  const startTime = requirement.start_time 
+                    ? new Date(`2000-01-01 ${requirement.start_time}`).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+                    : 'Time TBD';
+                  const endTime = requirement.end_time 
+                    ? new Date(`2000-01-01 ${requirement.end_time}`).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+                    : null;
+                  const location = requirement.location_name || requirement.address || requirement.hospital?.address || 'Location TBD';
+                  
+                  // Check-in time for active sessions
+                  const checkInTime = session?.check_in_time 
+                    ? new Date(session.check_in_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+                    : null;
                   
                   return (
                     <View key={requirement.id} style={styles.openingCard}>
@@ -875,13 +1006,6 @@ export default function DoctorHome() {
                             <Text style={styles.ratingText}>{hospitalRating.toFixed(1)}</Text>
                           </View>
                         )}
-                        
-                        {/* Match Badge - Top Right */}
-                        {matchPercentage > 0 && (
-                          <View style={styles.matchBadge}>
-                            <Text style={styles.matchText}>{matchPercentage}% Match</Text>
-                          </View>
-                        )}
                       </View>
                       
                       {/* Card Content */}
@@ -891,97 +1015,116 @@ export default function DoctorHome() {
                           {requirement.hospital?.name || 'Hospital'}
                         </Text>
                         
-                        {/* Specialties */}
+                        {/* Department */}
                         <Text style={styles.specialtiesText} numberOfLines={1}>
                           {requirement.department || 'General Practice'}
                         </Text>
                         
-                        {/* Hourly Rate */}
-                        <View style={styles.rateContainer}>
-                          <Text style={styles.hourlyRate}>₹{Number(hourlyRate).toLocaleString('en-IN')}/hr</Text>
-                          {estimatedTotal > 0 && (
-                            <Text style={styles.estimatedTotal}>
-                              Est. ₹{Number(estimatedTotal).toLocaleString('en-IN')} total
-                            </Text>
-                          )}
+                        {/* Location */}
+                        <View style={styles.infoRow}>
+                          <MapPin size={14} color={ModernColors.text.secondary} />
+                          <Text style={styles.infoText} numberOfLines={1}>{location}</Text>
+                        </View>
+                        
+                        {/* Date and Time */}
+                        <View style={styles.infoRow}>
+                          <Calendar size={14} color={ModernColors.text.secondary} />
+                          <Text style={styles.infoText}>{workDate}</Text>
+                        </View>
+                        
+                        <View style={styles.infoRow}>
+                          <Clock size={14} color={ModernColors.text.secondary} />
+                          <Text style={styles.infoText}>
+                            {startTime}{endTime ? ` - ${endTime}` : ''}
+                            {checkInTime && ` • Check-in: ${checkInTime}`}
+                          </Text>
+                        </View>
+                        
+                        {/* Payment Amount - Only show actual posted amount */}
+                        <View style={styles.paymentRow}>
+                          <Text style={styles.paymentLabel}>Payment:</Text>
+                          <Text style={styles.paymentAmount}>
+                            ₹{Number(requirement.payment_amount || 0).toLocaleString('en-IN')}
+                          </Text>
                         </View>
 
-                      {hasApplied ? (
-                        <View style={{ marginTop: 8 }}>
-                          {/* Status Badge */}
-                          <View style={[
-                            styles.statusBadge,
-                            isJobCompleted ? { backgroundColor: ModernColors.primary.light } :
-                            applicationStatus === 'rejected' ? { backgroundColor: ModernColors.error.light } :
-                            applicationStatus === 'selected' ? { backgroundColor: ModernColors.success.light } :
-                            { backgroundColor: ModernColors.neutral.gray200 }
-                          ]}>
-                            <Text style={[
-                              styles.statusBadgeText,
-                              isJobCompleted && { color: ModernColors.primary.main },
-                              !isJobCompleted && applicationStatus === 'rejected' && { color: ModernColors.error.main },
-                              !isJobCompleted && applicationStatus === 'selected' && { color: ModernColors.success.main },
-                              applicationStatus === 'pending' && { color: ModernColors.text.secondary }
-                            ]}>
-                              {isJobCompleted ? 'Job Completed' :
-                               applicationStatus === 'pending' ? 'Waiting for Approval' : 
-                               applicationStatus === 'selected' ? 'Application Approved' :
-                               applicationStatus === 'rejected' ? 'Application Rejected' : 
-                               applicationStatus === 'withdrawn' ? 'Withdrawn' : 'Applied'}
-                            </Text>
+                      {/* Status Stages */}
+                      {hasApplied && (
+                        <View style={styles.statusStagesContainer}>
+                          <View style={styles.statusStage}>
+                            <View style={[
+                              styles.statusDot,
+                              { backgroundColor: ModernColors.success.main }
+                            ]} />
+                            <Text style={styles.statusStageText}>Applied</Text>
                           </View>
                           
-                          {/* Action Buttons Row */}
-                          {applicationStatus === 'selected' && !isJobCompleted && (
-                            <View style={styles.actionRow}>
-                              <TouchableOpacity
-                                style={[styles.actionButton, { backgroundColor: ModernColors.primary.main, flex: 2 }]}
-                                onPress={() => router.push(`/(tabs)/job-detail/${application.id}`)}
-                                activeOpacity={0.8}
-                              >
-                                <Text style={styles.actionButtonText}>View Details</Text>
-                                <ArrowRight size={14} color="#fff" />
-                              </TouchableOpacity>
-
-                              <TouchableOpacity
-                                style={[styles.actionButton, { backgroundColor: ModernColors.error.light, flex: 1 }]}
-                                onPress={() => handleReject(requirement.id)}
-                                activeOpacity={0.8}
-                              >
-                                <Text style={[styles.actionButtonText, { color: ModernColors.error.main }]}>Reject</Text>
-                              </TouchableOpacity>
-                            </View>
-                          )}
-
-                          {isJobCompleted && (
-                            <View style={styles.actionRow}>
-                              <TouchableOpacity
-                                style={[styles.actionButton, { backgroundColor: ModernColors.primary.main, flex: 1 }]}
-                                onPress={() => router.push(`/(tabs)/job-detail/${application.id}`)}
-                                activeOpacity={0.8}
-                              >
-                                <Text style={styles.actionButtonText}>View Details</Text>
-                                <ArrowRight size={14} color="#fff" />
-                              </TouchableOpacity>
-                            </View>
-                          )}
-
-                          {applicationStatus === 'pending' && (
-                            <View style={styles.actionRow}>
-                                <TouchableOpacity
-                                  style={[styles.actionButton, { backgroundColor: ModernColors.neutral.gray200, flex: 1 }]}
-                                  onPress={() => {
-                                    const app = myApplications.find(a => a.job_requirement_id === requirement.id);
-                                    if (app) handleWithdraw(app.id);
-                                  }}
-                                  activeOpacity={0.8}
-                                >
-                                  <Text style={[styles.actionButtonText, { color: ModernColors.text.primary }]}>Withdraw</Text>
-                                </TouchableOpacity>
-                            </View>
-                          )}
+                          <View style={styles.statusStageLine} />
+                          
+                          <View style={styles.statusStage}>
+                            <View style={[
+                              styles.statusDot,
+                              applicationStatus === 'pending' || applicationStatus === 'selected' 
+                                ? { backgroundColor: '#F59E0B' }
+                                : { backgroundColor: ModernColors.neutral.gray300 }
+                            ]} />
+                            <Text style={[
+                              styles.statusStageText,
+                              applicationStatus === 'pending' || applicationStatus === 'selected' 
+                                ? { color: '#F59E0B' }
+                                : { color: ModernColors.text.secondary }
+                            ]}>Waiting</Text>
+                          </View>
+                          
+                          <View style={styles.statusStageLine} />
+                          
+                          <View style={styles.statusStage}>
+                            <View style={[
+                              styles.statusDot,
+                              applicationStatus === 'selected' 
+                                ? { backgroundColor: ModernColors.success.main }
+                                : applicationStatus === 'rejected'
+                                ? { backgroundColor: ModernColors.error.main }
+                                : { backgroundColor: ModernColors.neutral.gray300 }
+                            ]} />
+                            <Text style={[
+                              styles.statusStageText,
+                              applicationStatus === 'selected' 
+                                ? { color: ModernColors.success.main }
+                                : applicationStatus === 'rejected'
+                                ? { color: ModernColors.error.main }
+                                : { color: ModernColors.text.secondary }
+                            ]}>
+                              {applicationStatus === 'selected' ? 'Approved' :
+                               applicationStatus === 'rejected' ? 'Rejected' : 'Approval'}
+                            </Text>
+                          </View>
                         </View>
-                      ) : requirement.is_filled ? (
+                      )}
+                      
+                      {/* Active Session Indicator */}
+                      {session && session.status === 'in_progress' && (
+                        <View style={styles.activeSessionBadge}>
+                          <View style={styles.activeSessionDot} />
+                          <Text style={styles.activeSessionText}>Currently Live</Text>
+                        </View>
+                      )}
+                      
+                      {/* Withdraw button for pending applications */}
+                      {hasApplied && applicationStatus === 'pending' && (
+                        <TouchableOpacity
+                          style={[styles.applyButton, { backgroundColor: ModernColors.neutral.gray200, marginTop: 8 }]}
+                          onPress={() => {
+                            const app = myApplications.find(a => a.job_requirement_id === requirement.id);
+                            if (app) handleWithdraw(app.id);
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={[styles.applyButtonText, { color: ModernColors.text.primary }]}>Withdraw Application</Text>
+                        </TouchableOpacity>
+                      )}
+                      
+                      {!hasApplied && requirement.is_filled ? (
                         <View style={[styles.applyButton, { backgroundColor: ModernColors.neutral.gray200 }]}>
                           <Text style={[styles.expiredButtonText, { color: ModernColors.text.secondary }]}>Spot Filled</Text>
                         </View>
@@ -999,6 +1142,18 @@ export default function DoctorHome() {
                           <ArrowRight size={16} color="#fff" />
                         </TouchableOpacity>
                       )}
+                      
+                      {/* View Details Button - Always show for applied jobs */}
+                      {hasApplied && (
+                        <TouchableOpacity
+                          style={[styles.viewDetailsButton, { marginTop: 8 }]}
+                          onPress={() => router.push(`/(tabs)/job-detail/${application.id}`)}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={styles.viewDetailsButtonText}>View Details</Text>
+                          <ArrowRight size={16} color={ModernColors.primary.main} />
+                        </TouchableOpacity>
+                      )}
                       </View>
                     </View>
                   );
@@ -1006,6 +1161,111 @@ export default function DoctorHome() {
               </ScrollView>
             )}
           </View>
+
+          {/* Active Sessions Section */}
+          {activeSessions.length > 0 && (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionTitleContainer}>
+                  <View style={styles.activeIndicator} />
+                  <Text style={styles.sectionTitle}>Active Sessions</Text>
+                </View>
+              </View>
+
+              <View style={styles.activeSessionsContainer}>
+                {activeSessions.map((session: any) => {
+                  const application = myApplications.find(
+                    (app: any) => app.job_session?.id === session.id
+                  );
+                  const hospital = session.job_requirement?.hospital || session.jobRequirement?.hospital;
+                  const checkInTime = session.check_in_time 
+                    ? new Date(session.check_in_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+                    : null;
+                  const sessionDate = session.session_date 
+                    ? new Date(session.session_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+                    : 'Date TBD';
+                  const startTime = session.job_requirement?.start_time || session.jobRequirement?.start_time
+                    ? new Date(`2000-01-01 ${session.job_requirement?.start_time || session.jobRequirement?.start_time}`).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+                    : 'Time TBD';
+                  const location = session.job_requirement?.location_name || session.job_requirement?.address || hospital?.address || 'Location TBD';
+                  const paymentAmount = session.payment_amount || session.job_requirement?.payment_amount || 0;
+
+                  return (
+                    <ModernCard key={session.id} variant="elevated" padding="md" style={styles.activeSessionCard}>
+                      <View style={styles.activeSessionHeader}>
+                        <View style={styles.activeSessionHeaderLeft}>
+                          <View style={styles.activeSessionLiveDot} />
+                          <Text style={styles.activeSessionHospitalName}>{hospital?.name || 'Hospital'}</Text>
+                        </View>
+                        <Text style={styles.activeSessionStatus}>Live</Text>
+                      </View>
+
+                      <Text style={styles.activeSessionDepartment}>{session.job_requirement?.department || session.jobRequirement?.department || 'Department'}</Text>
+
+                      <View style={styles.activeSessionDetails}>
+                        <View style={styles.activeSessionDetailRow}>
+                          <MapPin size={14} color={ModernColors.text.secondary} />
+                          <Text style={styles.activeSessionDetailText} numberOfLines={1}>{location}</Text>
+                        </View>
+                        <View style={styles.activeSessionDetailRow}>
+                          <Calendar size={14} color={ModernColors.text.secondary} />
+                          <Text style={styles.activeSessionDetailText}>{sessionDate}</Text>
+                        </View>
+                        <View style={styles.activeSessionDetailRow}>
+                          <Clock size={14} color={ModernColors.text.secondary} />
+                          <Text style={styles.activeSessionDetailText}>
+                            {startTime}
+                            {checkInTime && ` • Check-in: ${checkInTime}`}
+                          </Text>
+                        </View>
+                        <View style={styles.activeSessionDetailRow}>
+                          <DollarSign size={14} color={ModernColors.text.secondary} />
+                          <Text style={styles.activeSessionDetailText}>
+                            ₹{Number(paymentAmount).toLocaleString('en-IN')} for this job
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Process Steps */}
+                      <View style={styles.processStepsContainer}>
+                        <View style={[styles.processStep, checkInTime && styles.processStepCompleted]}>
+                          <View style={[styles.processStepDot, checkInTime && { backgroundColor: ModernColors.success.main }]} />
+                          <Text style={[styles.processStepText, checkInTime && { color: ModernColors.success.main }]}>
+                            Check-in {checkInTime ? `✓ ${checkInTime}` : 'Pending'}
+                          </Text>
+                        </View>
+                        <View style={[styles.processStep, session.status === 'in_progress' && styles.processStepCompleted]}>
+                          <View style={[styles.processStepDot, session.status === 'in_progress' && { backgroundColor: ModernColors.success.main }]} />
+                          <Text style={[styles.processStepText, session.status === 'in_progress' && { color: ModernColors.success.main }]}>
+                            Session Active {session.status === 'in_progress' ? '✓' : 'Pending'}
+                          </Text>
+                        </View>
+                        <View style={[styles.processStep, session.attendance?.check_out_time && styles.processStepCompleted]}>
+                          <View style={[styles.processStepDot, session.attendance?.check_out_time && { backgroundColor: ModernColors.success.main }]} />
+                          <Text style={[styles.processStepText, session.attendance?.check_out_time && { color: ModernColors.success.main }]}>
+                            Check-out {session.attendance?.check_out_time ? '✓' : 'Pending'}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <TouchableOpacity
+                        style={styles.activeSessionViewButton}
+                        onPress={() => {
+                          if (application) {
+                            router.push(`/(tabs)/job-detail/${application.id}`);
+                          }
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.activeSessionViewButtonText}>View Details</Text>
+                        <ArrowRight size={16} color={ModernColors.primary.main} />
+                      </TouchableOpacity>
+                    </ModernCard>
+                  );
+                })}
+              </View>
+            </View>
+          )}
 
           {/* Upcoming Tasks */}
           <View style={styles.section}>
@@ -1443,23 +1703,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     gap: Spacing.md,
   },
+  openingsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: Spacing.lg,
+    gap: Spacing.md,
+  },
   openingCard: {
-    width: width * 0.85,
-    minWidth: 300,
+    width: isTablet ? (width - Spacing.lg * 3) / 4 : width * 0.85, // 4 cards per row on tablet
+    minWidth: isTablet ? 200 : 300,
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 8, // Neat rectangle with minimal rounding
     overflow: 'hidden',
-    marginRight: 16,
+    marginRight: isTablet ? Spacing.md : 16,
+    marginBottom: isTablet ? Spacing.md : 0,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
   },
   hospitalImageContainer: {
     width: '100%',
     height: 180,
     position: 'relative',
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    overflow: 'hidden',
   },
   hospitalImage: {
     width: '100%',
@@ -1531,9 +1803,10 @@ const styles = StyleSheet.create({
   applyButton: {
     backgroundColor: ModernColors.primary.main,
     paddingVertical: 12,
-    borderRadius: 12,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 8,
   },
   applyButtonText: {
     color: '#FFFFFF',
@@ -1634,6 +1907,215 @@ const styles = StyleSheet.create({
   expiredButtonText: {
     ...Typography.captionBold,
     color: ModernColors.text.secondary,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  infoText: {
+    fontSize: 13,
+    color: ModernColors.text.secondary,
+    flex: 1,
+  },
+  paymentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    marginBottom: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: ModernColors.border.light,
+  },
+  paymentLabel: {
+    fontSize: 13,
+    color: ModernColors.text.secondary,
+    fontWeight: '500',
+  },
+  paymentAmount: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: ModernColors.success.main,
+  },
+  paymentSubtext: {
+    fontSize: 12,
+    color: ModernColors.text.secondary,
+    fontWeight: '400',
+  },
+  statusStagesContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    marginBottom: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  statusStage: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
+  statusStageLine: {
+    flex: 1,
+    height: 2,
+    backgroundColor: ModernColors.border.light,
+    marginHorizontal: 4,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statusStageText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: ModernColors.text.secondary,
+  },
+  activeSessionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: ModernColors.success.light,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  activeSessionDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: ModernColors.success.main,
+  },
+  activeSessionText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: ModernColors.success.main,
+  },
+  viewDetailsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: ModernColors.primary.main,
+    gap: 6,
+  },
+  viewDetailsButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: ModernColors.primary.main,
+  },
+  activeIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: ModernColors.success.main,
+    marginRight: 8,
+  },
+  activeSessionsContainer: {
+    gap: Spacing.md,
+  },
+  activeSessionCard: {
+    borderLeftWidth: 3,
+    borderLeftColor: ModernColors.success.main,
+  },
+  activeSessionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  activeSessionHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  activeSessionLiveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: ModernColors.success.main,
+  },
+  activeSessionHospitalName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: ModernColors.text.primary,
+  },
+  activeSessionStatus: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: ModernColors.success.main,
+    backgroundColor: ModernColors.success.light,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  activeSessionDepartment: {
+    fontSize: 14,
+    color: ModernColors.text.secondary,
+    marginBottom: 12,
+  },
+  activeSessionDetails: {
+    gap: 8,
+    marginBottom: 12,
+  },
+  activeSessionDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  activeSessionDetailText: {
+    fontSize: 13,
+    color: ModernColors.text.secondary,
+    flex: 1,
+  },
+  processStepsContainer: {
+    gap: 8,
+    marginBottom: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: ModernColors.border.light,
+  },
+  processStep: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  processStepCompleted: {
+    opacity: 1,
+  },
+  processStepDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: ModernColors.neutral.gray300,
+  },
+  processStepText: {
+    fontSize: 12,
+    color: ModernColors.text.secondary,
+    fontWeight: '500',
+  },
+  activeSessionViewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: ModernColors.primary.main,
+    gap: 6,
+  },
+  activeSessionViewButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: ModernColors.primary.main,
   },
   tasksContainer: {
     gap: Spacing.md,

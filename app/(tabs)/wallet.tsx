@@ -66,6 +66,7 @@ export default function WalletScreen() {
   const [withdrawalAmount, setWithdrawalAmount] = useState('');
   const [withdrawing, setWithdrawing] = useState(false);
   const [transactionFilter, setTransactionFilter] = useState<'all' | 'pending' | 'completed' | 'withdrawals'>('all');
+  const [expandedStages, setExpandedStages] = useState(false);
 
   useEffect(() => {
     fetchWalletData();
@@ -224,7 +225,7 @@ export default function WalletScreen() {
   return (
 
     <View style={styles.mainContainer}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent={true} />
+      <StatusBar barStyle="light-content" backgroundColor="#0066FF" translucent={true} />
       
       {/* Premium Header Background */}
       <LinearGradient
@@ -254,36 +255,59 @@ export default function WalletScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Payment Flow Stages - Overlapping Header */}
-          <View style={styles.stagesCard}>
-            <ThemedText style={styles.stagesTitle}>Payment Cycle</ThemedText>
-            <View style={styles.stagesContainer}>
-              <View style={styles.stage}>
-                <View style={[styles.stageIcon, { backgroundColor: '#E3F2FD' }]}>
-                  <MaterialIcons name="work" size={20} color={PrimaryColors.main} />
-                </View>
-                <ThemedText style={styles.stageLabel}>Job Done</ThemedText>
-              </View>
-              <View style={styles.stageArrow}>
-                <MaterialIcons name="arrow-forward" size={16} color="#E0E0E0" />
-              </View>
-              <View style={styles.stage}>
-                <View style={[styles.stageIcon, { backgroundColor: '#E8F5E9' }]}>
-                  <MaterialIcons name="check-circle" size={20} color="#4CAF50" />
-                </View>
-                <ThemedText style={styles.stageLabel}>Released</ThemedText>
-              </View>
-              <View style={styles.stageArrow}>
-                <MaterialIcons name="arrow-forward" size={16} color="#E0E0E0" />
-              </View>
-              <View style={styles.stage}>
-                <View style={[styles.stageIcon, { backgroundColor: '#FFF3E0' }]}>
-                  <MaterialIcons name="account-balance" size={20} color="#FF9800" />
-                </View>
-                <ThemedText style={styles.stageLabel}>Withdraw</ThemedText>
-              </View>
+          {/* Payment Flow Stages - Horizontal with Expand/Collapse */}
+          <TouchableOpacity 
+            style={styles.stagesCard}
+            onPress={() => setExpandedStages(!expandedStages)}
+            activeOpacity={0.8}
+          >
+            <View style={styles.stagesHeader}>
+              <ThemedText style={styles.stagesTitle}>Payment Process</ThemedText>
+              <MaterialIcons 
+                name={expandedStages ? "expand-less" : "expand-more"} 
+                size={24} 
+                color={PrimaryColors.main} 
+              />
             </View>
-          </View>
+            {expandedStages && (
+              <View style={styles.stagesContainerHorizontal}>
+                <View style={styles.stageHorizontal}>
+                  <View style={[styles.stageIconHorizontal, { backgroundColor: '#E3F2FD' }]}>
+                    <MaterialIcons name="work" size={18} color={PrimaryColors.main} />
+                  </View>
+                  <ThemedText style={styles.stageLabelHorizontal}>Job Done</ThemedText>
+                  <View style={[styles.stageLine, { backgroundColor: '#E0E0E0' }]} />
+                </View>
+                <View style={styles.stageHorizontal}>
+                  <View style={[styles.stageIconHorizontal, { backgroundColor: '#FFF3E0' }]}>
+                    <MaterialIcons name="schedule" size={18} color="#FF9800" />
+                  </View>
+                  <ThemedText style={styles.stageLabelHorizontal}>Hospital Approval</ThemedText>
+                  <View style={[styles.stageLine, { backgroundColor: '#E0E0E0' }]} />
+                </View>
+                <View style={styles.stageHorizontal}>
+                  <View style={[styles.stageIconHorizontal, { backgroundColor: '#F3E5F5' }]}>
+                    <MaterialIcons name="verified" size={18} color="#9C27B0" />
+                  </View>
+                  <ThemedText style={styles.stageLabelHorizontal}>Admin Approval</ThemedText>
+                  <View style={[styles.stageLine, { backgroundColor: '#E0E0E0' }]} />
+                </View>
+                <View style={styles.stageHorizontal}>
+                  <View style={[styles.stageIconHorizontal, { backgroundColor: '#E8F5E9' }]}>
+                    <MaterialIcons name="check-circle" size={18} color="#4CAF50" />
+                  </View>
+                  <ThemedText style={styles.stageLabelHorizontal}>Released</ThemedText>
+                  <View style={[styles.stageLine, { backgroundColor: '#E0E0E0' }]} />
+                </View>
+                <View style={styles.stageHorizontal}>
+                  <View style={[styles.stageIconHorizontal, { backgroundColor: '#FFF3E0' }]}>
+                    <MaterialIcons name="account-balance" size={18} color="#FF9800" />
+                  </View>
+                  <ThemedText style={styles.stageLabelHorizontal}>Withdraw</ThemedText>
+                </View>
+              </View>
+            )}
+          </TouchableOpacity>
 
           {/* Balance Cards */}
           <View style={styles.balanceContainer}>
@@ -758,38 +782,45 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
+  stagesHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   stagesTitle: {
     fontSize: 16,
     fontWeight: '700',
     color: '#1F2937',
-    marginBottom: 20,
   },
-  stagesContainer: {
+  stagesContainerHorizontal: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingVertical: 8,
   },
-  stage: {
+  stageHorizontal: {
+    flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
   },
-  stageIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  stageIconHorizontal: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
+    marginRight: 8,
   },
-  stageLabel: {
-    fontSize: 12,
+  stageLabelHorizontal: {
+    fontSize: 11,
     color: '#6B7280',
-    textAlign: 'center',
     fontWeight: '600',
+    flex: 1,
   },
-  stageArrow: {
-    marginHorizontal: -8,
-    marginTop: -20,
+  stageLine: {
+    width: 20,
+    height: 2,
+    marginHorizontal: 4,
   },
   balanceContainer: {
     paddingHorizontal: 16,

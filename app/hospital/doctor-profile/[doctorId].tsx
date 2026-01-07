@@ -22,13 +22,14 @@ import {
 } from 'lucide-react-native';
 import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors, HospitalStatusColors as StatusColors } from '@/constants/hospital-theme';
 import API from '../../api';
-import { ScreenSafeArea } from '@/components/screen-safe-area';
+import { ScreenSafeArea, useSafeBottomPadding } from '@/components/screen-safe-area';
 import { getFullImageUrl } from '@/utils/url-helper';
 
 export default function DoctorProfileScreen() {
   const { doctorId } = useLocalSearchParams<{ doctorId: string }>();
   const [doctor, setDoctor] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const safeBottomPadding = useSafeBottomPadding();
 
   useFocusEffect(
     React.useCallback(() => {
@@ -100,7 +101,7 @@ export default function DoctorProfileScreen() {
   return (
     <ScreenSafeArea backgroundColor={NeutralColors.background}>
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={PrimaryColors.dark} />
+      <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
       
       {/* Header */}
       <View style={styles.header}>
@@ -111,7 +112,7 @@ export default function DoctorProfileScreen() {
         <View style={styles.headerRight} />
       </View>
 
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={[styles.content, { paddingBottom: safeBottomPadding + 16 }]}>
         {/* Profile Photo and Basic Info */}
         <View style={styles.profileSection}>
           <Image
@@ -123,14 +124,30 @@ export default function DoctorProfileScreen() {
           <Text style={styles.doctorName}>{doctor.name || 'Doctor'}</Text>
           <Text style={styles.specialization}>{doctor.specialization || 'Not specified'}</Text>
           
-          {/* Rating */}
+          {/* Rating - White text on blue background */}
           <View style={styles.ratingContainer}>
-            <View style={styles.starsRow}>
-              {renderStars(doctor.average_rating || 0)}
+            <View style={styles.ratingBadge}>
+              <View style={styles.starsRow}>
+                {renderStars(doctor.average_rating || 0)}
+              </View>
+              <Text style={styles.ratingText}>
+                {doctor.average_rating?.toFixed(1) || '0.0'} ({doctor.total_ratings || 0} ratings)
+              </Text>
             </View>
-            <Text style={styles.ratingText}>
-              {doctor.average_rating?.toFixed(1) || '0.0'} ({doctor.total_ratings || 0} ratings)
-            </Text>
+          </View>
+          
+          {/* Quality Information - White text on blue background */}
+          <View style={styles.qualityInfoContainer}>
+            <View style={styles.qualityBadge}>
+              <CheckCircle size={18} color="#fff" />
+              <Text style={styles.qualityText}>Verified Doctor</Text>
+            </View>
+            {doctor.completed_jobs_count > 0 && (
+              <View style={styles.qualityBadge}>
+                <CheckCircle size={18} color="#fff" />
+                <Text style={styles.qualityText}>{doctor.completed_jobs_count} Jobs Completed</Text>
+              </View>
+            )}
           </View>
         </View>
 
@@ -276,16 +293,50 @@ const styles = StyleSheet.create({
   },
   ratingContainer: {
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 12,
+    width: '100%',
+  },
+  ratingBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   starsRow: {
     flexDirection: 'row',
     gap: 4,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   ratingText: {
     fontSize: 14,
-    color: NeutralColors.textSecondary,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  qualityInfoContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 12,
+    width: '100%',
+  },
+  qualityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  qualityText: {
+    fontSize: 12,
+    color: '#fff',
     fontWeight: '600',
   },
   card: {

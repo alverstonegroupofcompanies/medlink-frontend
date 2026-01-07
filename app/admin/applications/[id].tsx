@@ -129,7 +129,7 @@ export default function ApplicationDetails() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#1e293b" />
+      <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
       
       {/* Header */}
       <View style={styles.header}>

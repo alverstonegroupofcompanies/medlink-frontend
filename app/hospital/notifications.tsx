@@ -104,7 +104,7 @@ export default function HospitalNotificationsScreen() {
   return (
     <ScreenSafeArea backgroundColor={PrimaryColors.main}>
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={PrimaryColors.main} />
+      <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
       <View style={styles.header}>
         <View style={styles.headerLeft} />
         <Text style={styles.headerTitle}>Notifications</Text>

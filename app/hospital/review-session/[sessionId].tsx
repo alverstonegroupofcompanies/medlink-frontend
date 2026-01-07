@@ -120,7 +120,7 @@ export default function ReviewSessionScreen() {
 
   return (
     <ScreenSafeArea style={styles.container}>
-      <StatusBar style="dark" backgroundColor="#fff" />
+      <StatusBar style="light" backgroundColor="#0066FF" />
       
       {/* Header */}
       <Surface style={styles.headerSurface} elevation={0}>

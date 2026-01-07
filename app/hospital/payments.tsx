@@ -278,7 +278,7 @@ export default function PaymentHistoryScreen() {
 
   return (
     <ScreenSafeArea style={styles.container} backgroundColor="#F8FAFC">
-      <StatusBar style="dark" />
+      <StatusBar style="light" backgroundColor="#0066FF" />
       
       {/* Header */}
       <View style={styles.header}>

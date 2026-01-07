@@ -60,7 +60,7 @@ export default function AllOpeningsScreen() {
 
       // Load job requirements and applications in parallel
       const [requirementsResponse, applicationsResponse] = await Promise.all([
-        API.get('/job-requirements'),
+        API.get('/doctor/job-requirements'),
         API.get('/doctor/applications'),
       ]);
 
