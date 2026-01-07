@@ -572,19 +572,31 @@ export default function ProfileScreen() {
                   <Text style={styles.sectionTitle}>Contact Information</Text>
                 </View>
                 <View style={styles.detailRow}>
-                  <Mail size={18} color={ModernColors.text.secondary} />
-                  <Text style={styles.detailLabel}>Email</Text>
-                  <Text style={styles.detailValue}>{doctor?.email || 'Not provided'}</Text>
+                  <View style={styles.iconWrapper}>
+                    <Mail size={18} color={ModernColors.primary.main} />
+                  </View>
+                  <View style={styles.detailContent}>
+                    <Text style={styles.detailLabel}>Email</Text>
+                    <Text style={styles.detailValue}>{doctor?.email || 'Not provided'}</Text>
+                  </View>
                 </View>
                 <View style={styles.detailRow}>
-                  <Phone size={18} color={ModernColors.text.secondary} />
-                  <Text style={styles.detailLabel}>Phone</Text>
-                  <Text style={styles.detailValue}>{doctor?.phone_number || 'Not provided'}</Text>
+                  <View style={styles.iconWrapper}>
+                    <Phone size={18} color={ModernColors.primary.main} />
+                  </View>
+                  <View style={styles.detailContent}>
+                    <Text style={styles.detailLabel}>Phone</Text>
+                    <Text style={styles.detailValue}>{doctor?.phone_number || 'Not provided'}</Text>
+                  </View>
                 </View>
                 <View style={styles.detailRow}>
-                  <MapPin size={18} color={ModernColors.text.secondary} />
-                  <Text style={styles.detailLabel}>Location</Text>
-                  <Text style={styles.detailValue}>{doctor?.current_location || 'Not provided'}</Text>
+                  <View style={styles.iconWrapper}>
+                    <MapPin size={18} color={ModernColors.primary.main} />
+                  </View>
+                  <View style={styles.detailContent}>
+                    <Text style={styles.detailLabel}>Location</Text>
+                    <Text style={styles.detailValue}>{doctor?.current_location || 'Not provided'}</Text>
+                  </View>
                 </View>
               </ModernCard>
 
@@ -710,6 +722,37 @@ export default function ProfileScreen() {
                       <Text style={[styles.documentText, styles.documentTextMissing]}>Medical Registration</Text>
                     </View>
                   )}
+                </View>
+              </ModernCard>
+
+              {/* Support Section - Separate at Bottom */}
+              <ModernCard variant="elevated" padding="md" style={[styles.sectionCard, styles.supportCard]}>
+                <View style={styles.sectionHeader}>
+                  <View style={[styles.sectionIconContainer, styles.supportIconContainer]}>
+                    <Phone size={20} color="#10B981" />
+                  </View>
+                  <Text style={styles.sectionTitle}>Support</Text>
+                </View>
+                <Text style={styles.supportDescription}>
+                  Need help? Contact our support team for assistance
+                </Text>
+                <View style={styles.supportRow}>
+                  <View style={styles.supportIconWrapper}>
+                    <Mail size={20} color="#10B981" />
+                  </View>
+                  <View style={styles.supportContent}>
+                    <Text style={styles.supportLabel}>Email</Text>
+                    <Text style={styles.supportValue}>support@alverconnect.com</Text>
+                  </View>
+                </View>
+                <View style={styles.supportRow}>
+                  <View style={styles.supportIconWrapper}>
+                    <Phone size={20} color="#10B981" />
+                  </View>
+                  <View style={styles.supportContent}>
+                    <Text style={styles.supportLabel}>Phone</Text>
+                    <Text style={styles.supportValue}>+91 1800-123-4567</Text>
+                  </View>
                 </View>
               </ModernCard>
             </>
@@ -1350,21 +1393,31 @@ const styles = StyleSheet.create({
   detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
-    paddingVertical: Spacing.sm,
+    gap: Spacing.md,
+    paddingVertical: Spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: ModernColors.border.light,
+  },
+  iconWrapper: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: ModernColors.primary.light,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  detailContent: {
+    flex: 1,
   },
   detailLabel: {
     ...Typography.captionBold,
     color: ModernColors.text.secondary,
-    minWidth: 100,
+    marginBottom: 2,
   },
   detailValue: {
     ...Typography.body,
     color: ModernColors.text.primary,
-    flex: 1,
-    textAlign: 'right',
+    fontWeight: '500',
   },
   detailSection: {
     paddingVertical: Spacing.sm,
@@ -1500,6 +1553,49 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: Spacing.md,
     fontStyle: 'italic',
+  },
+  supportCard: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#D1FAE5',
+  },
+  supportIconContainer: {
+    backgroundColor: '#D1FAE5',
+  },
+  supportDescription: {
+    ...Typography.caption,
+    color: ModernColors.text.secondary,
+    marginBottom: Spacing.md,
+    lineHeight: 20,
+  },
+  supportRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: '#D1FAE5',
+  },
+  supportIconWrapper: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#D1FAE5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  supportContent: {
+    flex: 1,
+  },
+  supportLabel: {
+    ...Typography.captionBold,
+    color: ModernColors.text.secondary,
+    marginBottom: 2,
+  },
+  supportValue: {
+    ...Typography.body,
+    color: '#059669',
+    fontWeight: '600',
   },
   saveButton: {
     marginTop: Spacing.md,

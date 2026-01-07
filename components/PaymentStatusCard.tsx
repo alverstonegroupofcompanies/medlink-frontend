@@ -36,13 +36,6 @@ export function PaymentStatusCard({
       completed: !!hospitalApprovedAt,
     },
     {
-      id: 'admin',
-      label: 'Admin Approved',
-      icon: 'verified',
-      color: '#9C27B0',
-      completed: !!adminApprovedAt,
-    },
-    {
       id: 'released',
       label: 'Released',
       icon: 'account-balance-wallet',
@@ -52,8 +45,7 @@ export function PaymentStatusCard({
   ];
 
   const getCurrentStage = () => {
-    if (paymentStatus === 'released') return 3;
-    if (adminApprovedAt) return 2;
+    if (paymentStatus === 'released') return 2;
     if (hospitalApprovedAt) return 1;
     return 0;
   };
@@ -137,11 +129,6 @@ export function PaymentStatusCard({
         {hospitalApprovedAt && (
           <ThemedText style={styles.timestamp}>
             Hospital approved: {new Date(hospitalApprovedAt).toLocaleDateString('en-IN')}
-          </ThemedText>
-        )}
-        {adminApprovedAt && (
-          <ThemedText style={styles.timestamp}>
-            Admin approved: {new Date(adminApprovedAt).toLocaleDateString('en-IN')}
           </ThemedText>
         )}
       </View>

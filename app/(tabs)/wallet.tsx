@@ -286,13 +286,6 @@ export default function WalletScreen() {
                   <View style={[styles.stageLine, { backgroundColor: '#E0E0E0' }]} />
                 </View>
                 <View style={styles.stageHorizontal}>
-                  <View style={[styles.stageIconHorizontal, { backgroundColor: '#F3E5F5' }]}>
-                    <MaterialIcons name="verified" size={18} color="#9C27B0" />
-                  </View>
-                  <ThemedText style={styles.stageLabelHorizontal}>Admin Approval</ThemedText>
-                  <View style={[styles.stageLine, { backgroundColor: '#E0E0E0' }]} />
-                </View>
-                <View style={styles.stageHorizontal}>
                   <View style={[styles.stageIconHorizontal, { backgroundColor: '#E8F5E9' }]}>
                     <MaterialIcons name="check-circle" size={18} color="#4CAF50" />
                   </View>
@@ -398,7 +391,7 @@ export default function WalletScreen() {
                 </View>
               ))}
               <ThemedText style={styles.pendingNote}>
-                Released after hospital & admin approval
+                Released after hospital approval
               </ThemedText>
             </View>
           </View>

@@ -59,6 +59,8 @@ export default function DoctorHome() {
     try {
       const isLoggedIn = await isDoctorLoggedIn();
       if (!isLoggedIn) {
+        // Clear doctor state if not logged in
+        setDoctor(null);
         router.replace('/login');
         return;
       }
@@ -70,6 +72,7 @@ export default function DoctorHome() {
           if (token) {
             await saveDoctorAuth(token, response.data.doctor);
           }
+          // Set doctor state - this will trigger image reload with new key
           setDoctor(response.data.doctor);
           if (response.data.doctor.average_rating) {
             setRating(response.data.doctor.average_rating);
@@ -93,12 +96,16 @@ export default function DoctorHome() {
           setCompletedJobsCount(info.completed_jobs_count);
         }
       } else {
+        // Clear doctor state if no info found
+        setDoctor(null);
         router.replace('/login');
       }
     } catch (error) {
       if (__DEV__) {
         console.error("Error loading doctor:", error);
       }
+      // Clear doctor state on error
+      setDoctor(null);
       router.replace('/login');
     }
   };
@@ -564,9 +571,10 @@ export default function DoctorHome() {
             <View style={styles.profileSection}>
               <View style={styles.profileImageContainer}>
                 <Image
-                  key={getProfilePhotoUrl(doctor)}
+                  key={`doctor-${doctor?.id || 'no-id'}-${doctor?.profile_photo || 'no-photo'}`}
                   source={{ uri: getProfilePhotoUrl(doctor) }}
                   style={styles.profileImage}
+                  cache="reload"
                 />
                 {doctor?.verification_status === 'approved' ? (
                   <View style={styles.verifiedBadge}>

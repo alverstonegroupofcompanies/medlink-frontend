@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, RefreshControl, ScrollView, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ArrowLeft, CreditCard, Calendar, User, DollarSign, CheckCircle, Clock, AlertCircle, Building2, FileText, MapPin, TrendingUp, TrendingDown } from 'lucide-react-native';
+import { ArrowLeft, CreditCard, Calendar, User, DollarSign, CheckCircle, Clock, AlertCircle, Building2, FileText, MapPin, TrendingUp, TrendingDown, ChevronDown, ChevronUp } from 'lucide-react-native';
 import API from '../api';
-import { ScreenSafeArea } from '@/components/screen-safe-area';
+import { ScreenSafeArea, useSafeBottomPadding } from '@/components/screen-safe-area';
 import { HospitalPrimaryColors as PrimaryColors } from '@/constants/hospital-theme';
 import { BASE_BACKEND_URL } from '@/config/api';
 
@@ -14,6 +14,7 @@ export default function PaymentHistoryScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'held' | 'released'>('all');
+  const safeBottomPadding = useSafeBottomPadding();
 
   const loadPayments = async () => {
     try {
@@ -94,16 +95,33 @@ export default function PaymentHistoryScreen() {
       .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0),
   };
 
+  const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
+
+  const toggleExpand = (itemId: number) => {
+    const newExpanded = new Set(expandedItems);
+    if (newExpanded.has(itemId)) {
+      newExpanded.delete(itemId);
+    } else {
+      newExpanded.add(itemId);
+    }
+    setExpandedItems(newExpanded);
+  };
+
   const renderItem = ({ item }: { item: any }) => {
     const isHeld = item.status === 'held' || item.status === 'in_escrow' || item.status === 'pending';
     const isReleased = item.status === 'released' || item.status === 'paid';
     const doctor = item.doctor;
     const jobSession = item.job_session;
     const jobRequirement = item.job_requirement;
+    const isExpanded = expandedItems.has(item.id);
 
     return (
-      <View style={styles.paymentCard}>
-        {/* Header with Doctor Info */}
+      <TouchableOpacity 
+        style={styles.paymentCard}
+        activeOpacity={0.7}
+        onPress={() => toggleExpand(item.id)}
+      >
+        {/* Compact Header - Always Visible */}
         <View style={styles.cardHeader}>
           <View style={styles.doctorInfo}>
             {doctor?.profile_photo ? (
@@ -114,90 +132,108 @@ export default function PaymentHistoryScreen() {
               />
             ) : (
               <View style={styles.avatarPlaceholder}>
-                <User size={20} color={PrimaryColors.main} />
+                <User size={16} color={PrimaryColors.main} />
               </View>
             )}
             <View style={styles.doctorDetails}>
-              <Text style={styles.doctorName}>Dr. {doctor?.name || 'Unknown Doctor'}</Text>
-              {jobRequirement?.department && (
-                <Text style={styles.department}>{jobRequirement.department}</Text>
+              <Text style={styles.doctorName} numberOfLines={1}>
+                {doctor?.name ? `Dr. ${doctor.name}` : (item.doctor_id ? 'Doctor (ID: ' + item.doctor_id + ')' : 'Unknown Doctor')}
+              </Text>
+              {(jobRequirement?.department || jobSession?.job_requirement?.department) && (
+                <Text style={styles.department} numberOfLines={1}>
+                  {jobRequirement?.department || jobSession?.job_requirement?.department}
+                </Text>
               )}
             </View>
           </View>
-          <View style={[styles.statusBadge, { backgroundColor: `${getStatusColor(item.status)}15` }]}>
-            {getStatusIcon(item.status)}
-            <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-              {getStatusLabel(item.status)}
-            </Text>
+          <View style={styles.headerRight}>
+            <View style={[styles.statusBadge, { backgroundColor: `${getStatusColor(item.status)}15` }]}>
+              {getStatusIcon(item.status)}
+              <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
+                {getStatusLabel(item.status)}
+              </Text>
+            </View>
+            {isExpanded ? (
+              <ChevronUp size={20} color="#64748B" style={styles.expandIcon} />
+            ) : (
+              <ChevronDown size={20} color="#64748B" style={styles.expandIcon} />
+            )}
           </View>
         </View>
 
-        {/* Payment Amount */}
-        <View style={styles.amountSection}>
-          <Text style={styles.amountLabel}>Payment Amount</Text>
-          <Text style={styles.amountValue}>₹{parseFloat(item.amount || 0).toFixed(2)}</Text>
-        </View>
-
-        {/* Payment Details Grid */}
-        <View style={styles.detailsGrid}>
+        {/* Compact Amount - Always Visible */}
+        <View style={styles.amountSectionCompact}>
+          <Text style={styles.amountValueCompact}>₹{parseFloat(item.amount || 0).toFixed(2)}</Text>
           {item.created_at && (
-            <View style={styles.detailItem}>
-              <Calendar size={14} color="#64748B" />
-              <View style={styles.detailContent}>
-                <Text style={styles.detailLabel}>Payment Date</Text>
-                <Text style={styles.detailValue}>
-                  {new Date(item.created_at).toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                  })}
-                </Text>
-              </View>
-            </View>
-          )}
-
-          {jobSession?.session_date && (
-            <View style={styles.detailItem}>
-              <Clock size={14} color="#64748B" />
-              <View style={styles.detailContent}>
-                <Text style={styles.detailLabel}>Job Date</Text>
-                <Text style={styles.detailValue}>
-                  {new Date(jobSession.session_date).toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                  })}
-                </Text>
-              </View>
-            </View>
-          )}
-
-          {item.payment_method && (
-            <View style={styles.detailItem}>
-              <CreditCard size={14} color="#64748B" />
-              <View style={styles.detailContent}>
-                <Text style={styles.detailLabel}>Payment Method</Text>
-                <Text style={styles.detailValue}>
-                  {item.payment_method.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
-                </Text>
-              </View>
-            </View>
-          )}
-
-          {jobSession?.id && (
-            <View style={styles.detailItem}>
-              <FileText size={14} color="#64748B" />
-              <View style={styles.detailContent}>
-                <Text style={styles.detailLabel}>Session ID</Text>
-                <Text style={styles.detailValue}>#{jobSession.id}</Text>
-              </View>
-            </View>
+            <Text style={styles.dateCompact}>
+              {new Date(item.created_at).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+              })}
+            </Text>
           )}
         </View>
 
-        {/* Approval Status */}
-        {(isHeld || isReleased) && (
-          <View style={styles.approvalSection}>
+        {/* Expandable Details - Horizontal Layout */}
+        {isExpanded && (
+          <View style={styles.expandedContent}>
+            {/* Payment Details - Horizontal Grid */}
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              style={styles.detailsHorizontal}
+              contentContainerStyle={styles.detailsHorizontalContent}
+            >
+              {item.created_at && (
+                <View style={styles.detailCardHorizontal}>
+                  <Calendar size={16} color={PrimaryColors.main} />
+                  <Text style={styles.detailLabelHorizontal}>Payment Date</Text>
+                  <Text style={styles.detailValueHorizontal}>
+                    {new Date(item.created_at).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })}
+                  </Text>
+                </View>
+              )}
+
+              {jobSession?.session_date && (
+                <View style={styles.detailCardHorizontal}>
+                  <Clock size={16} color={PrimaryColors.main} />
+                  <Text style={styles.detailLabelHorizontal}>Job Date</Text>
+                  <Text style={styles.detailValueHorizontal}>
+                    {new Date(jobSession.session_date).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })}
+                  </Text>
+                </View>
+              )}
+
+              {item.payment_method && (
+                <View style={styles.detailCardHorizontal}>
+                  <CreditCard size={16} color={PrimaryColors.main} />
+                  <Text style={styles.detailLabelHorizontal}>Method</Text>
+                  <Text style={styles.detailValueHorizontal}>
+                    {item.payment_method.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                  </Text>
+                </View>
+              )}
+
+              {jobSession?.id && (
+                <View style={styles.detailCardHorizontal}>
+                  <FileText size={16} color={PrimaryColors.main} />
+                  <Text style={styles.detailLabelHorizontal}>Session ID</Text>
+                  <Text style={styles.detailValueHorizontal}>#{jobSession.id}</Text>
+                </View>
+              )}
+            </ScrollView>
+
+            {/* Approval Status */}
+            {(isHeld || isReleased) && (
+              <View style={styles.approvalSection}>
             <Text style={styles.approvalTitle}>Approval Status</Text>
             <View style={styles.approvalTimeline}>
               <View style={styles.approvalStep}>
@@ -215,25 +251,6 @@ export default function PaymentHistoryScreen() {
                     </Text>
                   ) : (
                     <Text style={styles.approvalStepPending}>Pending</Text>
-                  )}
-                </View>
-              </View>
-
-              <View style={styles.approvalStep}>
-                <View style={[styles.approvalDot, item.admin_approved_at ? styles.approvalDotActive : styles.approvalDotPending]} />
-                <View style={styles.approvalStepContent}>
-                  <Text style={styles.approvalStepLabel}>Admin Approval</Text>
-                  {item.admin_approved_at ? (
-                    <Text style={styles.approvalStepTime}>
-                      {new Date(item.admin_approved_at).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: 'numeric',
-                        minute: '2-digit',
-                      })}
-                    </Text>
-                  ) : (
-                    <Text style={styles.approvalStepPending}>Waiting</Text>
                   )}
                 </View>
               </View>
@@ -258,21 +275,23 @@ export default function PaymentHistoryScreen() {
           </View>
         )}
 
-        {/* Payment Breakdown */}
-        {(item.admin_amount || item.doctor_amount) && (
-          <View style={styles.breakdownSection}>
-            <Text style={styles.breakdownTitle}>Payment Breakdown</Text>
-            <View style={styles.breakdownRow}>
-              <Text style={styles.breakdownLabel}>Doctor Payment (80%)</Text>
-              <Text style={styles.breakdownValue}>₹{parseFloat(item.doctor_amount || 0).toFixed(2)}</Text>
-            </View>
-            <View style={styles.breakdownRow}>
-              <Text style={styles.breakdownLabel}>Platform Fee (20%)</Text>
-              <Text style={styles.breakdownValue}>₹{parseFloat(item.admin_amount || 0).toFixed(2)}</Text>
-            </View>
+            {/* Payment Breakdown */}
+            {(item.admin_amount || item.doctor_amount) && (
+              <View style={styles.breakdownSection}>
+                <Text style={styles.breakdownTitle}>Payment Breakdown</Text>
+                <View style={styles.breakdownRow}>
+                  <Text style={styles.breakdownLabel}>Doctor Payment (80%)</Text>
+                  <Text style={styles.breakdownValue}>₹{parseFloat(item.doctor_amount || 0).toFixed(2)}</Text>
+                </View>
+                <View style={styles.breakdownRow}>
+                  <Text style={styles.breakdownLabel}>Platform Fee (20%)</Text>
+                  <Text style={styles.breakdownValue}>₹{parseFloat(item.admin_amount || 0).toFixed(2)}</Text>
+                </View>
+              </View>
+            )}
           </View>
         )}
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -296,7 +315,7 @@ export default function PaymentHistoryScreen() {
       ) : (
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: safeBottomPadding + 20 }]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
           {/* Stats Cards */}
@@ -495,12 +514,12 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 
-  // Payment Card
+  // Payment Card - Compact
   paymentCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: '#E5E7EB',
     shadowColor: '#000',
@@ -512,25 +531,25 @@ const styles = StyleSheet.create({
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
+    alignItems: 'center',
+    marginBottom: 10,
   },
   doctorInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
     flex: 1,
   },
   doctorAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#F1F5F9',
   },
   avatarPlaceholder: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#EFF6FF',
     justifyContent: 'center',
     alignItems: 'center',
@@ -539,77 +558,95 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   doctorName: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: '#0F172A',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   department: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#64748B',
     fontWeight: '500',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
   statusText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
+  },
+  expandIcon: {
+    marginLeft: 4,
   },
 
-  // Amount Section
-  amountSection: {
-    paddingVertical: 16,
+  // Compact Amount Section
+  amountSectionCompact: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 10,
     borderTopWidth: 1,
-    borderBottomWidth: 1,
     borderColor: '#F3F4F6',
-    marginBottom: 16,
   },
-  amountLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  amountValue: {
-    fontSize: 28,
+  amountValueCompact: {
+    fontSize: 20,
     fontWeight: '700',
     color: PrimaryColors.main,
-    letterSpacing: -0.5,
+    letterSpacing: -0.3,
+  },
+  dateCompact: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '500',
   },
 
-  // Details Grid
-  detailsGrid: {
-    gap: 12,
-    marginBottom: 16,
+  // Expanded Content
+  expandedContent: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderColor: '#F3F4F6',
   },
-  detailItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
+  detailsHorizontal: {
+    marginBottom: 12,
   },
-  detailContent: {
-    flex: 1,
+  detailsHorizontalContent: {
+    gap: 10,
+    paddingRight: 4,
   },
-  detailLabel: {
-    fontSize: 11,
+  detailCardHorizontal: {
+    backgroundColor: '#F8FAFC',
+    padding: 12,
+    borderRadius: 10,
+    minWidth: 140,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  detailLabelHorizontal: {
+    fontSize: 10,
     fontWeight: '600',
     color: '#9CA3AF',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+    marginTop: 6,
     marginBottom: 4,
   },
-  detailValue: {
-    fontSize: 14,
-    fontWeight: '500',
+  detailValueHorizontal: {
+    fontSize: 13,
+    fontWeight: '600',
     color: '#374151',
+    textAlign: 'center',
   },
 
   // Approval Section

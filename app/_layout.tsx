@@ -60,8 +60,8 @@ export default function RootLayout() {
           // Hide native splash screen immediately to show our custom animated splash
           await SplashScreen.hideAsync();
           
-          // Show custom splash for a fixed duration (e.g. 3 seconds) for the animation to play
-          const customSplashDuration = 3000;
+          // Show custom splash for a fixed duration (8 seconds) for the animation to play
+          const customSplashDuration = 8000;
           await new Promise(resolve => setTimeout(resolve, customSplashDuration));
           
           setAppIsReady(true);

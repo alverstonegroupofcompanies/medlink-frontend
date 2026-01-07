@@ -30,7 +30,7 @@ import {
 } from 'lucide-react-native';
 import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors, HospitalStatusColors as StatusColors } from '@/constants/hospital-theme';
 import API from '../api';
-import { ScreenSafeArea } from '@/components/screen-safe-area';
+import { ScreenSafeArea, useSafeBottomPadding } from '@/components/screen-safe-area';
 import { BASE_BACKEND_URL } from '@/config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isDoctorLoggedIn } from '@/utils/auth';
@@ -42,6 +42,7 @@ export default function HospitalProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [hasDoctorAccess, setHasDoctorAccess] = useState(false);
+  const safeBottomPadding = useSafeBottomPadding();
 
   useEffect(() => {
     checkDoctorAccess();
@@ -178,7 +179,7 @@ export default function HospitalProfileScreen() {
 
         <ScrollView 
           style={styles.scrollView}
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, { paddingBottom: safeBottomPadding + 20 }]}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
@@ -325,30 +326,6 @@ export default function HospitalProfileScreen() {
             </View>
           )}
 
-          {/* Quick Access Section */}
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Calendar size={24} color={PrimaryColors.main} />
-              <Text style={styles.cardTitle}>Quick Access</Text>
-            </View>
-            
-            <TouchableOpacity 
-              style={styles.actionButton}
-              onPress={() => router.push('/hospital/live-tracking')}
-            >
-              <MapPin size={18} color={PrimaryColors.main} />
-              <Text style={styles.actionButtonText}>Live Doctor Tracking</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.actionButton, { marginTop: 12 }]}
-              onPress={() => router.push('/hospital/sessions')}
-            >
-              <Calendar size={18} color={PrimaryColors.main} />
-              <Text style={styles.actionButtonText}>View All Sessions</Text>
-            </TouchableOpacity>
-          </View>
-
           {/* Security Section */}
           <View style={styles.card}>
             <View style={styles.cardHeader}>
@@ -363,6 +340,24 @@ export default function HospitalProfileScreen() {
               <Lock size={18} color={PrimaryColors.main} />
               <Text style={styles.actionButtonText}>Change Password</Text>
             </TouchableOpacity>
+          </View>
+
+          {/* Support Section */}
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <Phone size={24} color={PrimaryColors.main} />
+              <Text style={styles.cardTitle}>Support</Text>
+            </View>
+            
+            <View style={styles.infoRow}>
+              <Mail size={18} color={PrimaryColors.main} />
+              <Text style={styles.infoText}>support@alverconnect.com</Text>
+            </View>
+            
+            <View style={styles.infoRow}>
+              <Phone size={18} color={PrimaryColors.main} />
+              <Text style={styles.infoText}>+91 1800-123-4567</Text>
+            </View>
           </View>
         </ScrollView>
       </View>

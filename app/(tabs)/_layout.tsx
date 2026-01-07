@@ -1,7 +1,7 @@
 import { Tabs, router, useFocusEffect } from 'expo-router';
 import React, { useEffect } from 'react';
 import { Platform, View } from 'react-native';
-import { Home, Briefcase, User, Settings } from 'lucide-react-native';
+import { Home, Briefcase, User } from 'lucide-react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { isDoctorLoggedIn, getDoctorInfo } from '@/utils/auth';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -216,21 +216,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="more"
         options={{
-          title: 'Settings',
-          tabBarIcon: ({ color, focused }) => (
-            <View
-              style={{
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: 36,
-                height: 36,
-                borderRadius: 18,
-                backgroundColor: focused ? 'rgba(0, 102, 255, 0.1)' : 'transparent',
-              }}
-            >
-              <Settings size={24} color={color} fill={focused ? color : 'transparent'} />
-            </View>
-          ),
+          href: null, // Hide from tab bar
         }}
       />
       {/* Hidden routes - not shown in tab bar - using href: null to prevent tab bar display */}

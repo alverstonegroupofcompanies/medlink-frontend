@@ -15,6 +15,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Card, Surface, Button, useTheme, Chip, Avatar, FAB } from 'react-native-paper';
+import { LinearGradient } from 'expo-linear-gradient';
 import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors, HospitalStatusColors as StatusColors } from '@/constants/hospital-theme';
 import API from '../api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -576,7 +577,32 @@ export default function HospitalDashboard() {
   };
   
   const loadHospital = async () => {
+    // Clear hospital state first to prevent showing old data
+    setHospital(null);
     try {
+      // Try to load fresh data from API first
+      try {
+        const response = await API.get('/hospital/profile');
+        if (response.data?.hospital) {
+          const hospitalData = response.data.hospital;
+          // Save to AsyncStorage for offline access
+          await AsyncStorage.setItem(HOSPITAL_INFO_KEY, JSON.stringify(hospitalData));
+          setHospital(hospitalData);
+          
+          // Use hospital location as default if available
+          if (hospitalData.latitude && hospitalData.longitude) {
+             setLocation({
+               latitude: parseFloat(hospitalData.latitude),
+               longitude: parseFloat(hospitalData.longitude)
+             });
+          }
+          return;
+        }
+      } catch (apiError) {
+        console.log('⚠️ API fetch failed, using cached data:', apiError);
+      }
+
+      // Fallback to cached data from AsyncStorage
       const info = await AsyncStorage.getItem(HOSPITAL_INFO_KEY);
       if (info) {
         const hospitalData = JSON.parse(info);
@@ -779,19 +805,19 @@ export default function HospitalDashboard() {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    Alert.alert('Delete', 'Are you sure you want to delete this requirement?', [
+  const handleDelete = async (id: number) => { // Actually hides the job post
+    Alert.alert('Hide Job Post', 'This will hide the job post from view. The data will be preserved for payment and session records.', [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Delete',
+        text: 'Hide',
         style: 'destructive',
         onPress: async () => {
           try {
             await API.delete(`/hospital/requirements/${id}`);
             loadRequirements();
           } catch (error: any) {
-            console.error('Error deleting requirement:', error);
-            Alert.alert('Error', error.response?.data?.message || 'Failed to delete requirement');
+            console.error('Error hiding requirement:', error);
+            Alert.alert('Error', error.response?.data?.message || 'Failed to hide requirement');
           }
         },
       },
@@ -922,32 +948,36 @@ export default function HospitalDashboard() {
           showsVerticalScrollIndicator={true}
           overScrollMode="never"
         >
-        {/* Minimal Header */}
-        <Surface style={styles.headerSurface} elevation={0}>
+        {/* Enhanced Header with Gradient */}
+        <LinearGradient
+          colors={['#2563EB', '#1D4ED8', '#1E40AF']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.headerGradient}
+        >
           <View style={styles.headerContent}>
-            <TouchableOpacity onPress={() => router.push('/hospital/profile')}>
-               {/* DEBUG: Log image URL details */}
+            <TouchableOpacity onPress={() => router.push('/hospital/profile')} style={styles.profileButton}>
                {(() => {
                  const rawSrc = hospital?.profile_photo || hospital?.logo_path || hospital?.logo;
                  const fullUrl = getFullImageUrl(rawSrc);
-                 console.log('[Dashboard Header] Hospital Logo:', { raw: rawSrc, full: fullUrl });
                  
                  if (rawSrc) {
                    return (
                      <Avatar.Image 
-                       size={50} 
+                       key={`hospital-${hospital?.id || 'no-id'}-${rawSrc}`}
+                       size={56} 
                        source={{ uri: fullUrl }}
                        onError={(e) => console.log('[Dashboard Header] Image Error:', e.nativeEvent.error)}
-                       style={{ backgroundColor: '#fff', marginRight: 12 }} 
+                       style={{ backgroundColor: '#fff', borderWidth: 3, borderColor: 'rgba(255,255,255,0.3)' }} 
                      />
                    );
                  } else {
                    return (
                      <Avatar.Text 
-                       size={50} 
+                       size={56} 
                        label={hospital?.name?.charAt(0)?.toUpperCase() || 'H'} 
-                       style={{ backgroundColor: '#EFF6FF', marginRight: 12 }}
-                       labelStyle={{ color: '#2563EB', fontWeight: '700' }}
+                       style={{ backgroundColor: 'rgba(255,255,255,0.2)', borderWidth: 3, borderColor: 'rgba(255,255,255,0.3)' }}
+                       labelStyle={{ color: '#fff', fontWeight: '700', fontSize: 24 }}
                      />
                    );
                  }
@@ -960,34 +990,40 @@ export default function HospitalDashboard() {
                 {hospital?.name || 'Hospital Name'}
               </Text>
             </View>
-            <TouchableOpacity 
-              onPress={() => router.push('/hospital/notifications')}
-              style={styles.bellIcon}
-            >
-              <Bell size={24} color="#fff" />
-              {notificationCount > 0 && (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>
-                    {notificationCount > 99 ? '99+' : notificationCount}
-                  </Text>
+            <View style={styles.headerActions}>
+              <TouchableOpacity 
+                onPress={() => router.push('/hospital/notifications')}
+                style={styles.iconButton}
+              >
+                <View style={styles.iconButtonInner}>
+                  <Bell size={22} color="#fff" />
+                  {notificationCount > 0 && (
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>
+                        {notificationCount > 99 ? '99+' : notificationCount}
+                      </Text>
+                    </View>
+                  )}
                 </View>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity 
-              onPress={handleLogout}
-              style={[styles.bellIcon, { marginLeft: 8 }]}
-            >
-              <LogOut size={24} color="#fff" />
-            </TouchableOpacity>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                onPress={handleLogout}
+                style={styles.iconButton}
+              >
+                <View style={styles.iconButtonInner}>
+                  <LogOut size={22} color="#fff" />
+                </View>
+              </TouchableOpacity>
+            </View>
           </View>
-        </Surface>
+        </LinearGradient>
 
-        {/* Statistics Cards - 2x2 Grid */}
+        {/* Enhanced Statistics Cards - 2x2 Grid with Gradient */}
         <View style={styles.statsGrid}>
-          <Card style={styles.statCard} mode="elevated" elevation={2}>
+          <Card style={[styles.statCard, styles.statCard1]} mode="elevated" elevation={3}>
             <Card.Content style={styles.statContent}>
-              <View style={[styles.statIcon, { backgroundColor: '#DBEAFE' }]}>
-                <Building2 size={24} color="#2563EB" />
+              <View style={[styles.statIcon, styles.statIcon1]}>
+                <Building2 size={26} color="#2563EB" />
               </View>
               <View style={styles.statText}>
                 <Text style={styles.statValue}>
@@ -997,10 +1033,10 @@ export default function HospitalDashboard() {
               </View>
             </Card.Content>
           </Card>
-          <Card style={styles.statCard} mode="elevated" elevation={2}>
+          <Card style={[styles.statCard, styles.statCard2]} mode="elevated" elevation={3}>
             <Card.Content style={styles.statContent}>
-              <View style={[styles.statIcon, { backgroundColor: '#ECFDF5' }]}>
-                <Bell size={24} color="#10B981" />
+              <View style={[styles.statIcon, styles.statIcon2]}>
+                <Bell size={26} color="#10B981" />
               </View>
               <View style={styles.statText}>
                 <Text style={styles.statValue}>{notificationCount}</Text>
@@ -1008,23 +1044,23 @@ export default function HospitalDashboard() {
               </View>
             </Card.Content>
           </Card>
-          <Card style={styles.statCard} mode="elevated" elevation={2}>
+          <Card style={[styles.statCard, styles.statCard3]} mode="elevated" elevation={3}>
             <Card.Content style={styles.statContent}>
-              <View style={[styles.statIcon, { backgroundColor: '#FEF3C7' }]}>
-                <CheckCircle2 size={24} color="#F59E0B" />
+              <View style={[styles.statIcon, styles.statIcon3]}>
+                <CheckCircle2 size={26} color="#F59E0B" />
               </View>
               <View style={styles.statText}>
                 <Text style={styles.statValue}>
                   {sessions.filter((s: any) => s.status === 'completed').length}
                 </Text>
-                <Text style={styles.statLabel}>Completed Services</Text>
+                <Text style={styles.statLabel}>Completed</Text>
               </View>
             </Card.Content>
           </Card>
-          <Card style={styles.statCard} mode="elevated" elevation={2}>
+          <Card style={[styles.statCard, styles.statCard4]} mode="elevated" elevation={3}>
             <Card.Content style={styles.statContent}>
-              <View style={[styles.statIcon, { backgroundColor: '#FEE2E2' }]}>
-                <Clock size={24} color="#DC2626" />
+              <View style={[styles.statIcon, styles.statIcon4]}>
+                <Clock size={26} color="#DC2626" />
               </View>
               <View style={styles.statText}>
                 <Text style={styles.statValue}>
@@ -1038,12 +1074,46 @@ export default function HospitalDashboard() {
 
         {!showForm ? (
           <>
-            {/* Active & Recent Work Section - MOVED TO TOP */}
+            {/* Quick Actions */}
+            <View style={styles.actionsRow}>
+              <Button
+                mode="contained"
+                onPress={() => {
+                  Alert.alert(
+                    'Admin Approval Required',
+                    'Your job posting will be reviewed by our admin team before it goes live. You will be notified once it\'s approved.',
+                    [{ text: 'OK', onPress: () => setShowForm(true) }]
+                  );
+                }}
+                style={styles.actionButton}
+                contentStyle={styles.actionButtonContent}
+                labelStyle={styles.actionButtonLabel}
+                buttonColor="#2563EB"
+                textColor="#fff"
+                icon={() => <Plus size={18} color="#fff" />}
+              >
+                Post Job
+              </Button>
+              <Button
+                mode="contained"
+                onPress={() => router.push('/hospital/live-tracking')}
+                style={styles.actionButton}
+                contentStyle={styles.actionButtonContent}
+                labelStyle={styles.actionButtonLabel}
+                buttonColor="#10B981"
+                textColor="#fff"
+                icon={() => <Navigation size={18} color="#fff" />}
+              >
+                Live Tracking
+              </Button>
+            </View>
+
+            {/* Job Sessions Section - Moved here after Quick Actions */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                  <Text style={styles.sectionTitle}>Job Sessions</Text>
                  <TouchableOpacity onPress={() => router.push('/hospital/sessions' as any)}>
-                    <Text style={{color: '#2563EB', fontWeight: '600'}}>View All</Text>
+                    <Text style={{color: '#2563EB', fontWeight: '600', fontSize: 14}}>View All</Text>
                  </TouchableOpacity>
               </View>
               
@@ -1066,47 +1136,6 @@ export default function HospitalDashboard() {
                       ))}
                   </ScrollView>
               )}
-            </View>
-
-            {/* Quick Actions */}
-            <View style={styles.actionsRow}>
-              <Button
-                mode="contained"
-                onPress={() => setShowForm(true)}
-                style={styles.actionButton}
-                contentStyle={styles.actionButtonContent}
-                labelStyle={styles.actionButtonLabel}
-                buttonColor="#2563EB"
-                textColor="#fff"
-                icon={() => <Plus size={18} color="#fff" />}
-              >
-                Post Job
-              </Button>
-              <Button
-                mode="outlined"
-                onPress={() => router.push('/hospital/live-tracking')}
-                style={styles.actionButton}
-                contentStyle={styles.actionButtonContent}
-                labelStyle={styles.actionButtonLabel}
-                textColor="#2563EB"
-                icon={() => <Navigation size={18} color="#2563EB" />}
-              >
-                Live Tracking
-              </Button>
-            </View>
-
-            <View style={styles.actionsRow}>
-              <Button
-                mode="outlined"
-                onPress={() => router.push('/hospital/payments')}
-                style={styles.actionButton}
-                contentStyle={styles.actionButtonContent}
-                labelStyle={styles.actionButtonLabel}
-                textColor="#2563EB"
-                icon={() => <CreditCard size={18} color="#2563EB" />}
-              >
-                Payment History
-              </Button>
             </View>
 
             {/* Requirements Section */}
@@ -1401,16 +1430,33 @@ const styles = StyleSheet.create({
   content: { 
     paddingBottom: 24,
   },
-  headerSurface: {
+  headerGradient: {
     backgroundColor: '#2563EB',
     paddingTop: Platform.OS === 'ios' ? 60 : 50,
-    paddingBottom: 20,
+    paddingBottom: 24,
     paddingHorizontal: 20,
   },
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
+  },
+  profileButton: {
+    marginRight: 4,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  iconButton: {
+    padding: 4,
+  },
+  iconButtonInner: {
+    position: 'relative',
+    padding: 8,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
   },
   menuIcon: {
     padding: 8,
@@ -1459,6 +1505,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginTop: 20,
     marginBottom: 24,
+    justifyContent: 'center',
   },
   statCard: {
     width: '47%',
@@ -1473,11 +1520,43 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   statIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 14,
+    width: 60,
+    height: 60,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  statIcon1: {
+    backgroundColor: '#DBEAFE',
+  },
+  statIcon2: {
+    backgroundColor: '#ECFDF5',
+  },
+  statIcon3: {
+    backgroundColor: '#FEF3C7',
+  },
+  statIcon4: {
+    backgroundColor: '#FEE2E2',
+  },
+  statCard1: {
+    backgroundColor: '#FFFFFF',
+    borderLeftWidth: 4,
+    borderLeftColor: '#2563EB',
+  },
+  statCard2: {
+    backgroundColor: '#FFFFFF',
+    borderLeftWidth: 4,
+    borderLeftColor: '#10B981',
+  },
+  statCard3: {
+    backgroundColor: '#FFFFFF',
+    borderLeftWidth: 4,
+    borderLeftColor: '#F59E0B',
+  },
+  statCard4: {
+    backgroundColor: '#FFFFFF',
+    borderLeftWidth: 4,
+    borderLeftColor: '#DC2626',
   },
   statText: {
     flex: 1,
@@ -1498,13 +1577,16 @@ const styles = StyleSheet.create({
   },
   actionsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
     paddingHorizontal: 20,
     marginBottom: 24,
+    justifyContent: 'center',
   },
   actionButton: {
-    flex: 1,
-    borderRadius: 10,
+    width: '47%',
+    borderRadius: 12,
+    minHeight: 48,
   },
   actionButtonContent: {
     paddingVertical: 8,
@@ -1531,12 +1613,15 @@ const styles = StyleSheet.create({
   },
   countChip: {
     backgroundColor: '#EFF6FF',
-    height: 24,
+    minHeight: 28,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
   countChipText: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 13,
+    fontWeight: '600',
     color: '#2563EB',
+    lineHeight: 18,
   },
   emptyCard: {
     borderRadius: 12,
