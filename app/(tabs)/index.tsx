@@ -840,14 +840,31 @@ export default function DoctorHome() {
               <View style={styles.loadingContainer}>
                 <Text style={styles.loadingText}>Loading opportunities...</Text>
               </View>
-            ) : jobRequirements.length === 0 ? (
-              <ModernCard variant="outlined" padding="lg" style={styles.emptyCard}>
-                <Text style={styles.emptyText}>
+            ) : jobRequirements.filter((req: any) => {
+              const isExpired = req.is_expired || false;
+              const isFilled = req.is_filled || false;
+              const hasApplied = myApplications.some((app: any) => app.job_requirement_id === req.id);
+              return !isExpired && !isFilled && !hasApplied;
+            }).length === 0 ? (
+              <View style={styles.emptyStateContainer}>
+                <View style={styles.emptyStateIcon}>
+                  <TrendingUp size={64} color={ModernColors.primary.light} />
+                </View>
+                <Text style={styles.emptyStateTitle}>No New Opportunities</Text>
+                <Text style={styles.emptyStateMessage}>
                   {doctor?.department_id 
-                    ? 'No job openings available in your department at the moment' 
-                    : 'No job openings available. Please set your department in your profile to see relevant jobs.'}
+                    ? 'Great news! You\'ve seen all available opportunities in your department. Check back soon for new openings.' 
+                    : 'Start by adding your department in your profile to discover relevant job opportunities.'}
                 </Text>
-              </ModernCard>
+                {!doctor?.department_id && (
+                  <TouchableOpacity 
+                    style={styles.emptyStateButton}
+                    onPress={() => router.push('/profile')}
+                  >
+                    <Text style={styles.emptyStateButtonText}>Update Profile</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             ) : isTablet ? (
               <View style={styles.openingsGrid}>
                 {jobRequirements
@@ -1161,6 +1178,256 @@ export default function DoctorHome() {
               </ScrollView>
             )}
           </View>
+
+          {/* My Applications Section - Shows all applied jobs with status */}
+          {myApplications.length > 0 && (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionTitleContainer}>
+                  <CheckCircle size={20} color={ModernColors.primary.main} />
+                  <Text style={styles.sectionTitle}>My Applications</Text>
+                </View>
+                <TouchableOpacity onPress={() => router.push('/approved-applications')}>
+                  <Text style={styles.seeAllText}>See All</Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false} 
+                style={styles.openingsScroll}
+                contentContainerStyle={styles.openingsScrollContent}
+              >
+                {myApplications
+                  .filter((app: any) => {
+                    // Show all applications except cancelled ones
+                    // Include completed ones so users can see their job history
+                    const sessionStatus = app.job_session?.status;
+                    return sessionStatus !== 'cancelled';
+                  })
+                  .sort((a: any, b: any) => {
+                    // Sort by: in_progress first, then scheduled, then pending, then completed
+                    const statusOrder: any = { 'in_progress': 1, 'scheduled': 2, 'pending': 3, 'completed': 4, 'rejected': 5 };
+                    const aStatus = a.job_session?.status || (a.status === 'selected' ? 'scheduled' : a.status);
+                    const bStatus = b.job_session?.status || (b.status === 'selected' ? 'scheduled' : b.status);
+                    return (statusOrder[aStatus] || 99) - (statusOrder[bStatus] || 99);
+                  })
+                  .slice(0, 5)
+                  .map((application: any) => {
+                    const requirement = application.job_requirement;
+                    if (!requirement) return null;
+
+                    const applicationStatus = application.status || 'pending';
+                    const session = application.job_session;
+                    const sessionStatus = session?.status || null;
+                    
+                    const hospitalPicture = requirement.hospital?.hospital_picture_url || null;
+                    const hospitalRating = requirement.hospital?.average_rating || 0;
+                    const paymentAmount = requirement.payment_amount || 0;
+                    
+                    const workDate = requirement.work_required_date 
+                      ? new Date(requirement.work_required_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                      : 'Date TBD';
+                    const startTime = requirement.start_time 
+                      ? new Date(`2000-01-01 ${requirement.start_time}`).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+                      : 'Time TBD';
+                    const endTime = requirement.end_time 
+                      ? new Date(`2000-01-01 ${requirement.end_time}`).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+                      : null;
+                    const location = requirement.location_name || requirement.address || requirement.hospital?.address || 'Location TBD';
+                    
+                    const checkInTime = session?.check_in_time 
+                      ? new Date(session.check_in_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+                      : null;
+                    const checkOutTime = session?.attendance?.check_out_time 
+                      ? new Date(session.attendance.check_out_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+                      : null;
+
+                    // Determine current status stage
+                    let currentStage = 'applied';
+                    let statusMessage = 'Applied';
+                    let statusColor = '#3B82F6';
+                    
+                    if (applicationStatus === 'rejected') {
+                      currentStage = 'rejected';
+                      statusMessage = 'Rejected';
+                      statusColor = '#EF4444';
+                    } else if (applicationStatus === 'selected' && !session) {
+                      currentStage = 'accepted';
+                      statusMessage = 'Accepted - Check-in Required';
+                      statusColor = '#10B981';
+                    } else if (session && sessionStatus === 'scheduled') {
+                      currentStage = 'scheduled';
+                      statusMessage = 'Scheduled - Check-in Required';
+                      statusColor = '#10B981';
+                    } else if (session && sessionStatus === 'in_progress') {
+                      currentStage = 'in_progress';
+                      statusMessage = 'In Progress';
+                      statusColor = '#10B981';
+                    } else if (session && sessionStatus === 'completed') {
+                      currentStage = 'completed';
+                      statusMessage = 'Completed';
+                      statusColor = '#10B981';
+                    } else if (applicationStatus === 'pending') {
+                      currentStage = 'pending';
+                      statusMessage = 'Waiting for Approval';
+                      statusColor = '#F59E0B';
+                    }
+
+                    return (
+                      <View key={application.id} style={styles.openingCard}>
+                        <View style={styles.hospitalImageContainer}>
+                          {hospitalPicture ? (
+                            <Image
+                              source={{ uri: getFullImageUrl(hospitalPicture) }}
+                              style={styles.hospitalImage}
+                              resizeMode="cover"
+                            />
+                          ) : (
+                            <View style={[styles.hospitalImage, styles.hospitalImagePlaceholder]}>
+                              <Building2 size={40} color={ModernColors.primary.main} />
+                            </View>
+                          )}
+                          
+                          {hospitalRating > 0 && (
+                            <View style={styles.ratingBadge}>
+                              <Star size={14} color="#FFB800" fill="#FFB800" />
+                              <Text style={styles.ratingText}>{hospitalRating.toFixed(1)}</Text>
+                            </View>
+                          )}
+                          
+                          {/* Status Badge */}
+                          <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+                            <Text style={styles.statusBadgeText}>{statusMessage}</Text>
+                          </View>
+                        </View>
+                        
+                        <View style={styles.openingCardContent}>
+                          <Text style={styles.hospitalNameCard} numberOfLines={1}>
+                            {requirement.hospital?.name || 'Hospital'}
+                          </Text>
+                          
+                          <Text style={styles.specialtiesText} numberOfLines={1}>
+                            {requirement.department || 'General Practice'}
+                          </Text>
+                          
+                          <View style={styles.infoRow}>
+                            <MapPin size={14} color={ModernColors.text.secondary} />
+                            <Text style={styles.infoText} numberOfLines={1}>{location}</Text>
+                          </View>
+                          
+                          <View style={styles.infoRow}>
+                            <Calendar size={14} color={ModernColors.text.secondary} />
+                            <Text style={styles.infoText}>{workDate}</Text>
+                          </View>
+                          
+                          <View style={styles.infoRow}>
+                            <Clock size={14} color={ModernColors.text.secondary} />
+                            <Text style={styles.infoText}>
+                              {startTime}{endTime ? ` - ${endTime}` : ''}
+                            </Text>
+                          </View>
+                          
+                          {checkInTime && (
+                            <View style={styles.infoRow}>
+                              <CheckCircle size={14} color={ModernColors.success.main} />
+                              <Text style={[styles.infoText, { color: ModernColors.success.main, fontWeight: '600' }]}>
+                                Check-in: {checkInTime}
+                              </Text>
+                            </View>
+                          )}
+                          
+                          {checkOutTime && (
+                            <View style={styles.infoRow}>
+                              <CheckCircle size={14} color={ModernColors.success.main} />
+                              <Text style={[styles.infoText, { color: ModernColors.success.main, fontWeight: '600' }]}>
+                                Check-out: {checkOutTime}
+                              </Text>
+                            </View>
+                          )}
+                          
+                          <View style={styles.paymentRow}>
+                            <Text style={styles.paymentLabel}>Payment:</Text>
+                            <Text style={styles.paymentAmount}>
+                              ₹{Number(paymentAmount).toLocaleString('en-IN')}
+                            </Text>
+                          </View>
+
+                          {/* Status Stages Timeline */}
+                          <View style={styles.statusTimelineContainer}>
+                            {/* Applied Stage */}
+                            <View style={styles.statusTimelineItem}>
+                              <View style={[styles.statusTimelineDot, { backgroundColor: '#3B82F6' }]} />
+                              <Text style={styles.statusTimelineText}>Applied</Text>
+                            </View>
+                            
+                            {/* Waiting for Approval Stage */}
+                            <View style={styles.statusTimelineItem}>
+                              <View style={[
+                                styles.statusTimelineDot, 
+                                { backgroundColor: currentStage === 'pending' ? '#F59E0B' : currentStage === 'rejected' ? '#EF4444' : '#E5E7EB' }
+                              ]} />
+                              <Text style={[
+                                styles.statusTimelineText,
+                                currentStage === 'pending' && { color: '#F59E0B', fontWeight: '600' }
+                              ]}>
+                                {applicationStatus === 'rejected' ? 'Rejected' : 'Waiting'}
+                              </Text>
+                            </View>
+                            
+                            {/* Accepted/Check-in Stage */}
+                            {applicationStatus !== 'rejected' && (
+                              <View style={styles.statusTimelineItem}>
+                                <View style={[
+                                  styles.statusTimelineDot, 
+                                  { backgroundColor: (currentStage === 'accepted' || currentStage === 'scheduled') ? '#10B981' : '#E5E7EB' }
+                                ]} />
+                                <Text style={[
+                                  styles.statusTimelineText,
+                                  (currentStage === 'accepted' || currentStage === 'scheduled') && { color: '#10B981', fontWeight: '600' }
+                                ]}>
+                                  {checkInTime ? 'Checked In' : 'Check-in'}
+                                </Text>
+                              </View>
+                            )}
+                            
+                            {/* In Progress Stage */}
+                            {sessionStatus === 'in_progress' && (
+                              <View style={styles.statusTimelineItem}>
+                                <View style={[styles.statusTimelineDot, { backgroundColor: '#10B981' }]} />
+                                <Text style={[styles.statusTimelineText, { color: '#10B981', fontWeight: '600' }]}>
+                                  In Progress
+                                </Text>
+                              </View>
+                            )}
+                            
+                            {/* Completed Stage */}
+                            {sessionStatus === 'completed' && (
+                              <View style={styles.statusTimelineItem}>
+                                <View style={[styles.statusTimelineDot, { backgroundColor: '#10B981' }]} />
+                                <Text style={[styles.statusTimelineText, { color: '#10B981', fontWeight: '600' }]}>
+                                  Completed
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                          
+                          {/* View Details Button */}
+                          <TouchableOpacity
+                            style={[styles.viewDetailsButton, { marginTop: 12 }]}
+                            onPress={() => router.push(`/(tabs)/job-detail/${application.id}`)}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.viewDetailsButtonText}>View Details</Text>
+                            <ArrowRight size={16} color={ModernColors.primary.main} />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    );
+                  })}
+              </ScrollView>
+            </View>
+          )}
 
           {/* Active Sessions Section */}
           {activeSessions.length > 0 && (
@@ -1696,6 +1963,58 @@ const styles = StyleSheet.create({
     color: ModernColors.text.secondary,
     textAlign: 'center',
   },
+  emptyStateContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 40,
+    marginVertical: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    minHeight: 280,
+  },
+  emptyStateIcon: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: ModernColors.primary.light + '20',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  emptyStateTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  emptyStateMessage: {
+    fontSize: 15,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+    paddingHorizontal: 20,
+  },
+  emptyStateButton: {
+    backgroundColor: ModernColors.primary.main,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 10,
+    marginTop: 8,
+  },
+  emptyStateButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
   openingsScroll: {
     marginHorizontal: -Spacing.lg,
   },
@@ -1710,27 +2029,27 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   openingCard: {
-    width: isTablet ? (width - Spacing.lg * 3) / 4 : width * 0.85, // 4 cards per row on tablet
-    minWidth: isTablet ? 200 : 300,
+    width: isTablet ? (width - Spacing.lg * 3) / 2 : width * 0.92, // Wider cards - 2 per row on tablet, 92% width on mobile
+    minWidth: isTablet ? 350 : 340, // Increased minimum width for landscape feel
     backgroundColor: '#FFFFFF',
-    borderRadius: 8, // Neat rectangle with minimal rounding
+    borderRadius: 12, // Slightly more rounded for modern look
     overflow: 'hidden',
     marginRight: isTablet ? Spacing.md : 16,
-    marginBottom: isTablet ? Spacing.md : 0,
+    marginBottom: isTablet ? Spacing.md : 16,
     borderWidth: 1,
     borderColor: '#E5E7EB',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 4,
   },
   hospitalImageContainer: {
     width: '100%',
-    height: 180,
+    height: 200, // Increased height for better visual impact
     position: 'relative',
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
     overflow: 'hidden',
   },
   hospitalImage: {
@@ -1774,18 +2093,20 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   openingCardContent: {
-    padding: 16,
+    padding: 18,
   },
   hospitalNameCard: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
     color: '#1E293B',
-    marginBottom: 4,
+    marginBottom: 6,
+    letterSpacing: 0.3,
   },
   specialtiesText: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#64748B',
-    marginBottom: 12,
+    marginBottom: 14,
+    fontWeight: '500',
   },
   rateContainer: {
     marginBottom: 16,
@@ -1802,11 +2123,18 @@ const styles = StyleSheet.create({
   },
   applyButton: {
     backgroundColor: ModernColors.primary.main,
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingVertical: 14,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
+    marginTop: 12,
+    flexDirection: 'row',
+    gap: 8,
+    shadowColor: ModernColors.primary.main,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   applyButtonText: {
     color: '#FFFFFF',
@@ -1911,33 +2239,39 @@ const styles = StyleSheet.create({
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 6,
+    gap: 8,
+    marginBottom: 10,
+    paddingVertical: 4,
   },
   infoText: {
-    fontSize: 13,
-    color: ModernColors.text.secondary,
+    fontSize: 14,
+    color: '#475569',
     flex: 1,
+    fontWeight: '500',
   },
   paymentRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 8,
+    marginTop: 12,
     marginBottom: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: ModernColors.border.light,
+    paddingTop: 14,
+    paddingBottom: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   paymentLabel: {
-    fontSize: 13,
-    color: ModernColors.text.secondary,
-    fontWeight: '500',
+    fontSize: 14,
+    color: '#64748B',
+    fontWeight: '600',
   },
   paymentAmount: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: ModernColors.success.main,
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#10B981',
   },
   paymentSubtext: {
     fontSize: 12,
@@ -2354,15 +2688,49 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   statusBadge: {
-    alignSelf: 'flex-start',
+    position: 'absolute',
+    top: 12,
+    right: 12,
     paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.sm,
-    marginBottom: 8,
+    paddingVertical: 6,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   statusBadgeText: {
-    ...Typography.captionBold,
-    fontSize: 12,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  statusTimelineContainer: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    alignItems: 'center',
+  },
+  statusTimelineItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  statusTimelineDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  statusTimelineText: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '500',
   },
   actionRow: {
     flexDirection: 'row',
