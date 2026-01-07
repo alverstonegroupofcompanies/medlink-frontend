@@ -3,7 +3,7 @@ require('dotenv').config();
 
 module.exports = {
   expo: {
-    name: "AlverConnect",
+    name: "Alverconnect",
     slug: "AlverstoneMedLink",
     version: "1.0.0",
     orientation: "portrait",
@@ -23,6 +23,7 @@ module.exports = {
         monochromeImage: "./assets/images/android-icon-monochrome.png"
       },
       package: "com.alverstonemedlink.app",
+      versionCode: 5,
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
       permissions: [
