@@ -40,18 +40,79 @@ export const getFieldLabel = (field: string): string => {
  * Convert technical error messages to user-friendly messages
  */
 export const getUserFriendlyError = (error: any): string => {
-  // Network errors
+  // Network errors (no response from server)
   if (!error.response) {
-    if (error.message?.includes('Network') || error.message?.includes('network')) {
+    const errorMessage = error.message?.toLowerCase() || '';
+    const errorCode = error.code || '';
+    
+    // SSL/Certificate errors
+    if (
+      errorMessage.includes('certificate') || 
+      errorMessage.includes('ssl') || 
+      errorMessage.includes('tls') ||
+      errorCode === 'CERT_HAS_EXPIRED' || 
+      errorCode === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' ||
+      errorCode === 'CERT_SIGNATURE_FAILURE' ||
+      errorCode === 'DEPTH_ZERO_SELF_SIGNED_CERT'
+    ) {
+      return 'Unable to verify server certificate. Please contact support if this persists.';
+    }
+    
+    // Network connectivity errors (most common in production)
+    if (
+      errorMessage.includes('network') || 
+      errorMessage.includes('network request failed') ||
+      errorMessage.includes('networkerror') ||
+      errorMessage.includes('failed to fetch') ||
+      errorMessage.includes('fetch failed') ||
+      errorCode === 'NETWORK_ERROR' ||
+      errorCode === 'ERR_NETWORK'
+    ) {
       return 'Unable to connect. Please check your internet connection and try again.';
     }
-    if (error.message?.includes('timeout') || error.code === 'ETIMEDOUT') {
+    
+    // Timeout errors
+    if (
+      errorMessage.includes('timeout') || 
+      errorCode === 'ETIMEDOUT' || 
+      errorCode === 'ECONNABORTED' ||
+      errorCode === 'TIMEOUT'
+    ) {
       return 'Request took too long. Please check your connection and try again.';
     }
-    if (error.code === 'ECONNREFUSED') {
+    
+    // Connection refused (server not running or unreachable)
+    if (
+      errorCode === 'ECONNREFUSED' || 
+      errorMessage.includes('failed to connect') || 
+      errorMessage.includes('connection refused') ||
+      errorMessage.includes('connection reset') ||
+      errorCode === 'ERR_CONNECTION_REFUSED'
+    ) {
       return 'Cannot connect to server. Please try again later.';
     }
-    return 'Something went wrong. Please try again.';
+    
+    // DNS errors (domain not found)
+    if (
+      errorCode === 'ENOTFOUND' || 
+      errorMessage.includes('getaddrinfo') ||
+      errorMessage.includes('dns') ||
+      errorCode === 'ERR_NAME_NOT_RESOLVED'
+    ) {
+      return 'Unable to reach server. Please check your internet connection.';
+    }
+    
+    // Connection closed/aborted
+    if (
+      errorCode === 'ECONNRESET' ||
+      errorMessage.includes('connection closed') ||
+      errorMessage.includes('socket hang up')
+    ) {
+      return 'Connection was interrupted. Please try again.';
+    }
+    
+    // Generic network error fallback
+    return 'Unable to connect to server. Please check your internet connection and try again.';
   }
 
   // Server errors (4xx, 5xx)
@@ -105,7 +166,13 @@ export const getUserFriendlyError = (error: any): string => {
 
   // Unauthorized (401)
   if (status === 401) {
-    return data?.message || 'Invalid email or password. Please try again.';
+    // Check if it's a login endpoint (different message)
+    const endpoint = error.config?.url || '';
+    if (endpoint.includes('/login') || endpoint.includes('/register')) {
+      return data?.message || 'Invalid email or password. Please try again.';
+    }
+    // For other endpoints, it's likely token expired
+    return 'Your session has expired. Please log in again.';
   }
 
   // Forbidden (403)

@@ -15,7 +15,7 @@ import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { API_BASE_URL } from '../../config/api';
-import { Building2, User, FileText, Calendar, LogOut, DollarSign } from 'lucide-react-native';
+import { Building2, User, FileText, Calendar, LogOut, DollarSign, BookOpen } from 'lucide-react-native';
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -125,6 +125,12 @@ export default function AdminDashboard() {
               router.push('/admin/job-sessions');
             }}
           />
+          <StatCard
+            icon={<BookOpen size={24} color="#ec4899" />}
+            label="Blogs"
+            value={stats?.total_blogs || 0}
+            onPress={() => router.push('/admin/blogs')}
+          />
         </View>
 
         {/* Quick Actions */}
@@ -147,6 +153,15 @@ export default function AdminDashboard() {
             onPress={() => router.push('/admin/applications')}
           >
             <Text style={styles.actionButtonText}>View All Applications</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => router.push('/admin/blogs')}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <BookOpen size={20} color="#2563EB" style={{ marginRight: 8 }} />
+              <Text style={styles.actionButtonText}>Manage Blogs</Text>
+            </View>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.actionButton}

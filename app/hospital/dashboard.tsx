@@ -13,6 +13,7 @@ import {
   Modal,
   Image,
   ActivityIndicator,
+  StatusBar,
 } from 'react-native';
 import { Card, Surface, Button, useTheme, Chip, Avatar, FAB } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -20,7 +21,7 @@ import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as Neutra
 import API from '../api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect } from 'expo-router';
-import { Plus, MapPin, Building2, Clock, X, Navigation, Bell, LogOut, CreditCard, Users, CheckCircle2 } from 'lucide-react-native';
+import { Plus, MapPin, Building2, Clock, X, Navigation, Bell, LogOut, CreditCard, Users, CheckCircle2, FileText } from 'lucide-react-native';
 import { ScreenSafeArea, useSafeBottomPadding } from '@/components/screen-safe-area';
 import * as Location from 'expo-location';
 import { DepartmentPicker } from '@/components/department-picker';
@@ -432,6 +433,23 @@ export default function HospitalDashboard() {
     }
   }, [formData.start_time, formData.end_time]);
 
+  // Ensure status bar stays blue always
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      StatusBar.setBackgroundColor('#2563EB', true);
+      StatusBar.setTranslucent(false);
+      StatusBar.setBarStyle('light-content', true);
+    }
+  }, []);
+
+  // Ensure status bar stays blue when form is shown/hidden
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      StatusBar.setBackgroundColor('#2563EB', true);
+      StatusBar.setBarStyle('light-content', true);
+    }
+  }, [showForm]);
+
   useEffect(() => {
     // Check authentication first
     const checkAuth = async () => {
@@ -723,6 +741,16 @@ export default function HospitalDashboard() {
       return;
     }
 
+    // Check if hospital is verified before submitting
+    if (hospital?.verification_status !== 'approved') {
+      Alert.alert(
+        'Verification Required',
+        'Your hospital account needs to be verified before you can post job requirements. Please wait for admin approval.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     setLoading(true);
     try {
       const safeParseFloat = (val: string) => {
@@ -903,6 +931,12 @@ export default function HospitalDashboard() {
 
   return (
     <ScreenSafeArea backgroundColor="#2563EB" statusBarStyle="light-content" edges={['top', 'left', 'right']}>
+      {/* Ensure status bar stays blue always */}
+      <StatusBar 
+        barStyle="light-content" 
+        backgroundColor="#2563EB" 
+        translucent={false}
+      />
       {/* Custom Logout Confirmation Modal - appears on top of everything */}
       <Modal
         visible={showLogoutModal}
@@ -1079,11 +1113,18 @@ export default function HospitalDashboard() {
               <Button
                 mode="contained"
                 onPress={() => {
-                  Alert.alert(
-                    'Admin Approval Required',
-                    'Your job posting will be reviewed by our admin team before it goes live. You will be notified once it\'s approved.',
-                    [{ text: 'OK', onPress: () => setShowForm(true) }]
-                  );
+                  // Check if hospital is verified
+                  if (hospital?.verification_status !== 'approved') {
+                    // Show notification only if not verified
+                    Alert.alert(
+                      'Verification Required',
+                      'Your hospital account needs to be verified before you can post job requirements. Please wait for admin approval.',
+                      [{ text: 'OK' }]
+                    );
+                  } else {
+                    // If verified, open form directly without notification
+                    setShowForm(true);
+                  }
                 }}
                 style={styles.actionButton}
                 contentStyle={styles.actionButtonContent}
@@ -1105,6 +1146,18 @@ export default function HospitalDashboard() {
                 icon={() => <Navigation size={18} color="#fff" />}
               >
                 Live Tracking
+              </Button>
+              <Button
+                mode="contained"
+                onPress={() => router.push('/hospital/blogs')}
+                style={styles.actionButton}
+                contentStyle={styles.actionButtonContent}
+                labelStyle={styles.actionButtonLabel}
+                buttonColor="#8B5CF6"
+                textColor="#fff"
+                icon={() => <FileText size={18} color="#fff" />}
+              >
+                Our Blogs
               </Button>
             </View>
 
@@ -1155,7 +1208,20 @@ export default function HospitalDashboard() {
                     <Text style={styles.emptySubtitle}>Post your first job requirement to get started</Text>
                     <Button
                       mode="contained"
-                      onPress={() => setShowForm(true)}
+                      onPress={() => {
+                        // Check if hospital is verified
+                        if (hospital?.verification_status !== 'approved') {
+                          // Show notification only if not verified
+                          Alert.alert(
+                            'Verification Required',
+                            'Your hospital account needs to be verified before you can post job requirements. Please wait for admin approval.',
+                            [{ text: 'OK' }]
+                          );
+                        } else {
+                          // If verified, open form directly without notification
+                          setShowForm(true);
+                        }
+                      }}
                       style={styles.emptyButton}
                       buttonColor="#2563EB"
                       textColor="#fff"

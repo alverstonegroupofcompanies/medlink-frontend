@@ -1,7 +1,8 @@
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
-import API from '../app/api';
+import axios from 'axios';
+import { API_BASE_URL } from '../config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface ErrorLogData {
@@ -23,6 +24,11 @@ interface ErrorLogData {
 
 let errorQueue: ErrorLogData[] = [];
 let isSending = false;
+let lastErrorTime = 0;
+const ERROR_LOG_COOLDOWN = 2000; // 2 seconds between error logs
+const MAX_ERRORS_PER_MINUTE = 10;
+let errorCount = 0;
+let errorCountResetTime = Date.now();
 
 /**
  * Get device information
@@ -65,14 +71,24 @@ async function getUserType(): Promise<string | undefined> {
 }
 
 /**
- * Send error to backend
+ * Send error to backend using a separate axios instance to avoid interceptors
+ * This prevents infinite loops where error logging triggers more error logging
  */
 async function sendError(errorData: ErrorLogData) {
   try {
-    await API.post('/error-logs', errorData);
+    // Use a separate axios instance without interceptors to prevent loops
+    const errorLogger = axios.create({
+      baseURL: API_BASE_URL,
+      timeout: 5000, // Short timeout to prevent hanging
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    await errorLogger.post('/error-logs', errorData);
   } catch (e) {
     // Silently fail - don't log errors about logging errors
-    console.warn('Failed to send error log to backend');
+    // This prevents infinite loops
   }
 }
 
@@ -101,7 +117,7 @@ async function processQueue() {
 }
 
 /**
- * Log console error
+ * Log console error with rate limiting to prevent infinite loops
  */
 export async function logConsoleError(
   error: Error | string,
@@ -115,7 +131,31 @@ export async function logConsoleError(
   }
 ) {
   try {
+    // Rate limiting: prevent too many error logs
+    const now = Date.now();
+    
+    // Reset counter every minute
+    if (now - errorCountResetTime > 60000) {
+      errorCount = 0;
+      errorCountResetTime = now;
+    }
+    
+    // Skip if too many errors in the last minute
+    if (errorCount >= MAX_ERRORS_PER_MINUTE) {
+      return;
+    }
+    
+    // Skip if same error was logged recently (cooldown)
+    if (now - lastErrorTime < ERROR_LOG_COOLDOWN && errorType === 'api') {
+      return;
+    }
+    
+    // Skip if this is an error about the error-logs endpoint itself
     const message = typeof error === 'string' ? error : error.message;
+    if (message && additionalData?.endpoint?.includes('/error-logs')) {
+      return; // Don't log errors about error logging
+    }
+    
     const stack = typeof error === 'string' ? undefined : error.stack;
     
     const errorData: ErrorLogData = {
@@ -135,13 +175,17 @@ export async function logConsoleError(
       user_type: await getUserType(),
     };
     
+    // Update rate limiting counters
+    lastErrorTime = now;
+    errorCount++;
+    
     // Add to queue
     errorQueue.push(errorData);
     
     // Process queue (with debounce)
     setTimeout(processQueue, 500);
   } catch (e) {
-    // Silently fail
+    // Silently fail - don't log errors about logging errors
   }
 }
 

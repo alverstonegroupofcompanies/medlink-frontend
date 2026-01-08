@@ -76,7 +76,16 @@ API.interceptors.request.use(
       }
       
       if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
+        // Validate token format (should not be empty or just whitespace)
+        const trimmedToken = token.trim();
+        if (trimmedToken && trimmedToken.length > 0) {
+          config.headers.Authorization = `Bearer ${trimmedToken}`;
+        } else {
+          // Invalid token format
+          if (__DEV__ && !isPublicRoute) {
+            console.warn('⚠️ Invalid token format (empty/whitespace) for route:', url);
+          }
+        }
       } else if (__DEV__ && !isPublicRoute) {
         // Only warn if it's not a public route (login/register don't need tokens)
         console.warn('⚠️ No token found for route:', url);
@@ -152,56 +161,62 @@ API.interceptors.response.use(
           console.warn('🌐 Full URL Attempted:', fullUrl);
           console.warn('═══════════════════════════════════════');
           
-          // Log network errors
-          try {
-            const { logConsoleError } = require('@/utils/error-logger');
-            logConsoleError(
-              `Network Error: Cannot connect to ${fullUrl}`,
-              'network',
-              {
-                endpoint: relativePath,
-                method: error.config?.method?.toUpperCase(),
-              }
-            );
-          } catch (logError) {
-            // Silently fail
+          // Log network errors (but skip if it's the error-logs endpoint to prevent loops)
+          if (relativePath && !relativePath.includes('/error-logs')) {
+            try {
+              const { logConsoleError } = require('@/utils/error-logger');
+              logConsoleError(
+                `Network Error: Cannot connect to ${fullUrl}`,
+                'network',
+                {
+                  endpoint: relativePath,
+                  method: error.config?.method?.toUpperCase(),
+                }
+              );
+            } catch (logError) {
+              // Silently fail
+            }
           }
         } else {
           console.warn('❌ Request Error:', error.message);
           
-          // Log other request errors
-          try {
-            const { logConsoleError } = require('@/utils/error-logger');
-            logConsoleError(
-              error.message || 'Request Error',
-              'api',
-              {
-                endpoint: error.config?.url,
-                method: error.config?.method?.toUpperCase(),
-              }
-            );
-          } catch (logError) {
-            // Silently fail
+          // Log other request errors (but skip if it's the error-logs endpoint to prevent loops)
+          if (error.config?.url && !error.config.url.includes('/error-logs')) {
+            try {
+              const { logConsoleError } = require('@/utils/error-logger');
+              logConsoleError(
+                error.message || 'Request Error',
+                'api',
+                {
+                  endpoint: error.config?.url,
+                  method: error.config?.method?.toUpperCase(),
+                }
+              );
+            } catch (logError) {
+              // Silently fail
+            }
           }
         }
       } else if (error.response) {
         // Server responded with error status
         console.error(`❌ API Error ${error.response.status}:`, error.response.data);
         
-        // Log API errors to backend
-        try {
-          const { logConsoleError } = require('@/utils/error-logger');
-          logConsoleError(
-            error.response.data?.message || error.message || 'API Error',
-            'api',
-            {
-              endpoint: error.config?.url,
-              method: error.config?.method?.toUpperCase(),
-              trace: JSON.stringify(error.response.data),
-            }
-          );
-        } catch (logError) {
-          // Silently fail
+        // Log API errors to backend (but skip if it's the error-logs endpoint to prevent loops)
+        if (error.config?.url && !error.config.url.includes('/error-logs')) {
+          try {
+            const { logConsoleError } = require('@/utils/error-logger');
+            logConsoleError(
+              error.response.data?.message || error.message || 'API Error',
+              'api',
+              {
+                endpoint: error.config?.url,
+                method: error.config?.method?.toUpperCase(),
+                trace: JSON.stringify(error.response.data),
+              }
+            );
+          } catch (logError) {
+            // Silently fail
+          }
         }
         
         // Handle 401 Unauthorized - token expired or invalid
@@ -209,12 +224,33 @@ API.interceptors.response.use(
           console.warn('⚠️ Unauthorized - clearing auth data');
           try {
             const url = error.config?.url || '';
+            const { router } = require('expo-router');
+            
             if (url.includes('/hospital/')) {
               await AsyncStorage.multiRemove(['hospitalToken', 'hospitalInfo']);
               console.warn('🏥 Cleared hospital auth data');
+              // Redirect to hospital login
+              setTimeout(() => {
+                try {
+                  router.replace('/hospital/login');
+                } catch (navError) {
+                  console.error('Navigation error:', navError);
+                }
+              }, 100);
+            } else if (url.includes('/admin/')) {
+              // Admin routes - don't clear here, let admin handle it
+              console.warn('🔐 Admin route 401 - admin should handle logout');
             } else {
               await AsyncStorage.multiRemove(['doctorToken', 'doctorInfo']);
               console.warn('👨‍⚕️ Cleared doctor auth data');
+              // Redirect to doctor login
+              setTimeout(() => {
+                try {
+                  router.replace('/login');
+                } catch (navError) {
+                  console.error('Navigation error:', navError);
+                }
+              }, 100);
             }
           } catch (clearError) {
             console.error('Error clearing auth data:', clearError);
@@ -222,14 +258,33 @@ API.interceptors.response.use(
         }
       }
     } else {
-      // Production: Only handle auth silently, no logging
+      // Production: Handle auth errors and redirect
       if (error.response?.status === 401) {
         try {
           const url = error.config?.url || '';
+          const { router } = require('expo-router');
+          
           if (url.includes('/hospital/')) {
             await AsyncStorage.multiRemove(['hospitalToken', 'hospitalInfo']);
-          } else {
+            // Redirect to hospital login
+            setTimeout(() => {
+              try {
+                router.replace('/hospital/login');
+              } catch (navError) {
+                // Silently handle navigation errors
+              }
+            }, 100);
+          } else if (!url.includes('/admin/')) {
+            // Only redirect doctor routes, not admin
             await AsyncStorage.multiRemove(['doctorToken', 'doctorInfo']);
+            // Redirect to doctor login
+            setTimeout(() => {
+              try {
+                router.replace('/login');
+              } catch (navError) {
+                // Silently handle navigation errors
+              }
+            }, 100);
           }
         } catch (clearError) {
           // Silently handle - no logging in production

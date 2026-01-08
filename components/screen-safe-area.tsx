@@ -23,7 +23,7 @@ export function ScreenSafeArea({
   useEffect(() => {
     if (Platform.OS === 'android') {
       StatusBar.setBackgroundColor(backgroundColor, true);
-      StatusBar.setTranslucent(true);
+      StatusBar.setTranslucent(false); // Changed to false for better control
       StatusBar.setBarStyle(statusBarStyle, true);
     }
   }, [backgroundColor, statusBarStyle]);

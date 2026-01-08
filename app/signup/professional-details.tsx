@@ -209,19 +209,33 @@ export default function ProfessionalDetailsScreen() {
           : `${API_BASE_URL}${err.config?.url || '/doctor/register'}`;
         
         title = 'Connection Error';
-        message = `Cannot connect to server.\n\nAttempted URL:\n${attemptedUrl}\n\nTroubleshooting Steps:\n\n`;
-        message += '1. Backend server is running\n';
-        message += '   Command: php artisan serve --host=0.0.0.0 --port=8080\n\n';
-        message += '2. API URL is correct in frontend/.env file\n';
-        message += '   Variable: EXPO_PUBLIC_BACKEND_URL=http://YOUR_IP:8080\n\n';
-        message += '3. Phone and computer are on same WiFi network\n\n';
-        message += '4. Firewall allows port 8000\n';
-        message += '   (Check Windows Firewall settings)\n\n';
-        message += '5. Test connection from phone browser:\n';
-        const testUrl = attemptedUrl.replace('/doctor/register', '/test');
-        message += `   ${testUrl}\n\n`;
-        message += '6. Restart Expo with cache clear:\n';
-        message += '   npx expo start --clear';
+        
+        // Check if this is a production build
+        const isProduction = !__DEV__;
+        
+        if (isProduction) {
+          // Production error message - user-friendly
+          message = `Cannot connect to server.\n\nPlease check:\n\n`;
+          message += '• Your internet connection\n';
+          message += '• Server may be temporarily unavailable\n';
+          message += '• Try again in a few moments\n\n';
+          message += 'If the problem persists, please contact support.';
+        } else {
+          // Development error message - detailed troubleshooting
+          message = `Cannot connect to server.\n\nAttempted URL:\n${attemptedUrl}\n\nTroubleshooting Steps:\n\n`;
+          message += '1. Backend server is running\n';
+          message += '   Command: php artisan serve --host=0.0.0.0 --port=8080\n\n';
+          message += '2. API URL is correct in frontend/.env file\n';
+          message += '   Variable: EXPO_PUBLIC_BACKEND_URL=http://YOUR_IP:8080\n\n';
+          message += '3. Phone and computer are on same WiFi network\n\n';
+          message += '4. Firewall allows port 8000\n';
+          message += '   (Check Windows Firewall settings)\n\n';
+          message += '5. Test connection from phone browser:\n';
+          const testUrl = attemptedUrl.replace('/doctor/register', '/test');
+          message += `   ${testUrl}\n\n`;
+          message += '6. Restart Expo with cache clear:\n';
+          message += '   npx expo start --clear';
+        }
       } else if (err.response?.data?.message) {
         // Server responded with error message
         message = err.response.data.message;

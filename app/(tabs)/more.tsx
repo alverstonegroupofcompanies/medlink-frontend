@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Alert, ScrollView, TouchableOpacity, ActivityIndicator, Modal, Keyboard, Platform, StatusBar } from 'react-native';
-import { LogOut, User, Shield, HelpCircle, Info, Building2 } from 'lucide-react-native';
+import { LogOut, User, Shield, HelpCircle, Info, Building2, FileText } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { DoctorPrimaryColors as PrimaryColors, DoctorNeutralColors as NeutralColors, DoctorStatusColors as StatusColors } from '@/constants/doctor-theme';
 import { ModernColors } from '@/constants/modern-theme';
@@ -327,6 +327,23 @@ export default function MoreScreen() {
               <Text style={styles.logoutHint}>
                 This will remove all your login details and redirect you to the home page.
               </Text>
+            </View>
+          </View>
+
+          {/* Blogs Section */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <FileText size={20} color={PrimaryColors.main} />
+              <Text style={[styles.sectionTitle, { color: PrimaryColors.dark }]}>Our Blogs</Text>
+            </View>
+            <View style={styles.sectionContent}>
+              <TouchableOpacity 
+                style={styles.helpItem}
+                onPress={() => router.push('/(tabs)/blogs')}
+              >
+                <FileText size={18} color={NeutralColors.textSecondary} />
+                <Text style={styles.helpText}>View Blogs</Text>
+              </TouchableOpacity>
             </View>
           </View>
 
