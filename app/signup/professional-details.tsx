@@ -117,13 +117,10 @@ export default function ProfessionalDetailsScreen() {
       Object.entries(formData).forEach(([key, value]) => {
         if (key === 'department_ids') {
              // Handle array properly for FormData
+             // Note: Primary department concept removed - only use selected departments
              (value as number[]).forEach((id, index) => {
                  data.append(`department_ids[${index}]`, id.toString());
              });
-             // Also send primary department_id for backward compatibility
-             if ((value as number[]).length > 0) {
-                 data.append('department_id', (value as number[])[0].toString());
-             }
         } else if (value !== null && value !== '') {
           data.append(key, value as string);
         }
@@ -152,25 +149,121 @@ export default function ProfessionalDetailsScreen() {
       Object.entries(files).forEach(([key, file]) => {
         if (file && file.uri) {
             let fileUri = file.uri;
+            
+            // Log file info for debugging
+            if (__DEV__) {
+              console.log(`📎 Appending file ${key}:`, {
+                originalUri: file.uri,
+                name: file.name,
+                type: file.type,
+                platform: Platform.OS,
+              });
+            }
+            
+            // Fix file URI for platform compatibility
             if (Platform.OS === 'android') {
                 if (!fileUri.startsWith('file://')) {
                     fileUri = `file://${fileUri}`;
                 }
             } else if (Platform.OS === 'ios') {
+                // iOS needs file:// prefix removed for FormData
                 fileUri = fileUri.replace('file://', '');
             }
 
+            // Determine MIME type if not provided
+            let mimeType = file.type;
+            if (!mimeType || mimeType === '') {
+              const extension = file.name.split('.').pop()?.toLowerCase();
+              const mimeTypes: Record<string, string> = {
+                'pdf': 'application/pdf',
+                'jpg': 'image/jpeg',
+                'jpeg': 'image/jpeg',
+                'png': 'image/png',
+                'doc': 'application/msword',
+                'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+              };
+              mimeType = mimeTypes[extension || ''] || 'application/octet-stream';
+            }
+
+            // Verify file exists (for debugging)
+            if (__DEV__) {
+              console.log(`📎 Final file data for ${key}:`, {
+                uri: fileUri,
+                name: file.name,
+                type: mimeType,
+              });
+            }
+
             data.append(key, {
-            uri: fileUri,
-            name: file.name,
-            type: file.type,
+              uri: fileUri,
+              name: file.name || `${key}.pdf`,
+              type: mimeType,
             } as any);
         }
       });
 
-      const res = await API.post('/doctor/register', data, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      // For multipart/form-data, don't set Content-Type header manually
+      // Axios will set it automatically with the correct boundary parameter
+      
+      // Log request details for debugging
+      if (__DEV__) {
+        console.log('📤 Sending registration request...');
+        console.log('📦 FormData entries:', Object.keys(files).length, 'files');
+        console.log('🔗 Endpoint:', '/doctor/register');
+        console.log('🌐 Base URL:', API_BASE_URL);
+      }
+      
+      // Add retry logic for network errors
+      let lastError: any = null;
+      const maxRetries = 2;
+      let res: any = null;
+      
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          if (attempt > 0) {
+            // Wait before retry (exponential backoff)
+            const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+            console.log(`🔄 Retrying registration (attempt ${attempt + 1}/${maxRetries + 1}) after ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+          }
+          
+          res = await API.post('/doctor/register', data, {
+            timeout: 120000, // 2 minutes timeout for file uploads
+            maxContentLength: Infinity, // No limit on content length
+            maxBodyLength: Infinity, // No limit on body length
+          });
+          
+          // Success - break out of retry loop
+          break;
+        } catch (retryError: any) {
+          lastError = retryError;
+          
+          // Only retry on network errors, not validation errors
+          if (retryError.response) {
+            // Server responded with an error - don't retry
+            throw retryError;
+          }
+          
+          // Network error - retry if we have attempts left
+          if (attempt < maxRetries && (
+            retryError.code === 'ERR_NETWORK' ||
+            retryError.code === 'ECONNREFUSED' ||
+            retryError.code === 'ETIMEDOUT' ||
+            retryError.message?.includes('Network') ||
+            retryError.message?.includes('timeout')
+          )) {
+            console.warn(`⚠️ Network error on attempt ${attempt + 1}, will retry...`);
+            continue;
+          } else {
+            // No more retries or non-retryable error
+            throw retryError;
+          }
+        }
+      }
+      
+      if (!res) {
+        throw lastError || new Error('Failed to register after retries');
+      }
 
       const { token, doctor } = res.data;
 
@@ -189,20 +282,39 @@ export default function ProfessionalDetailsScreen() {
         ]
       );
     } catch (err: any) {
-      console.log('Registration error:', err.response?.data || err.message);
-      console.log('Error details:', {
+      console.error('❌ Registration error:', err);
+      console.error('Error details:', {
         message: err.message,
         code: err.code,
         response: err.response?.status,
+        responseData: err.response?.data,
+        config: err.config?.url,
+        timeout: err.code === 'ECONNABORTED' ? 'Request timeout' : 'No timeout',
         url: err.config?.url,
         baseURL: err.config?.baseURL,
       });
       
+      // Enhanced error handling with better messages
+      const baseUrl = err.config?.baseURL || API_BASE_URL;
+      const endpoint = err.config?.url || '/doctor/register';
+      const fullUrl = `${baseUrl}${endpoint}`;
+      
       let message = 'Registration failed. Please try again.';
       let title = 'Registration Error';
+      let showRetry = false;
       
+      // Handle timeout errors
+      if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+        title = 'Upload Timeout';
+        message = 'File upload is taking too long. This may be due to:\n\n';
+        message += '• Large file sizes\n';
+        message += '• Slow internet connection\n';
+        message += '• Server processing delay\n\n';
+        message += 'Please try again with smaller files or check your internet connection.';
+        showRetry = true;
+      }
       // Handle network errors
-      if (!err.response) {
+      else if (!err.response) {
         // Network error - backend not reachable
         const attemptedUrl = err.config?.baseURL 
           ? `${err.config.baseURL}${err.config.url || ''}`
@@ -210,31 +322,47 @@ export default function ProfessionalDetailsScreen() {
         
         title = 'Connection Error';
         
-        // Check if this is a production build
-        const isProduction = !__DEV__;
+        // Check error code for specific issues
+        const isFileUpload = err.config?.data instanceof FormData;
+        const errorCode = err.code || '';
         
-        if (isProduction) {
-          // Production error message - user-friendly
-          message = `Cannot connect to server.\n\nPlease check:\n\n`;
-          message += '• Your internet connection\n';
-          message += '• Server may be temporarily unavailable\n';
-          message += '• Try again in a few moments\n\n';
-          message += 'If the problem persists, please contact support.';
+        if (err.code === 'ERR_NETWORK' || err.code === 'ECONNREFUSED' || 
+            err.message?.includes('Network') || err.message?.includes('Unable to connect')) {
+          message = `Unable to connect to server.\n\n`;
+          message += `Trying to reach: ${fullUrl}\n\n`;
+          message += `Please check:\n`;
+          message += `1. Your internet connection\n`;
+          message += `2. Backend server is running\n`;
+          message += `3. Server URL is correct\n\n`;
+          
+          if (isFileUpload) {
+            message += `File upload failed. Try:\n`;
+            message += `• Smaller file sizes\n`;
+            message += `• Better internet connection\n`;
+          }
+          
+          message += `\nIf this persists, the server may be temporarily unavailable.`;
+          showRetry = true;
         } else {
-          // Development error message - detailed troubleshooting
-          message = `Cannot connect to server.\n\nAttempted URL:\n${attemptedUrl}\n\nTroubleshooting Steps:\n\n`;
-          message += '1. Backend server is running\n';
-          message += '   Command: php artisan serve --host=0.0.0.0 --port=8080\n\n';
-          message += '2. API URL is correct in frontend/.env file\n';
-          message += '   Variable: EXPO_PUBLIC_BACKEND_URL=http://YOUR_IP:8080\n\n';
-          message += '3. Phone and computer are on same WiFi network\n\n';
-          message += '4. Firewall allows port 8000\n';
-          message += '   (Check Windows Firewall settings)\n\n';
-          message += '5. Test connection from phone browser:\n';
-          const testUrl = attemptedUrl.replace('/doctor/register', '/test');
-          message += `   ${testUrl}\n\n`;
-          message += '6. Restart Expo with cache clear:\n';
-          message += '   npx expo start --clear';
+          message = `Network error: ${err.message || 'Unknown error'}\n\n`;
+          message += `Endpoint: ${fullUrl}\n\n`;
+          message += `Please check your connection and try again.`;
+          showRetry = true;
+        }
+        
+        // Add development-specific troubleshooting if in dev mode
+        if (__DEV__) {
+          message += '\n\n--- Development Debug Info ---\n';
+          message += `Error Code: ${errorCode}\n`;
+          message += `Attempted URL: ${attemptedUrl}\n`;
+          if (isFileUpload) {
+            message += '\n⚠️ This is a file upload request.\n';
+            message += 'Possible issues:\n';
+            message += '1. File size too large (server limit)\n';
+            message += '2. Request timeout (120 seconds)\n';
+            message += '3. CORS not configured for file uploads\n';
+            message += '4. Server not accepting multipart/form-data\n';
+          }
         }
       } else if (err.response?.data?.message) {
         // Server responded with error message
@@ -251,7 +379,14 @@ export default function ProfessionalDetailsScreen() {
         message = 'Please check all fields and try again.';
       }
       
-      Alert.alert(title, message);
+      Alert.alert(
+        title, 
+        message, 
+        showRetry ? [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Retry', onPress: () => handleSubmit() }
+        ] : [{ text: 'OK' }]
+      );
     } finally {
       setLoading(false);
     }

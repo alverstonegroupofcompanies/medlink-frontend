@@ -14,7 +14,7 @@ import {
   DeviceEventEmitter,
   Modal,
 } from "react-native";
-import { Star, Bell, MapPin, Clock, TrendingUp, Award, Building2, CheckCircle, ArrowRight, Calendar, AlertCircle, Phone, Navigation, LogOut, DollarSign } from "lucide-react-native";
+import { Star, Bell, MapPin, Clock, TrendingUp, Award, Building2, CheckCircle, Check, ArrowRight, Calendar, AlertCircle, Phone, Navigation, LogOut, DollarSign } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
 import { ModernColors, Spacing, BorderRadius, Shadows, Typography } from "@/constants/modern-theme";
@@ -27,9 +27,11 @@ import { showNotificationFromData, scheduleLocalNotification } from "@/utils/not
 import { ModernCard } from "@/components/modern-card";
 import { useLocationTracking } from "@/hooks/useLocationTracking";
 import { getFullImageUrl } from "@/utils/url-helper";
+import PromoCarousel from "@/components/promo-carousel";
 
 const { width } = Dimensions.get('window');
 const isTablet = width >= 768; // 11 inch tablet is typically 768px or more
+const isLargeTablet = width >= 1024; // 10 inch tablet is typically 1024px or more
 
 export default function DoctorHome() {
   const [doctor, setDoctor] = useState<any>(null);
@@ -551,6 +553,17 @@ export default function DoctorHome() {
     </View>
   ) : null;
 
+  // Ensure status bar is always blue
+  useFocusEffect(
+    React.useCallback(() => {
+      if (Platform.OS === 'android') {
+        StatusBar.setBackgroundColor('#0066FF', true);
+        StatusBar.setBarStyle('light-content', true);
+        StatusBar.setTranslucent(false);
+      }
+    }, [])
+  );
+
   return (
     <ScreenSafeArea 
       backgroundColor={ModernColors.primary.main} 
@@ -558,7 +571,7 @@ export default function DoctorHome() {
       statusBarStyle="light-content"
     >
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
+        <StatusBar barStyle="light-content" backgroundColor="#0066FF" translucent={false} />
         
         {/* Modern Header with Gradient */}
         <LinearGradient
@@ -896,7 +909,16 @@ export default function DoctorHome() {
                     const hospitalPicture = requirement.hospital?.hospital_picture_url || null;
                     const hospitalRating = requirement.hospital?.average_rating || 0;
                     const matchPercentage = requirement.match_percentage || 0;
-                    const paymentAmount = requirement.payment_amount || 0; // Only show actual posted amount
+                    const paymentAmount = requirement.payment_amount || 0;
+                    
+                    // Posted time
+                    const postedDate = requirement.created_at ? new Date(requirement.created_at) : null;
+                    const isPostedToday = postedDate ? 
+                      postedDate.toDateString() === new Date().toDateString() : false;
+                    const postedTime = postedDate ? 
+                      postedDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : null;
+                    const postedDateStr = postedDate ? 
+                      postedDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: postedDate.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined }) : null;
                     
                     const workDate = requirement.work_required_date 
                       ? new Date(requirement.work_required_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -904,56 +926,115 @@ export default function DoctorHome() {
                     const startTime = requirement.start_time 
                       ? new Date(`2000-01-01 ${requirement.start_time}`).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
                       : 'Time TBD';
+                    const endTime = requirement.end_time 
+                      ? new Date(`2000-01-01 ${requirement.end_time}`).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+                      : null;
                     const location = requirement.location_name || requirement.address || requirement.hospital?.address || 'Location TBD';
                     
                     return (
-                      <View key={requirement.id} style={styles.openingCard}>
-                        <View style={styles.hospitalImageContainer}>
-                          {hospitalPicture ? (
-                            <Image source={{ uri: getFullImageUrl(hospitalPicture) }} style={styles.hospitalImage} resizeMode="cover" />
-                          ) : (
-                            <View style={[styles.hospitalImage, styles.hospitalImagePlaceholder]}>
-                              <Building2 size={40} color={ModernColors.primary.main} />
+                      <ModernCard key={requirement.id} variant="elevated" padding="md" style={styles.newOpportunityCard}>
+                        {/* Hospital Image - Right side */}
+                        {hospitalPicture && (
+                          <View style={styles.newOpportunityImageBackground}>
+                            <Image
+                              source={{ uri: getFullImageUrl(hospitalPicture) }}
+                              style={styles.newOpportunityBackgroundImage}
+                              resizeMode="cover"
+                            />
+                            <View style={styles.newOpportunityImageOverlay} />
+                          </View>
+                        )}
+                        
+                        {/* Content Container */}
+                        <View style={hospitalPicture ? styles.newOpportunityContentWrapper : styles.newOpportunityContentWrapperFull}>
+                          {/* Header with Logo and Urgent Badge */}
+                          <View style={styles.newOpportunityCardHeader}>
+                            <View style={styles.newOpportunityHeaderLeft}>
+                              {requirement.hospital?.logo_url ? (
+                                <View style={styles.newOpportunityIconBox}>
+                                  <Image 
+                                    source={{ uri: getFullImageUrl(requirement.hospital.logo_url) }} 
+                                    style={styles.newOpportunityLogo}
+                                    resizeMode="cover"
+                                  />
+                                </View>
+                              ) : (
+                                <View style={[styles.newOpportunityIconBox, { backgroundColor: ModernColors.primary.light }]}>
+                                  <Building2 size={18} color={ModernColors.primary.main} />
+                                </View>
+                              )}
+                              <View style={styles.newOpportunityHeaderText}>
+                                <Text style={styles.newOpportunityHospitalName} numberOfLines={1}>
+                                  {requirement.hospital?.name || 'Hospital'}
+                                </Text>
+                                <Text style={styles.newOpportunityDepartment} numberOfLines={1}>
+                                  {requirement.department || 'General Practice'}
+                                </Text>
+                              </View>
+                            </View>
+                            {/* Urgent Badge - Only if posted today */}
+                            {isPostedToday && (
+                              <View style={styles.urgentBadge}>
+                                <AlertCircle size={12} color="#EF4444" />
+                                <Text style={styles.urgentBadgeText}>Urgent</Text>
+                              </View>
+                            )}
+                          </View>
+                          
+                          {/* Posted Time */}
+                          {postedTime && (
+                            <View style={styles.postedTimeRow}>
+                              <Clock size={12} color={ModernColors.text.secondary} />
+                              <Text style={styles.postedTimeText}>
+                                Posted {isPostedToday ? `today at ${postedTime}` : `on ${postedDateStr} at ${postedTime}`}
+                              </Text>
                             </View>
                           )}
-                          {hospitalRating > 0 && (
-                            <View style={styles.ratingBadge}>
-                              <Star size={14} color="#FFB800" fill="#FFB800" />
-                              <Text style={styles.ratingText}>{hospitalRating.toFixed(1)}</Text>
+                          
+                          {/* Details */}
+                          <View style={styles.newOpportunityDetailsContainer}>
+                            <View style={styles.newOpportunityDetailRow}>
+                              <MapPin size={14} color={ModernColors.text.secondary} />
+                              <Text style={styles.newOpportunityDetailText} numberOfLines={1}>{location}</Text>
                             </View>
-                          )}
-                        </View>
-                        <View style={styles.openingCardContent}>
-                          <Text style={styles.hospitalNameCard} numberOfLines={1}>{requirement.hospital?.name || 'Hospital'}</Text>
-                          <Text style={styles.specialtiesText} numberOfLines={1}>{requirement.department || 'General Practice'}</Text>
-                          <View style={styles.infoRow}>
-                            <MapPin size={14} color={ModernColors.text.secondary} />
-                            <Text style={styles.infoText} numberOfLines={1}>{location}</Text>
+                            
+                            <View style={styles.newOpportunityDetailRow}>
+                              <Calendar size={14} color={ModernColors.text.secondary} />
+                              <Text style={styles.newOpportunityDetailText}>{workDate}</Text>
+                            </View>
+                            
+                            <View style={styles.newOpportunityDetailRow}>
+                              <Clock size={14} color={ModernColors.text.secondary} />
+                              <Text style={styles.newOpportunityDetailText}>
+                                {startTime}{endTime ? ` - ${endTime}` : ''}
+                              </Text>
+                            </View>
                           </View>
-                          <View style={styles.infoRow}>
-                            <Calendar size={14} color={ModernColors.text.secondary} />
-                            <Text style={styles.infoText}>{workDate}</Text>
+                          
+                          {/* Payment Details */}
+                          <View style={styles.newOpportunityPaymentContainer}>
+                            <View style={styles.newOpportunityPaymentRow}>
+                              <DollarSign size={16} color={ModernColors.primary.main} />
+                              <Text style={styles.newOpportunityPaymentLabel}>Payment:</Text>
+                              <Text style={styles.newOpportunityPaymentAmount}>
+                                ₹{Number(paymentAmount).toLocaleString('en-IN')}
+                              </Text>
+                            </View>
                           </View>
-                          <View style={styles.infoRow}>
-                            <Clock size={14} color={ModernColors.text.secondary} />
-                            <Text style={styles.infoText}>{startTime}</Text>
-                          </View>
-                          <View style={styles.paymentRow}>
-                            <Text style={styles.paymentLabel}>Payment:</Text>
-                            <Text style={styles.paymentAmount}>₹{Number(paymentAmount).toLocaleString('en-IN')}</Text>
-                          </View>
+                          
+                          {/* Apply Button */}
                           {!hasApplied && !requirement.is_filled && !isExpired && (
                             <TouchableOpacity
-                              style={[styles.applyButton, { backgroundColor: ModernColors.primary.main }]}
+                              style={styles.newOpportunityApplyButton}
                               onPress={() => handleApply(requirement.id)}
                               activeOpacity={0.8}
                             >
-                              <Text style={styles.applyButtonText}>Apply Now</Text>
+                              <Text style={styles.newOpportunityApplyButtonText}>Apply Now</Text>
                               <ArrowRight size={16} color="#fff" />
                             </TouchableOpacity>
                           )}
                         </View>
-                      </View>
+                      </ModernCard>
                     );
                   })}
               </View>
@@ -1008,179 +1089,121 @@ export default function DoctorHome() {
                     ? new Date(session.check_in_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
                     : null;
                   
+                  // Posted time
+                  const postedDate = requirement.created_at ? new Date(requirement.created_at) : null;
+                  const isPostedToday = postedDate ? 
+                    postedDate.toDateString() === new Date().toDateString() : false;
+                  const postedTime = postedDate ? 
+                    postedDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : null;
+                  const postedDateStr = postedDate ? 
+                    postedDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: postedDate.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined }) : null;
+                  const paymentAmount = requirement.payment_amount || 0;
+                  
                   return (
-                    <View key={requirement.id} style={styles.openingCard}>
-                      {/* Hospital Image */}
-                      <View style={styles.hospitalImageContainer}>
-                        {hospitalPicture ? (
+                    <ModernCard key={requirement.id} variant="elevated" padding="md" style={styles.newOpportunityCard}>
+                      {/* Hospital Image - Right side */}
+                      {hospitalPicture && (
+                        <View style={styles.newOpportunityImageBackground}>
                           <Image
                             source={{ uri: getFullImageUrl(hospitalPicture) }}
-                            style={styles.hospitalImage}
+                            style={styles.newOpportunityBackgroundImage}
                             resizeMode="cover"
                           />
-                        ) : (
-                          <View style={[styles.hospitalImage, styles.hospitalImagePlaceholder]}>
-                            <Building2 size={40} color={ModernColors.primary.main} />
-                          </View>
-                        )}
-                        
-                        {/* Rating Badge - Top Left */}
-                        {hospitalRating > 0 && (
-                          <View style={styles.ratingBadge}>
-                            <Star size={14} color="#FFB800" fill="#FFB800" />
-                            <Text style={styles.ratingText}>{hospitalRating.toFixed(1)}</Text>
-                          </View>
-                        )}
-                      </View>
+                          <View style={styles.newOpportunityImageOverlay} />
+                        </View>
+                      )}
                       
-                      {/* Card Content */}
-                      <View style={styles.openingCardContent}>
-                        {/* Hospital Name */}
-                        <Text style={styles.hospitalNameCard} numberOfLines={1}>
-                          {requirement.hospital?.name || 'Hospital'}
-                        </Text>
-                        
-                        {/* Department */}
-                        <Text style={styles.specialtiesText} numberOfLines={1}>
-                          {requirement.department || 'General Practice'}
-                        </Text>
-                        
-                        {/* Location */}
-                        <View style={styles.infoRow}>
-                          <MapPin size={14} color={ModernColors.text.secondary} />
-                          <Text style={styles.infoText} numberOfLines={1}>{location}</Text>
+                      {/* Content Container */}
+                      <View style={hospitalPicture ? styles.newOpportunityContentWrapper : styles.newOpportunityContentWrapperFull}>
+                        {/* Header with Logo and Urgent Badge */}
+                        <View style={styles.newOpportunityCardHeader}>
+                          <View style={styles.newOpportunityHeaderLeft}>
+                            {requirement.hospital?.logo_url ? (
+                              <View style={styles.newOpportunityIconBox}>
+                                <Image 
+                                  source={{ uri: getFullImageUrl(requirement.hospital.logo_url) }} 
+                                  style={styles.newOpportunityLogo}
+                                  resizeMode="cover"
+                                />
+                              </View>
+                            ) : (
+                              <View style={[styles.newOpportunityIconBox, { backgroundColor: ModernColors.primary.light }]}>
+                                <Building2 size={18} color={ModernColors.primary.main} />
+                              </View>
+                            )}
+                            <View style={styles.newOpportunityHeaderText}>
+                              <Text style={styles.newOpportunityHospitalName} numberOfLines={1}>
+                                {requirement.hospital?.name || 'Hospital'}
+                              </Text>
+                              <Text style={styles.newOpportunityDepartment} numberOfLines={1}>
+                                {requirement.department || 'General Practice'}
+                              </Text>
+                            </View>
+                          </View>
+                          {/* Urgent Badge - Only if posted today */}
+                          {isPostedToday && (
+                            <View style={styles.urgentBadge}>
+                              <AlertCircle size={12} color="#EF4444" />
+                              <Text style={styles.urgentBadgeText}>Urgent</Text>
+                            </View>
+                          )}
                         </View>
                         
-                        {/* Date and Time */}
-                        <View style={styles.infoRow}>
-                          <Calendar size={14} color={ModernColors.text.secondary} />
-                          <Text style={styles.infoText}>{workDate}</Text>
-                        </View>
+                        {/* Posted Time */}
+                        {postedTime && (
+                          <View style={styles.postedTimeRow}>
+                            <Clock size={12} color={ModernColors.text.secondary} />
+                            <Text style={styles.postedTimeText}>
+                              Posted {isPostedToday ? `today at ${postedTime}` : `on ${postedDateStr} at ${postedTime}`}
+                            </Text>
+                          </View>
+                        )}
                         
-                        <View style={styles.infoRow}>
-                          <Clock size={14} color={ModernColors.text.secondary} />
-                          <Text style={styles.infoText}>
-                            {startTime}{endTime ? ` - ${endTime}` : ''}
-                            {checkInTime && ` • Check-in: ${checkInTime}`}
-                          </Text>
-                        </View>
-                        
-                        {/* Payment Amount - Only show actual posted amount */}
-                        <View style={styles.paymentRow}>
-                          <Text style={styles.paymentLabel}>Payment:</Text>
-                          <Text style={styles.paymentAmount}>
-                            ₹{Number(requirement.payment_amount || 0).toLocaleString('en-IN')}
-                          </Text>
-                        </View>
-
-                      {/* Status Stages */}
-                      {hasApplied && (
-                        <View style={styles.statusStagesContainer}>
-                          <View style={styles.statusStage}>
-                            <View style={[
-                              styles.statusDot,
-                              { backgroundColor: ModernColors.success.main }
-                            ]} />
-                            <Text style={styles.statusStageText}>Applied</Text>
+                        {/* Details */}
+                        <View style={styles.newOpportunityDetailsContainer}>
+                          <View style={styles.newOpportunityDetailRow}>
+                            <MapPin size={14} color={ModernColors.text.secondary} />
+                            <Text style={styles.newOpportunityDetailText} numberOfLines={1}>{location}</Text>
                           </View>
                           
-                          <View style={styles.statusStageLine} />
-                          
-                          <View style={styles.statusStage}>
-                            <View style={[
-                              styles.statusDot,
-                              applicationStatus === 'pending' || applicationStatus === 'selected' 
-                                ? { backgroundColor: '#F59E0B' }
-                                : { backgroundColor: ModernColors.neutral.gray300 }
-                            ]} />
-                            <Text style={[
-                              styles.statusStageText,
-                              applicationStatus === 'pending' || applicationStatus === 'selected' 
-                                ? { color: '#F59E0B' }
-                                : { color: ModernColors.text.secondary }
-                            ]}>Waiting</Text>
+                          <View style={styles.newOpportunityDetailRow}>
+                            <Calendar size={14} color={ModernColors.text.secondary} />
+                            <Text style={styles.newOpportunityDetailText}>{workDate}</Text>
                           </View>
                           
-                          <View style={styles.statusStageLine} />
-                          
-                          <View style={styles.statusStage}>
-                            <View style={[
-                              styles.statusDot,
-                              applicationStatus === 'selected' 
-                                ? { backgroundColor: ModernColors.success.main }
-                                : applicationStatus === 'rejected'
-                                ? { backgroundColor: ModernColors.error.main }
-                                : { backgroundColor: ModernColors.neutral.gray300 }
-                            ]} />
-                            <Text style={[
-                              styles.statusStageText,
-                              applicationStatus === 'selected' 
-                                ? { color: ModernColors.success.main }
-                                : applicationStatus === 'rejected'
-                                ? { color: ModernColors.error.main }
-                                : { color: ModernColors.text.secondary }
-                            ]}>
-                              {applicationStatus === 'selected' ? 'Approved' :
-                               applicationStatus === 'rejected' ? 'Rejected' : 'Approval'}
+                          <View style={styles.newOpportunityDetailRow}>
+                            <Clock size={14} color={ModernColors.text.secondary} />
+                            <Text style={styles.newOpportunityDetailText}>
+                              {startTime}{endTime ? ` - ${endTime}` : ''}
                             </Text>
                           </View>
                         </View>
-                      )}
-                      
-                      {/* Active Session Indicator */}
-                      {session && session.status === 'in_progress' && (
-                        <View style={styles.activeSessionBadge}>
-                          <View style={styles.activeSessionDot} />
-                          <Text style={styles.activeSessionText}>Currently Live</Text>
+                        
+                        {/* Payment Details */}
+                        <View style={styles.newOpportunityPaymentContainer}>
+                          <View style={styles.newOpportunityPaymentRow}>
+                            <DollarSign size={16} color={ModernColors.primary.main} />
+                            <Text style={styles.newOpportunityPaymentLabel}>Payment:</Text>
+                            <Text style={styles.newOpportunityPaymentAmount}>
+                              ₹{Number(paymentAmount).toLocaleString('en-IN')}
+                            </Text>
+                          </View>
                         </View>
-                      )}
-                      
-                      {/* Withdraw button for pending applications */}
-                      {hasApplied && applicationStatus === 'pending' && (
-                        <TouchableOpacity
-                          style={[styles.applyButton, { backgroundColor: ModernColors.neutral.gray200, marginTop: 8 }]}
-                          onPress={() => {
-                            const app = myApplications.find(a => a.job_requirement_id === requirement.id);
-                            if (app) handleWithdraw(app.id);
-                          }}
-                          activeOpacity={0.8}
-                        >
-                          <Text style={[styles.applyButtonText, { color: ModernColors.text.primary }]}>Withdraw Application</Text>
-                        </TouchableOpacity>
-                      )}
-                      
-                      {!hasApplied && requirement.is_filled ? (
-                        <View style={[styles.applyButton, { backgroundColor: ModernColors.neutral.gray200 }]}>
-                          <Text style={[styles.expiredButtonText, { color: ModernColors.text.secondary }]}>Spot Filled</Text>
-                        </View>
-                      ) : isExpired ? (
-                        <View style={[styles.applyButton, styles.expiredButton]}>
-                          <Text style={styles.expiredButtonText}>Expired</Text>
-                        </View>
-                      ) : (
-                        <TouchableOpacity
-                          style={[styles.applyButton, { backgroundColor: ModernColors.primary.main }]}
-                          onPress={() => handleApply(requirement.id)}
-                          activeOpacity={0.8}
-                        >
-                          <Text style={styles.applyButtonText}>Apply Now</Text>
-                          <ArrowRight size={16} color="#fff" />
-                        </TouchableOpacity>
-                      )}
-                      
-                      {/* View Details Button - Always show for applied jobs */}
-                      {hasApplied && (
-                        <TouchableOpacity
-                          style={[styles.viewDetailsButton, { marginTop: 8 }]}
-                          onPress={() => router.push(`/(tabs)/job-detail/${application.id}`)}
-                          activeOpacity={0.8}
-                        >
-                          <Text style={styles.viewDetailsButtonText}>View Details</Text>
-                          <ArrowRight size={16} color={ModernColors.primary.main} />
-                        </TouchableOpacity>
-                      )}
+
+                        
+                        {/* Apply Button */}
+                        {!hasApplied && !requirement.is_filled && !isExpired && (
+                          <TouchableOpacity
+                            style={styles.newOpportunityApplyButton}
+                            onPress={() => handleApply(requirement.id)}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.newOpportunityApplyButtonText}>Apply Now</Text>
+                            <ArrowRight size={16} color="#fff" />
+                          </TouchableOpacity>
+                        )}
                       </View>
-                    </View>
+                    </ModernCard>
                   );
                 })}
               </ScrollView>
@@ -1203,8 +1226,8 @@ export default function DoctorHome() {
               <ScrollView 
                 horizontal 
                 showsHorizontalScrollIndicator={false} 
-                style={styles.openingsScroll}
-                contentContainerStyle={styles.openingsScrollContent}
+                style={styles.applicationsScroll}
+                contentContainerStyle={styles.applicationsScrollContent}
               >
                 {myApplications
                   .filter((app: any) => {
@@ -1231,7 +1254,6 @@ export default function DoctorHome() {
                     
                     const hospitalPicture = requirement.hospital?.hospital_picture_url || null;
                     const hospitalRating = requirement.hospital?.average_rating || 0;
-                    const paymentAmount = requirement.payment_amount || 0;
                     
                     const workDate = requirement.work_required_date 
                       ? new Date(requirement.work_required_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -1283,154 +1305,169 @@ export default function DoctorHome() {
                     }
 
                     return (
-                      <View key={application.id} style={styles.openingCard}>
-                        <View style={styles.hospitalImageContainer}>
-                          {hospitalPicture ? (
+                      <ModernCard key={application.id} variant="elevated" padding="md" style={styles.applicationCard}>
+                        {/* Hospital Image - Right side for all screens */}
+                        {hospitalPicture && (
+                          <View style={styles.applicationImageBackground}>
                             <Image
                               source={{ uri: getFullImageUrl(hospitalPicture) }}
-                              style={styles.hospitalImage}
+                              style={styles.applicationBackgroundImage}
                               resizeMode="cover"
                             />
-                          ) : (
-                            <View style={[styles.hospitalImage, styles.hospitalImagePlaceholder]}>
-                              <Building2 size={40} color={ModernColors.primary.main} />
-                            </View>
-                          )}
-                          
-                          {hospitalRating > 0 && (
-                            <View style={styles.ratingBadge}>
-                              <Star size={14} color="#FFB800" fill="#FFB800" />
-                              <Text style={styles.ratingText}>{hospitalRating.toFixed(1)}</Text>
-                            </View>
-                          )}
-                          
-                          {/* Status Badge */}
-                          <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-                            <Text style={styles.statusBadgeText}>{statusMessage}</Text>
+                            <View style={styles.applicationImageOverlay} />
                           </View>
-                        </View>
+                        )}
                         
-                        <View style={styles.openingCardContent}>
-                          <Text style={styles.hospitalNameCard} numberOfLines={1}>
-                            {requirement.hospital?.name || 'Hospital'}
-                          </Text>
-                          
-                          <Text style={styles.specialtiesText} numberOfLines={1}>
-                            {requirement.department || 'General Practice'}
-                          </Text>
-                          
-                          <View style={styles.infoRow}>
-                            <MapPin size={14} color={ModernColors.text.secondary} />
-                            <Text style={styles.infoText} numberOfLines={1}>{location}</Text>
+                        {/* Content Container */}
+                        <View style={hospitalPicture ? styles.applicationContentWrapper : styles.applicationContentWrapperFull}>
+                          {/* Header with Hospital Name and Status */}
+                          <View style={styles.applicationCardHeader}>
+                            <View style={styles.applicationHeaderLeft}>
+                              {requirement.hospital?.logo_url ? (
+                                <View style={styles.applicationIconBox}>
+                                  <Image 
+                                    source={{ uri: getFullImageUrl(requirement.hospital.logo_url) }} 
+                                    style={styles.applicationLogo}
+                                    resizeMode="cover"
+                                  />
+                                </View>
+                              ) : (
+                                <View style={[styles.applicationIconBox, { backgroundColor: ModernColors.primary.light }]}>
+                                  <Building2 size={18} color={ModernColors.primary.main} />
+                                </View>
+                              )}
+                              <View style={styles.applicationHeaderText}>
+                                <Text style={styles.applicationHospitalName} numberOfLines={1}>
+                                  {requirement.hospital?.name || 'Hospital'}
+                                </Text>
+                                <Text style={styles.applicationDepartment} numberOfLines={1}>
+                                  {requirement.department || 'General Practice'}
+                                </Text>
+                              </View>
+                            </View>
+                            {/* Main Status Badge - Integrated in Header */}
+                            <View style={[styles.applicationMainStatusBadge, { 
+                              backgroundColor: statusColor + '15',
+                              borderColor: statusColor,
+                            }]}>
+                              <View style={[styles.statusBadgeDot, { backgroundColor: statusColor }]} />
+                              <Text style={[styles.applicationMainStatusText, { color: statusColor }]}>
+                                {statusMessage}
+                              </Text>
+                            </View>
+                          </View>
+                        
+                        {/* Application Details - Compact */}
+                        <View style={styles.applicationDetailsContainer}>
+                          <View style={styles.applicationDetailRow}>
+                            <MapPin size={12} color={ModernColors.text.secondary} />
+                            <Text style={styles.applicationDetailText} numberOfLines={1}>{location}</Text>
                           </View>
                           
-                          <View style={styles.infoRow}>
-                            <Calendar size={14} color={ModernColors.text.secondary} />
-                            <Text style={styles.infoText}>{workDate}</Text>
+                          <View style={styles.applicationDetailRow}>
+                            <Calendar size={12} color={ModernColors.text.secondary} />
+                            <Text style={styles.applicationDetailText}>{workDate}</Text>
                           </View>
                           
-                          <View style={styles.infoRow}>
-                            <Clock size={14} color={ModernColors.text.secondary} />
-                            <Text style={styles.infoText}>
+                          <View style={styles.applicationDetailRow}>
+                            <Clock size={12} color={ModernColors.text.secondary} />
+                            <Text style={styles.applicationDetailText}>
                               {startTime}{endTime ? ` - ${endTime}` : ''}
                             </Text>
                           </View>
-                          
-                          {checkInTime && (
-                            <View style={styles.infoRow}>
-                              <CheckCircle size={14} color={ModernColors.success.main} />
-                              <Text style={[styles.infoText, { color: ModernColors.success.main, fontWeight: '600' }]}>
-                                Check-in: {checkInTime}
-                              </Text>
+                        </View>
+
+                        {/* Status Stages - Enhanced with Checkmarks */}
+                        <View style={styles.applicationStatusStages}>
+                          {/* Applied Stage - Always completed */}
+                          <View style={styles.statusStage}>
+                            <View style={[styles.statusStageIcon, { backgroundColor: '#3B82F6' }]}>
+                              <Check size={10} color="#FFFFFF" />
                             </View>
-                          )}
+                            <Text style={[styles.statusStageText, { color: '#3B82F6', fontWeight: '700' }]}>Applied</Text>
+                          </View>
                           
-                          {checkOutTime && (
-                            <View style={styles.infoRow}>
-                              <CheckCircle size={14} color={ModernColors.success.main} />
-                              <Text style={[styles.infoText, { color: ModernColors.success.main, fontWeight: '600' }]}>
-                                Check-out: {checkOutTime}
-                              </Text>
-                            </View>
-                          )}
+                          <View style={styles.statusStageLine} />
                           
-                          <View style={styles.paymentRow}>
-                            <Text style={styles.paymentLabel}>Payment:</Text>
-                            <Text style={styles.paymentAmount}>
-                              ₹{Number(paymentAmount).toLocaleString('en-IN')}
+                          {/* Waiting/Rejected Stage */}
+                          <View style={styles.statusStage}>
+                            {currentStage === 'pending' || currentStage === 'rejected' ? (
+                              <View style={[
+                                styles.statusStageIcon,
+                                { backgroundColor: currentStage === 'rejected' ? '#EF4444' : '#F59E0B' }
+                              ]}>
+                                {currentStage === 'rejected' ? (
+                                  <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700' }}>✕</Text>
+                                ) : (
+                                  <View style={styles.statusStagePulse} />
+                                )}
+                              </View>
+                            ) : (
+                              <View style={[styles.statusStageIcon, { backgroundColor: ModernColors.neutral.gray300 }]}>
+                                <Check size={10} color="#FFFFFF" />
+                              </View>
+                            )}
+                            <Text style={[
+                              styles.statusStageText,
+                              currentStage === 'pending' && { color: '#F59E0B', fontWeight: '700' },
+                              currentStage === 'rejected' && { color: '#EF4444', fontWeight: '700' },
+                              (currentStage !== 'pending' && currentStage !== 'rejected') && { color: ModernColors.success.main, fontWeight: '700' }
+                            ]}>
+                              {applicationStatus === 'rejected' ? 'Rejected' : 'Waiting'}
                             </Text>
                           </View>
-
-                          {/* Status Stages Timeline */}
-                          <View style={styles.statusTimelineContainer}>
-                            {/* Applied Stage */}
-                            <View style={styles.statusTimelineItem}>
-                              <View style={[styles.statusTimelineDot, { backgroundColor: '#3B82F6' }]} />
-                              <Text style={styles.statusTimelineText}>Applied</Text>
-                            </View>
-                            
-                            {/* Waiting for Approval Stage */}
-                            <View style={styles.statusTimelineItem}>
-                              <View style={[
-                                styles.statusTimelineDot, 
-                                { backgroundColor: currentStage === 'pending' ? '#F59E0B' : currentStage === 'rejected' ? '#EF4444' : '#E5E7EB' }
-                              ]} />
-                              <Text style={[
-                                styles.statusTimelineText,
-                                currentStage === 'pending' && { color: '#F59E0B', fontWeight: '600' }
-                              ]}>
-                                {applicationStatus === 'rejected' ? 'Rejected' : 'Waiting'}
-                              </Text>
-                            </View>
-                            
-                            {/* Accepted/Check-in Stage */}
-                            {applicationStatus !== 'rejected' && (
-                              <View style={styles.statusTimelineItem}>
-                                <View style={[
-                                  styles.statusTimelineDot, 
-                                  { backgroundColor: (currentStage === 'accepted' || currentStage === 'scheduled') ? '#10B981' : '#E5E7EB' }
-                                ]} />
+                          
+                          {applicationStatus !== 'rejected' && (
+                            <>
+                              <View style={styles.statusStageLine} />
+                              
+                              {/* Check-in Stage */}
+                              <View style={styles.statusStage}>
+                                {checkInTime ? (
+                                  <View style={[styles.statusStageIcon, { backgroundColor: ModernColors.success.main }]}>
+                                    <Check size={10} color="#FFFFFF" />
+                                  </View>
+                                ) : (
+                                  <View style={[styles.statusStageIcon, { backgroundColor: ModernColors.neutral.gray300 }]}>
+                                    <View style={styles.statusStagePulse} />
+                                  </View>
+                                )}
                                 <Text style={[
-                                  styles.statusTimelineText,
-                                  (currentStage === 'accepted' || currentStage === 'scheduled') && { color: '#10B981', fontWeight: '600' }
+                                  styles.statusStageText,
+                                  checkInTime && { color: ModernColors.success.main, fontWeight: '700' }
                                 ]}>
                                   {checkInTime ? 'Checked In' : 'Check-in'}
                                 </Text>
                               </View>
-                            )}
-                            
-                            {/* In Progress Stage */}
-                            {sessionStatus === 'in_progress' && (
-                              <View style={styles.statusTimelineItem}>
-                                <View style={[styles.statusTimelineDot, { backgroundColor: '#10B981' }]} />
-                                <Text style={[styles.statusTimelineText, { color: '#10B981', fontWeight: '600' }]}>
-                                  In Progress
-                                </Text>
-                              </View>
-                            )}
-                            
-                            {/* Completed Stage */}
-                            {sessionStatus === 'completed' && (
-                              <View style={styles.statusTimelineItem}>
-                                <View style={[styles.statusTimelineDot, { backgroundColor: '#10B981' }]} />
-                                <Text style={[styles.statusTimelineText, { color: '#10B981', fontWeight: '600' }]}>
-                                  Completed
-                                </Text>
-                              </View>
-                            )}
-                          </View>
-                          
-                          {/* View Details Button */}
-                          <TouchableOpacity
-                            style={[styles.viewDetailsButton, { marginTop: 12 }]}
-                            onPress={() => router.push(`/(tabs)/job-detail/${application.id}`)}
-                            activeOpacity={0.8}
-                          >
-                            <Text style={styles.viewDetailsButtonText}>View Details</Text>
-                            <ArrowRight size={16} color={ModernColors.primary.main} />
-                          </TouchableOpacity>
+                              
+                              {(sessionStatus === 'in_progress' || sessionStatus === 'completed') && (
+                                <>
+                                  <View style={styles.statusStageLine} />
+                                  <View style={styles.statusStage}>
+                                    <View style={[styles.statusStageIcon, { backgroundColor: ModernColors.success.main }]}>
+                                      <Check size={10} color="#FFFFFF" />
+                                    </View>
+                                    <Text style={[styles.statusStageText, { color: ModernColors.success.main, fontWeight: '700' }]}>
+                                      {sessionStatus === 'completed' ? 'Completed' : 'In Progress'}
+                                    </Text>
+                                  </View>
+                                </>
+                              )}
+                            </>
+                          )}
                         </View>
-                      </View>
+                        
+                        {/* View Details Button */}
+                        <TouchableOpacity
+                          style={styles.applicationViewButton}
+                          onPress={() => router.push(`/(tabs)/job-detail/${application.id}`)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.applicationViewButtonText}>View Details</Text>
+                          <ArrowRight size={14} color={ModernColors.primary.main} />
+                        </TouchableOpacity>
+                        </View>
+                      </ModernCard>
                     );
                   })}
               </ScrollView>
@@ -1561,59 +1598,169 @@ export default function DoctorHome() {
               </ModernCard>
             ) : (
               <View style={styles.tasksContainer}>
-                {upcomingApplications.slice(0, 3).map((app: any) => {
+                {upcomingApplications
+                  .sort((a: any, b: any) => {
+                    // Sort by date in ascending order (nearest date first)
+                    let aDate: Date | null = null;
+                    let bDate: Date | null = null;
+                    
+                    if (a.job_requirement?.work_required_date) {
+                      aDate = new Date(a.job_requirement.work_required_date);
+                    } else if (a.job_session?.session_date) {
+                      aDate = new Date(a.job_session.session_date);
+                    } else if (a.available_date) {
+                      aDate = new Date(a.available_date);
+                    }
+                    
+                    if (b.job_requirement?.work_required_date) {
+                      bDate = new Date(b.job_requirement.work_required_date);
+                    } else if (b.job_session?.session_date) {
+                      bDate = new Date(b.job_session.session_date);
+                    } else if (b.available_date) {
+                      bDate = new Date(b.available_date);
+                    }
+                    
+                    if (!aDate && !bDate) return 0;
+                    if (!aDate) return 1;
+                    if (!bDate) return -1;
+                    
+                    return aDate.getTime() - bDate.getTime();
+                  })
+                  .slice(0, 3)
+                  .map((app: any) => {
                   const taskDate = app.job_requirement?.work_required_date 
                     ? new Date(app.job_requirement.work_required_date)
                     : app.job_session?.session_date 
                     ? new Date(app.job_session.session_date)
                     : null;
                   
+                  const requirement = app.job_requirement;
+                  const hospital = requirement?.hospital;
+                  const hospitalPicture = hospital?.hospital_picture_url || null;
+                  const session = app.job_session;
+                  const applicationStatus = app.status || 'pending';
+                  
+                  // Determine status
+                  let statusColor = '#3B82F6';
+                  let statusMessage = 'Upcoming';
+                  if (applicationStatus === 'selected' && session) {
+                    statusColor = '#10B981';
+                    statusMessage = 'Scheduled';
+                  } else if (applicationStatus === 'selected') {
+                    statusColor = '#10B981';
+                    statusMessage = 'Approved';
+                  } else if (applicationStatus === 'pending') {
+                    statusColor = '#F59E0B';
+                    statusMessage = 'Pending';
+                  }
+                  
+                  const workDate = requirement?.work_required_date 
+                    ? new Date(requirement.work_required_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                    : taskDate 
+                    ? taskDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                    : 'Date TBD';
+                  const startTime = requirement?.start_time 
+                    ? new Date(`2000-01-01 ${requirement.start_time}`).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+                    : 'Time TBD';
+                  const location = requirement?.location_name || requirement?.address || hospital?.address || 'Location TBD';
+                  
                   return (
                     <ModernCard key={app.id} variant="elevated" padding="md" style={styles.taskCard}>
-                      <View style={styles.taskHeader}>
-                        {app.job_requirement?.hospital?.logo_url ? (
-                           <View style={styles.taskIconContainer}>
-                             <Image 
-                               source={{ uri: app.job_requirement.hospital.logo_url }} 
-                               style={styles.hospitalLogo} // Reuse same style as opportunities
-                             />
-                           </View>
-                        ) : (
-                          <View style={[styles.taskIconContainer, { backgroundColor: ModernColors.secondary.light }]}>
-                            <Building2 size={20} color={ModernColors.secondary.main} />
-                          </View>
-                        )}
-                        <View style={styles.taskInfo}>
-                          <Text style={styles.taskHospital} numberOfLines={1}>
-                            {app.job_requirement?.hospital?.name || 'Hospital'}
-                          </Text>
-                          <Text style={styles.taskDepartment} numberOfLines={1}>
-                            {app.job_requirement?.department || 'Department'}
-                          </Text>
-                        </View>
-                      </View>
-                      {taskDate && (
-                        <View style={styles.taskDateContainer}>
-                          <Clock size={14} color={ModernColors.text.secondary} />
-                          <Text style={styles.taskDate}>
-                            {taskDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                          </Text>
+                      {/* Hospital Image Background - Full Right Side */}
+                      {hospitalPicture && (
+                        <View style={styles.taskImageBackground}>
+                          <Image
+                            source={{ uri: getFullImageUrl(hospitalPicture) }}
+                            style={styles.taskBackgroundImage}
+                            resizeMode="cover"
+                          />
+                          <View style={styles.taskImageOverlay} />
                         </View>
                       )}
-                      <TouchableOpacity
-                        style={styles.taskButton}
-                        onPress={() => router.push(`/job-detail/${app.id}`)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.taskButtonText}>View Details</Text>
-                        <ArrowRight size={16} color={ModernColors.primary.main} />
-                      </TouchableOpacity>
+                      
+                      {/* Content Container - Left Side */}
+                      <View style={styles.taskContentWrapper}>
+                        {/* Header with Hospital Name and Status */}
+                        <View style={styles.taskHeader}>
+                          <View style={styles.taskHeaderLeft}>
+                            {hospital?.logo_url ? (
+                              <View style={styles.taskIconContainer}>
+                                <Image 
+                                  source={{ uri: getFullImageUrl(hospital.logo_url) }} 
+                                  style={styles.taskLogo}
+                                  resizeMode="cover"
+                                />
+                              </View>
+                            ) : (
+                              <View style={[styles.taskIconContainer, { backgroundColor: ModernColors.primary.light }]}>
+                                <Building2 size={18} color={ModernColors.primary.main} />
+                              </View>
+                            )}
+                            <View style={styles.taskInfo}>
+                              <Text style={styles.taskHospital} numberOfLines={1}>
+                                {hospital?.name || 'Hospital'}
+                              </Text>
+                              <Text style={styles.taskDepartment} numberOfLines={1}>
+                                {requirement?.department || 'Department'}
+                              </Text>
+                            </View>
+                          </View>
+                          {/* Status Badge */}
+                          <View style={[styles.taskStatusBadge, { 
+                            backgroundColor: statusColor + '15',
+                            borderColor: statusColor,
+                          }]}>
+                            <View style={[styles.taskStatusDot, { backgroundColor: statusColor }]} />
+                            <Text style={[styles.taskStatusText, { color: statusColor }]}>
+                              {statusMessage}
+                            </Text>
+                          </View>
+                        </View>
+                        
+                        {/* Task Details */}
+                        <View style={styles.taskDetailsContainer}>
+                          <View style={styles.taskDetailRow}>
+                            <MapPin size={12} color={ModernColors.text.secondary} />
+                            <Text style={styles.taskDetailText} numberOfLines={1}>{location}</Text>
+                          </View>
+                          
+                          <View style={styles.taskDetailRow}>
+                            <Calendar size={12} color={ModernColors.text.secondary} />
+                            <Text style={styles.taskDetailText}>{workDate}</Text>
+                          </View>
+                          
+                          <View style={styles.taskDetailRow}>
+                            <Clock size={12} color={ModernColors.text.secondary} />
+                            <Text style={styles.taskDetailText}>{startTime}</Text>
+                          </View>
+                        </View>
+                        
+                        {/* View Details Button */}
+                        <TouchableOpacity
+                          style={styles.taskButton}
+                          onPress={() => router.push(`/job-detail/${app.id}`)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.taskButtonText}>View Details</Text>
+                          <ArrowRight size={14} color={ModernColors.primary.main} />
+                        </TouchableOpacity>
+                      </View>
                     </ModernCard>
                   );
                 })}
               </View>
             )}
           </View>
+
+          {/* Promo Carousel */}
+          <PromoCarousel 
+            onPromoPress={(promo) => {
+              router.push({
+                pathname: '/blog-detail',
+                params: { blogId: promo.id }
+              });
+            }}
+          />
         </ScrollView>
         
         {/* Schedule Modal */}
@@ -1868,13 +2015,16 @@ const styles = StyleSheet.create({
   },
   statsContainer: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexWrap: isLargeTablet ? 'nowrap' : 'wrap',
     gap: Spacing.md,
     marginBottom: Spacing.xl,
   },
   statCardWrapper: {
-    width: (width - Spacing.lg * 2 - Spacing.md) / 2,
+    width: isLargeTablet 
+      ? (width - Spacing.lg * 2 - Spacing.md * 3) / 4  // 4 cards in one row for 10+ inch screens
+      : (width - Spacing.lg * 2 - Spacing.md) / 2,      // 2 cards per row for smaller screens
     aspectRatio: 1,
+    flexShrink: 0,
   },
   statCard: {
     flex: 1,
@@ -2051,6 +2201,169 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 8,
     elevation: 4,
+  },
+  newOpportunityCard: {
+    width: isTablet ? (width - Spacing.lg * 3) / 2 : width * 0.85,
+    minWidth: isTablet ? 350 : 320,
+    marginBottom: Spacing.sm,
+    position: 'relative',
+    overflow: 'hidden',
+    marginRight: isTablet ? Spacing.md : 16,
+  },
+  newOpportunityImageBackground: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    width: '40%',
+    borderRadius: 0,
+    borderTopRightRadius: 12,
+    borderBottomRightRadius: 12,
+    overflow: 'hidden',
+    zIndex: 0,
+  },
+  newOpportunityBackgroundImage: {
+    width: '100%',
+    height: '100%',
+  },
+  newOpportunityImageOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.75)',
+  },
+  newOpportunityContentWrapper: {
+    flex: 1,
+    position: 'relative',
+    zIndex: 1,
+    paddingRight: '42%', // Space for 40% image + 2% margin
+  },
+  newOpportunityContentWrapperFull: {
+    flex: 1,
+    position: 'relative',
+    zIndex: 1,
+  },
+  newOpportunityCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  newOpportunityHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: Spacing.sm,
+  },
+  newOpportunityIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  newOpportunityLogo: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  newOpportunityHeaderText: {
+    flex: 1,
+  },
+  newOpportunityHospitalName: {
+    ...Typography.bodyBold,
+    color: ModernColors.text.primary,
+    marginBottom: 2,
+  },
+  newOpportunityDepartment: {
+    ...Typography.caption,
+    color: ModernColors.text.secondary,
+  },
+  urgentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: '#EF4444',
+    flexShrink: 0,
+  },
+  urgentBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#EF4444',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  postedTimeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: Spacing.sm,
+  },
+  postedTimeText: {
+    ...Typography.caption,
+    color: ModernColors.text.secondary,
+    fontSize: 11,
+  },
+  newOpportunityDetailsContainer: {
+    marginBottom: Spacing.sm,
+    gap: 6,
+  },
+  newOpportunityDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  newOpportunityDetailText: {
+    ...Typography.caption,
+    color: ModernColors.text.secondary,
+    flex: 1,
+  },
+  newOpportunityPaymentContainer: {
+    backgroundColor: ModernColors.primary.light + '20',
+    padding: Spacing.sm,
+    borderRadius: 8,
+    marginBottom: Spacing.sm,
+  },
+  newOpportunityPaymentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  newOpportunityPaymentLabel: {
+    ...Typography.caption,
+    color: ModernColors.text.secondary,
+    fontWeight: '600',
+  },
+  newOpportunityPaymentAmount: {
+    ...Typography.bodyBold,
+    color: ModernColors.primary.main,
+    fontSize: 16,
+  },
+  newOpportunityApplyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: ModernColors.primary.main,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: 8,
+    gap: Spacing.xs,
+    marginTop: Spacing.xs,
+  },
+  newOpportunityApplyButtonText: {
+    ...Typography.bodyBold,
+    color: '#FFFFFF',
+    fontSize: 14,
   },
   hospitalImageContainer: {
     width: '100%',
@@ -2298,22 +2611,23 @@ const styles = StyleSheet.create({
   statusStage: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    flex: 1,
+    gap: 4,
+    flexShrink: 0,
   },
   statusStageLine: {
-    flex: 1,
+    width: 12,
     height: 2,
     backgroundColor: ModernColors.border.light,
-    marginHorizontal: 4,
+    marginHorizontal: 2,
+    flexShrink: 0,
   },
   statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   statusStageText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
     color: ModernColors.text.secondary,
   },
@@ -2464,11 +2778,51 @@ const styles = StyleSheet.create({
   },
   taskCard: {
     marginBottom: Spacing.sm,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  taskImageBackground: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    width: '40%',
+    borderRadius: 0,
+    borderTopRightRadius: 12,
+    borderBottomRightRadius: 12,
+    overflow: 'hidden',
+    zIndex: 0,
+  },
+  taskBackgroundImage: {
+    width: '100%',
+    height: '100%',
+  },
+  taskImageOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.75)',
+  },
+  taskContentWrapper: {
+    flex: 1,
+    position: 'relative',
+    zIndex: 1,
+    paddingRight: '42%', // Space for 40% image + 2% margin
   },
   taskHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     marginBottom: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  taskHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: Spacing.sm,
   },
   taskIconContainer: {
     width: 40,
@@ -2476,7 +2830,12 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: Spacing.sm,
+    overflow: 'hidden',
+  },
+  taskLogo: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
   },
   taskInfo: {
     flex: 1,
@@ -2485,30 +2844,60 @@ const styles = StyleSheet.create({
     ...Typography.bodyBold,
     color: ModernColors.text.primary,
     marginBottom: 2,
+    fontSize: 15,
   },
   taskDepartment: {
     ...Typography.caption,
     color: ModernColors.text.secondary,
+    fontSize: 12,
   },
-  taskDateContainer: {
+  taskStatusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.xs,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    gap: 6,
+    borderWidth: 1,
+    flexShrink: 0,
+  },
+  taskStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  taskStatusText: {
+    fontSize: 10,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+    letterSpacing: 0.2,
+  },
+  taskDetailsContainer: {
+    gap: 6,
     marginBottom: Spacing.sm,
   },
-  taskDate: {
+  taskDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  taskDetailText: {
     ...Typography.caption,
     color: ModernColors.text.secondary,
+    fontSize: 12,
+    flex: 1,
   },
   taskButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.xs,
     alignSelf: 'flex-start',
+    marginTop: 4,
   },
   taskButtonText: {
     ...Typography.captionBold,
     color: ModernColors.primary.main,
+    fontSize: 12,
   },
   // Calendar Section Styles
   calendarSection: {
@@ -2755,6 +3144,199 @@ const styles = StyleSheet.create({
   actionButtonText: {
     ...Typography.captionBold,
     color: '#fff',
+    fontSize: 12,
+  },
+  applicationsScroll: {
+    marginHorizontal: -Spacing.lg,
+  },
+  applicationsScrollContent: {
+    paddingHorizontal: Spacing.lg,
+    gap: Spacing.md,
+  },
+  applicationCard: {
+    marginBottom: Spacing.sm,
+    position: 'relative',
+    overflow: 'hidden',
+    width: width * 0.85, // 85% of screen width for horizontal scroll
+    minWidth: 320,
+  },
+  applicationImageBackground: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    width: '40%',
+    borderRadius: 0,
+    borderTopRightRadius: 12,
+    borderBottomRightRadius: 12,
+    overflow: 'hidden',
+    zIndex: 0,
+  },
+  applicationImageTop: {
+    width: '100%',
+    height: 180,
+    borderRadius: 0,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    overflow: 'hidden',
+    marginBottom: Spacing.md,
+    marginTop: -Spacing.md,
+    marginLeft: -Spacing.md,
+    marginRight: -Spacing.md,
+    alignSelf: 'stretch',
+  },
+  applicationBackgroundImage: {
+    width: '100%',
+    height: '100%',
+  },
+  applicationImageOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.75)',
+  },
+  applicationContentWrapper: {
+    flex: 1,
+    position: 'relative',
+    zIndex: 1,
+    paddingRight: '42%', // Space for 40% image + 2% margin
+  },
+  applicationContentWrapperFull: {
+    flex: 1,
+    position: 'relative',
+    zIndex: 1,
+  },
+  applicationCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  applicationMainStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    gap: 6,
+    borderWidth: 1,
+    flexShrink: 0,
+  },
+  statusBadgeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  applicationMainStatusText: {
+    fontSize: 10,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+    letterSpacing: 0.2,
+  },
+  applicationHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: Spacing.sm,
+  },
+  applicationIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  applicationLogo: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  applicationHeaderText: {
+    flex: 1,
+  },
+  applicationHospitalName: {
+    ...Typography.bodyBold,
+    color: ModernColors.text.primary,
+    marginBottom: 2,
+    fontSize: 15,
+  },
+  applicationDepartment: {
+    ...Typography.caption,
+    color: ModernColors.text.secondary,
+    fontSize: 12,
+  },
+  applicationStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    alignSelf: 'flex-start',
+  },
+  applicationStatusText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  applicationDetailsContainer: {
+    gap: 6,
+    marginBottom: Spacing.sm,
+    position: 'relative',
+    zIndex: 1,
+  },
+  applicationDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  applicationDetailText: {
+    ...Typography.caption,
+    color: ModernColors.text.secondary,
+    fontSize: 12,
+    flex: 1,
+  },
+  applicationStatusStages: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.sm,
+    paddingTop: Spacing.sm,
+    paddingBottom: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  statusStageIcon: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  statusStagePulse: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FFFFFF',
+  },
+  applicationViewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    position: 'relative',
+    zIndex: 1,
+  },
+  applicationViewButtonText: {
+    ...Typography.captionBold,
+    color: ModernColors.primary.main,
     fontSize: 12,
   },
 });

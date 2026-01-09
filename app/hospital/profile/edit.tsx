@@ -14,6 +14,7 @@ import {
   Dimensions,
   ActivityIndicator,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
 import {
   ArrowLeft,
@@ -26,15 +27,18 @@ import {
   MapPin,
   Shield,
   Upload,
+  X,
+  Eye,
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import API from '../../api';
 import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors } from '@/constants/hospital-theme';
-import { ScreenSafeArea } from '@/components/screen-safe-area';
+import { ScreenSafeArea, useSafeBottomPadding } from '@/components/screen-safe-area';
 import { BASE_BACKEND_URL } from '@/config/api';
 import { getUserFriendlyError } from '@/utils/errorMessages';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ModernCard } from '@/components/modern-card';
 
 import { LocationPickerMap } from '@/components/LocationPickerMap';
 
@@ -45,6 +49,7 @@ export default function HospitalProfileEditScreen() {
   const [hospital, setHospital] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const safeBottomPadding = useSafeBottomPadding();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -306,19 +311,63 @@ export default function HospitalProfileEditScreen() {
       }
 
       // Use POST method with _method=PUT for file uploads in Laravel
-      const response = await API.request({
-        method: 'POST',
-        url: '/hospital/profile',
-        data: data,
-        timeout: 120000,
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'multipart/form-data',
-        },
-        transformRequest: (data, headers) => {
-          return data;
-        },
-      });
+      // Note: Don't set Content-Type manually - axios will set it automatically with boundary for FormData
+      // Add retry logic for network errors
+      let lastError: any = null;
+      const maxRetries = 2;
+      let response: any = null;
+      
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          if (attempt > 0) {
+            // Wait before retry (exponential backoff)
+            const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+            console.log(`🔄 Retrying hospital profile update (attempt ${attempt + 1}/${maxRetries + 1}) after ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+          }
+          
+          response = await API.request({
+            method: 'POST',
+            url: '/hospital/profile',
+            data: data,
+            timeout: 120000,
+            headers: {
+              'Accept': 'application/json',
+              // Content-Type will be set automatically by axios for FormData
+            },
+          });
+          
+          // Success - break out of retry loop
+          break;
+        } catch (retryError: any) {
+          lastError = retryError;
+          
+          // Only retry on network errors, not validation errors
+          if (retryError.response) {
+            // Server responded with an error - don't retry
+            throw retryError;
+          }
+          
+          // Network error - retry if we have attempts left
+          if (attempt < maxRetries && (
+            retryError.code === 'ERR_NETWORK' ||
+            retryError.code === 'ECONNREFUSED' ||
+            retryError.code === 'ETIMEDOUT' ||
+            retryError.message?.includes('Network') ||
+            retryError.message?.includes('timeout')
+          )) {
+            console.warn(`⚠️ Network error on attempt ${attempt + 1}, will retry...`);
+            continue;
+          } else {
+            // No more retries or non-retryable error
+            throw retryError;
+          }
+        }
+      }
+      
+      if (!response) {
+        throw lastError || new Error('Failed to update profile after retries');
+      }
 
       // Check response structure
       if (response?.data) {
@@ -383,10 +432,9 @@ export default function HospitalProfileEditScreen() {
               type: type,
             } as any);
 
+            // Note: Don't set Content-Type manually - axios will set it automatically with boundary for FormData
             await API.post('/hospital/upload/picture', pictureFormData, {
-              headers: {
-                'Content-Type': 'multipart/form-data',
-              },
+              timeout: 120000,
             });
 
             // Update hospital picture URI
@@ -434,17 +482,42 @@ export default function HospitalProfileEditScreen() {
       // Use user-friendly error message
       const friendlyMessage = error?.userFriendlyMessage || getUserFriendlyError(error);
       
-      // Determine appropriate title
+      // Determine appropriate title and retry option
       let errorTitle = 'Unable to Update';
+      let showRetry = false;
+      let errorMessage = friendlyMessage;
+      
       if (error.response?.status === 422) {
         errorTitle = 'Please Check Your Input';
       } else if (!error.response) {
         errorTitle = 'Connection Problem';
+        const baseUrl = error.config?.baseURL || 'server';
+        const endpoint = error.config?.url || '/hospital/profile';
+        const fullUrl = `${baseUrl}${endpoint}`;
+        
+        if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED' || 
+            error.message?.includes('Network') || error.message?.includes('Unable to connect')) {
+          errorMessage = `Unable to connect to server.\n\nTrying to reach: ${fullUrl}\n\nPlease check:\n1. Your internet connection\n2. Backend server is running\n3. Server URL is correct\n\nIf this persists, the server may be temporarily unavailable.`;
+          showRetry = true;
+        } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+          errorMessage = 'Request timed out. The file may be too large or connection is slow. Please try again with a smaller file or check your connection speed.';
+          showRetry = true;
+        } else {
+          errorMessage = `${error.message || 'Network error'}\n\nEndpoint: ${fullUrl}\n\nPlease check your connection and try again.`;
+          showRetry = true;
+        }
       } else if (error.response.status >= 500) {
         errorTitle = 'Server Error';
       }
       
-      Alert.alert(errorTitle, friendlyMessage, [{ text: 'OK' }]);
+      Alert.alert(
+        errorTitle, 
+        errorMessage, 
+        showRetry ? [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Retry', onPress: () => handleSave() }
+        ] : [{ text: 'OK' }]
+      );
     }
   };
 
@@ -462,7 +535,7 @@ export default function HospitalProfileEditScreen() {
   }
 
   return (
-    <ScreenSafeArea backgroundColor={NeutralColors.background}>
+    <ScreenSafeArea backgroundColor={PrimaryColors.dark}>
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -470,76 +543,112 @@ export default function HospitalProfileEditScreen() {
       >
         <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
         
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <ArrowLeft size={24} color="#fff" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Edit Profile</Text>
-          <TouchableOpacity
-            onPress={handleSave}
-            style={styles.saveButton}
-            disabled={saving}
-          >
-            {saving ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Save size={20} color="#fff" />
-            )}
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
-          {/* Logo Section */}
-          <View style={styles.logoSection}>
-            <View style={styles.logoContainer}>
-              {logoUri ? (
-                <Image 
-                  source={{ uri: logoUri }} 
-                  style={styles.logo}
-                  key={`hospital-logo-${logoUri || Date.now()}`} // Force re-render when logo changes
-                />
+        {/* Modern Gradient Header */}
+        <LinearGradient
+          colors={[PrimaryColors.dark, PrimaryColors.main]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.headerGradient}
+        >
+          <View style={styles.headerContent}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+              <ArrowLeft size={24} color="#fff" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Edit Profile</Text>
+            <TouchableOpacity
+              onPress={handleSave}
+              style={styles.headerSaveButton}
+              disabled={saving}
+            >
+              {saving ? (
+                <ActivityIndicator size="small" color="#fff" />
               ) : (
-                <View style={styles.logoPlaceholder}>
-                  <Building2 size={48} color={PrimaryColors.main} />
-                </View>
+                <>
+                  <Save size={18} color="#fff" />
+                  <Text style={styles.headerSaveButtonText}>Save</Text>
+                </>
               )}
-            </View>
-            <TouchableOpacity style={styles.logoButton} onPress={handlePickLogo}>
-              <Camera size={18} color={PrimaryColors.main} />
-              <Text style={styles.logoButtonText}>Change Logo</Text>
             </TouchableOpacity>
           </View>
+        </LinearGradient>
 
-          {/* Hospital Picture Section */}
-          <View style={styles.logoSection}>
-            <Text style={styles.sectionLabel}>Hospital Picture</Text>
-            <Text style={styles.sectionHint}>This picture will appear in job opportunity cards for doctors</Text>
-            <View style={styles.hospitalPictureContainer}>
-              {hospitalPictureUri ? (
-                <Image 
-                  source={{ uri: hospitalPictureUri }} 
-                  style={styles.hospitalPicture}
-                  key={`hospital-picture-${hospitalPictureUri || Date.now()}`}
-                />
-              ) : (
-                <View style={styles.hospitalPicturePlaceholder}>
-                  <Camera size={48} color={PrimaryColors.main} />
-                  <Text style={styles.placeholderText}>No Picture</Text>
-                </View>
-              )}
+        <ScrollView 
+          style={styles.scrollView} 
+          contentContainerStyle={[styles.content, { paddingBottom: safeBottomPadding + 20 }]}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Logo & Picture Section */}
+          <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionIconContainer}>
+                <Camera size={20} color={PrimaryColors.main} />
+              </View>
+              <Text style={styles.sectionTitle}>Profile Images</Text>
             </View>
-            <TouchableOpacity style={styles.logoButton} onPress={handlePickHospitalPicture}>
-              <Camera size={18} color={PrimaryColors.main} />
-              <Text style={styles.logoButtonText}>
-                {hospitalPictureUri ? 'Change Picture' : 'Upload Hospital Picture'}
-              </Text>
-            </TouchableOpacity>
-          </View>
+            
+            {/* Logo */}
+            <View style={styles.imageUploadSection}>
+              <Text style={styles.imageLabel}>Hospital Logo</Text>
+              <View style={styles.imageContainer}>
+                {logoUri ? (
+                  <Image 
+                    source={{ uri: logoUri }} 
+                    style={styles.logo}
+                    key={`hospital-logo-${logoUri || Date.now()}`}
+                  />
+                ) : (
+                  <View style={styles.logoPlaceholder}>
+                    <Building2 size={40} color={PrimaryColors.main} />
+                  </View>
+                )}
+                <TouchableOpacity style={styles.imageEditButton} onPress={handlePickLogo}>
+                  <Camera size={16} color="#fff" />
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity style={styles.imageButton} onPress={handlePickLogo}>
+                <Camera size={18} color={PrimaryColors.main} />
+                <Text style={styles.imageButtonText}>Change Logo</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Hospital Picture */}
+            <View style={styles.imageUploadSection}>
+              <Text style={styles.imageLabel}>Hospital Picture</Text>
+              <Text style={styles.imageHint}>This picture will appear in job opportunity cards for doctors</Text>
+              <View style={styles.imageContainer}>
+                {hospitalPictureUri ? (
+                  <Image 
+                    source={{ uri: hospitalPictureUri }} 
+                    style={styles.hospitalPicture}
+                    key={`hospital-picture-${hospitalPictureUri || Date.now()}`}
+                  />
+                ) : (
+                  <View style={styles.hospitalPicturePlaceholder}>
+                    <Camera size={40} color={PrimaryColors.main} />
+                    <Text style={styles.placeholderText}>No Picture</Text>
+                  </View>
+                )}
+                <TouchableOpacity style={styles.imageEditButton} onPress={handlePickHospitalPicture}>
+                  <Camera size={16} color="#fff" />
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity style={styles.imageButton} onPress={handlePickHospitalPicture}>
+                <Camera size={18} color={PrimaryColors.main} />
+                <Text style={styles.imageButtonText}>
+                  {hospitalPictureUri ? 'Change Picture' : 'Upload Hospital Picture'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </ModernCard>
 
           {/* Basic Information */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Basic Information</Text>
+          <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionIconContainer}>
+                <Building2 size={20} color={PrimaryColors.main} />
+              </View>
+              <Text style={styles.sectionTitle}>Basic Information</Text>
+            </View>
             
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Hospital Name *</Text>
@@ -590,13 +699,18 @@ export default function HospitalProfileEditScreen() {
                 textAlignVertical="top"
               />
             </View>
-          </View>
+          </ModernCard>
 
           {/* Location */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Location</Text>
+          <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionIconContainer}>
+                <MapPin size={20} color={PrimaryColors.main} />
+              </View>
+              <Text style={styles.sectionTitle}>Location</Text>
+            </View>
             <Text style={styles.label}>Update Hospital Location</Text>
-            <Text style={[styles.label, { fontSize: 12, color: NeutralColors.textSecondary, marginBottom: 12 }]}>
+            <Text style={styles.locationHint}>
               Drag the map to pinpoint your exact hospital location.
             </Text>
             
@@ -612,12 +726,14 @@ export default function HospitalProfileEditScreen() {
               }}
               height={300}
             />
-          </View>
+          </ModernCard>
 
           {/* License Information */}
-          <View style={styles.section}>
+          <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
             <View style={styles.sectionHeader}>
-              <Shield size={20} color={PrimaryColors.main} />
+              <View style={styles.sectionIconContainer}>
+                <Shield size={20} color={PrimaryColors.main} />
+              </View>
               <Text style={styles.sectionTitle}>License Information</Text>
             </View>
             
@@ -632,31 +748,55 @@ export default function HospitalProfileEditScreen() {
               />
             </View>
 
-            <TouchableOpacity
-              style={styles.documentButton}
-              onPress={handlePickLicenseDocument}
-            >
-              <FileText size={18} color={PrimaryColors.main} />
-              <Text style={styles.documentButtonText}>
-                {licenseDocument ? licenseDocument.name : 'Upload License Document'}
-              </Text>
-            </TouchableOpacity>
-          </View>
+            {licenseDocument ? (
+              <View style={styles.documentPreview}>
+                <View style={styles.documentPreviewInfo}>
+                  <FileText size={20} color="#10B981" />
+                  <View style={styles.documentPreviewText}>
+                    <Text style={styles.documentPreviewName}>{licenseDocument.name}</Text>
+                    <Text style={styles.documentPreviewStatus}>Selected</Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={styles.documentRemoveButton}
+                  onPress={() => setLicenseDocument(null)}
+                >
+                  <X size={16} color="#DC2626" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.documentButton}
+                onPress={handlePickLicenseDocument}
+              >
+                <Upload size={18} color={PrimaryColors.main} />
+                <Text style={styles.documentButtonText}>Upload License Document</Text>
+              </TouchableOpacity>
+            )}
+          </ModernCard>
 
           {/* Save Button */}
           <TouchableOpacity
             style={[styles.saveButtonBottom, saving && styles.saveButtonDisabled]}
             onPress={handleSave}
             disabled={saving}
+            activeOpacity={0.8}
           >
-            {saving ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <>
-                <Save size={20} color="#fff" />
-                <Text style={styles.saveButtonText}>Save Changes</Text>
-              </>
-            )}
+            <LinearGradient
+              colors={[PrimaryColors.main, PrimaryColors.dark]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.saveButtonGradient}
+            >
+              {saving ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Save size={20} color="#fff" />
+                  <Text style={styles.saveButtonText}>Save Changes</Text>
+                </>
+              )}
+            </LinearGradient>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -679,11 +819,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: NeutralColors.textSecondary,
   },
-  header: {
-    backgroundColor: PrimaryColors.dark,
-    paddingTop: 50,
+  headerGradient: {
+    paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + 20 : 50,
     paddingBottom: 16,
     paddingHorizontal: 16,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+  },
+  headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -695,24 +838,71 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: '#fff',
+    flex: 1,
+    textAlign: 'center',
   },
-  saveButton: {
-    padding: 8,
+  headerSaveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+  headerSaveButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   scrollView: {
     flex: 1,
   },
   content: {
     padding: 16,
-    paddingBottom: 32,
+    paddingTop: 24,
   },
-  logoSection: {
-    alignItems: 'center',
-    marginBottom: 24,
-    paddingVertical: 24,
-  },
-  logoContainer: {
+  sectionCard: {
     marginBottom: 16,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+  },
+  sectionIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: `${PrimaryColors.main}15`,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: NeutralColors.textPrimary,
+  },
+  imageUploadSection: {
+    marginBottom: 20,
+  },
+  imageLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: NeutralColors.textPrimary,
+    marginBottom: 8,
+  },
+  imageHint: {
+    fontSize: 12,
+    color: NeutralColors.textSecondary,
+    marginBottom: 12,
+    lineHeight: 18,
+  },
+  imageContainer: {
+    position: 'relative',
+    marginBottom: 12,
+    alignItems: 'center',
   },
   logo: {
     width: 120,
@@ -720,6 +910,7 @@ const styles = StyleSheet.create({
     borderRadius: 60,
     borderWidth: 4,
     borderColor: PrimaryColors.main,
+    backgroundColor: NeutralColors.background,
   },
   logoPlaceholder: {
     width: 120,
@@ -730,83 +921,71 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 4,
     borderColor: PrimaryColors.main,
+    borderStyle: 'dashed',
   },
-  logoButton: {
+  imageEditButton: {
+    position: 'absolute',
+    bottom: 0,
+    right: '40%',
+    backgroundColor: PrimaryColors.main,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  imageButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: 10,
     paddingHorizontal: 20,
-    backgroundColor: `${PrimaryColors.main}15`,
+    backgroundColor: `${PrimaryColors.main}10`,
     borderRadius: 10,
     gap: 8,
   },
-  logoButtonText: {
+  imageButtonText: {
     fontSize: 14,
     fontWeight: '600',
     color: PrimaryColors.main,
-  },
-  sectionLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: PrimaryColors.dark,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  sectionHint: {
-    fontSize: 12,
-    color: NeutralColors.textSecondary,
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  hospitalPictureContainer: {
-    marginBottom: 16,
-    width: '100%',
-    alignItems: 'center',
   },
   hospitalPicture: {
     width: '100%',
     height: 200,
     borderRadius: 12,
-    backgroundColor: NeutralColors.backgroundSecondary,
+    backgroundColor: NeutralColors.background,
+    borderWidth: 2,
+    borderColor: PrimaryColors.main,
   },
   hospitalPicturePlaceholder: {
     width: '100%',
     height: 200,
     borderRadius: 12,
-    backgroundColor: NeutralColors.backgroundSecondary,
+    backgroundColor: `${PrimaryColors.main}10`,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: NeutralColors.border,
+    borderColor: PrimaryColors.main,
     borderStyle: 'dashed',
   },
   placeholderText: {
     marginTop: 8,
     fontSize: 14,
     color: NeutralColors.textSecondary,
+    fontWeight: '500',
   },
-  section: {
-    backgroundColor: NeutralColors.cardBackground,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: NeutralColors.textPrimary,
-    marginBottom: 16,
+  locationHint: {
+    fontSize: 12,
+    color: NeutralColors.textSecondary,
+    marginBottom: 12,
+    lineHeight: 18,
   },
   inputGroup: {
     marginBottom: 16,
@@ -839,27 +1018,81 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     backgroundColor: `${PrimaryColors.main}10`,
+    borderWidth: 1,
+    borderColor: PrimaryColors.main,
+    borderStyle: 'dashed',
     borderRadius: 10,
     gap: 8,
     marginTop: 8,
+    minHeight: 56,
   },
   documentButtonText: {
     fontSize: 14,
     fontWeight: '600',
     color: PrimaryColors.main,
+    flex: 1,
+    textAlign: 'center',
   },
-  saveButtonBottom: {
+  documentPreview: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: PrimaryColors.main,
-    paddingVertical: 16,
-    borderRadius: 12,
-    gap: 8,
+    justifyContent: 'space-between',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#10B981',
+    borderRadius: 10,
+    padding: 12,
     marginTop: 8,
+    minHeight: 56,
+  },
+  documentPreviewInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  documentPreviewText: {
+    flex: 1,
+  },
+  documentPreviewName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: NeutralColors.textPrimary,
+    marginBottom: 2,
+  },
+  documentPreviewStatus: {
+    fontSize: 12,
+    color: '#10B981',
+    fontWeight: '500',
+  },
+  documentRemoveButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FEF2F2',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  saveButtonBottom: {
+    marginTop: 8,
+    marginBottom: 16,
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
   },
   saveButtonDisabled: {
     opacity: 0.6,
+  },
+  saveButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    gap: 8,
   },
   saveButtonText: {
     fontSize: 16,

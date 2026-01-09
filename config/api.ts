@@ -1,30 +1,41 @@
 import Constants from 'expo-constants';
 
-// Try to get BACKEND_URL from multiple sources:
-// 1. process.env (for development and EAS builds)
-// 2. Constants.expoConfig.extra (for production builds via app.config.js)
+// Try to get BACKEND_URL from multiple sources (in order of priority):
+// 1. Constants.expoConfig.extra (for EAS builds with secrets - this is the primary source for production)
+// 2. Constants.manifest?.extra (for Expo Go and older builds)
+// 3. process.env (for development and local builds)
 const BACKEND_URL = 
-  process.env.EXPO_PUBLIC_BACKEND_URL || 
   Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL ||
-  (Constants as any)?.manifest?.extra?.EXPO_PUBLIC_BACKEND_URL;
+  (Constants as any)?.manifest?.extra?.EXPO_PUBLIC_BACKEND_URL ||
+  process.env.EXPO_PUBLIC_BACKEND_URL;
 
 if (!BACKEND_URL) {
   // In production, provide a more graceful error message
   if (__DEV__) {
     throw new Error(`
-    ❌ Missing EXPO_PUBLIC_BACKEND_URL in .env file!
+    ❌ Missing EXPO_PUBLIC_BACKEND_URL!
 
-    Add this to .env:
-
+    For development:
+    Add this to .env file:
     EXPO_PUBLIC_BACKEND_URL=http://YOUR_IP:8000
 
     Then restart Expo: npx expo start --clear
+
+    For production builds:
+    Set it as an EAS secret:
+    eas secret:create --scope project --name EXPO_PUBLIC_BACKEND_URL --value https://your-api-url.com
+
+    Or add it to app.config.js extra section.
   `);
   } else {
-    // Production: Log error but don't crash - use a default or show user-friendly message
-    console.error('❌ EXPO_PUBLIC_BACKEND_URL is not configured. Please set it in eas.json or as an EAS secret.');
-    // You may want to throw here or handle it differently based on your needs
-    throw new Error('Server configuration error. Please contact support.');
+    // Production: Log detailed error for debugging
+    console.error('❌ EXPO_PUBLIC_BACKEND_URL is not configured.');
+    console.error('Available Constants.expoConfig?.extra:', Constants.expoConfig?.extra);
+    console.error('Available Constants.manifest?.extra:', (Constants as any)?.manifest?.extra);
+    console.error('Available process.env.EXPO_PUBLIC_BACKEND_URL:', process.env.EXPO_PUBLIC_BACKEND_URL);
+    console.error('To fix: Set EXPO_PUBLIC_BACKEND_URL as an EAS secret or in app.config.js extra section');
+    // Throw error to prevent app from running with invalid configuration
+    throw new Error('Server configuration error. EXPO_PUBLIC_BACKEND_URL not found. Please contact support.');
   }
 }
 
@@ -53,19 +64,29 @@ const apiPath = FINAL_BACKEND_URL.endsWith('/api')
   : '/api';
 export const API_BASE_URL = `${FINAL_BACKEND_URL}${apiPath}`;
 
-// Debug log (visible only in development mode)
+// Debug log (always log in production for troubleshooting, but with limited info)
 if (__DEV__) {
   console.log("==========================================");
-  console.log("🔧 API CONFIG LOADED");
+  console.log("🔧 API CONFIG LOADED (Development)");
   console.log("Backend URL:", BACKEND_URL);
   console.log("API Base URL:", API_BASE_URL);
+  console.log("Source:", 
+    Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL ? 'Constants.expoConfig.extra' :
+    (Constants as any)?.manifest?.extra?.EXPO_PUBLIC_BACKEND_URL ? 'Constants.manifest.extra' :
+    'process.env'
+  );
   console.log("==========================================");
 } else {
-  // Production: Log API base URL for debugging (without exposing full URL in user errors)
-  // This helps diagnose connection issues without cluttering production logs
-  // Only log if there's an issue connecting
-  if (typeof console !== 'undefined' && console.log) {
-    // Store for potential debugging - can be accessed via error handlers
+  // Production: Log limited info for debugging network issues
+  console.log("🔧 API CONFIG LOADED (Production)");
+  console.log("API Base URL configured:", API_BASE_URL ? 'Yes' : 'No');
+  console.log("URL source:", 
+    Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL ? 'EAS Secret (Constants.expoConfig.extra)' :
+    (Constants as any)?.manifest?.extra?.EXPO_PUBLIC_BACKEND_URL ? 'Expo Manifest' :
+    process.env.EXPO_PUBLIC_BACKEND_URL ? 'process.env' : 'Not Found'
+  );
+  // Store for potential debugging - can be accessed via error handlers if needed
+  if (typeof global !== 'undefined') {
     (global as any).__API_BASE_URL__ = API_BASE_URL;
   }
 }

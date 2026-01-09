@@ -330,22 +330,6 @@ export default function MoreScreen() {
             </View>
           </View>
 
-          {/* Blogs Section */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <FileText size={20} color={PrimaryColors.main} />
-              <Text style={[styles.sectionTitle, { color: PrimaryColors.dark }]}>Our Blogs</Text>
-            </View>
-            <View style={styles.sectionContent}>
-              <TouchableOpacity 
-                style={styles.helpItem}
-                onPress={() => router.push('/(tabs)/blogs')}
-              >
-                <FileText size={18} color={NeutralColors.textSecondary} />
-                <Text style={styles.helpText}>View Blogs</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
 
           {/* Help Section */}
           <View style={styles.section}>

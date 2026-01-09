@@ -11,6 +11,7 @@ import {
   RefreshControl,
   Alert,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
 import {
   ArrowLeft,
@@ -27,6 +28,7 @@ import {
   Lock,
   Calendar,
   User,
+  Eye,
 } from 'lucide-react-native';
 import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors, HospitalStatusColors as StatusColors } from '@/constants/hospital-theme';
 import API from '../api';
@@ -34,6 +36,7 @@ import { ScreenSafeArea, useSafeBottomPadding } from '@/components/screen-safe-a
 import { BASE_BACKEND_URL } from '@/config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isDoctorLoggedIn } from '@/utils/auth';
+import { ModernCard } from '@/components/modern-card';
 
 const HOSPITAL_INFO_KEY = 'hospitalInfo';
 
@@ -166,16 +169,24 @@ export default function HospitalProfileScreen() {
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
         
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Profile</Text>
-          <TouchableOpacity 
-            onPress={() => router.push('/hospital/profile/edit')} 
-            style={styles.editButton}
-          >
-            <Edit size={20} color="#fff" />
-          </TouchableOpacity>
-        </View>
+        {/* Modern Gradient Header */}
+        <LinearGradient
+          colors={[PrimaryColors.dark, PrimaryColors.main]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.headerGradient}
+        >
+          <View style={styles.headerContent}>
+            <Text style={styles.headerTitle}>Profile</Text>
+            <TouchableOpacity 
+              onPress={() => router.push('/hospital/profile/edit')} 
+              style={styles.editButton}
+            >
+              <Edit size={20} color={PrimaryColors.main} />
+              <Text style={styles.editButtonText}>Edit</Text>
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
 
         <ScrollView 
           style={styles.scrollView}
@@ -183,109 +194,133 @@ export default function HospitalProfileScreen() {
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
+          showsVerticalScrollIndicator={false}
         >
-          {/* Profile Header */}
-          <View style={styles.profileHeader}>
-            <View style={styles.logoContainer}>
-              {hospital.logo_url || hospital.logo_path ? (
-                <Image
-                  source={{
-                    uri: hospital.logo_url || `${BASE_BACKEND_URL}/app/${hospital.logo_path}`,
-                  }}
-                  style={styles.logo}
-                />
-              ) : (
-                <View style={styles.logoPlaceholder}>
-                  <Building2 size={48} color={PrimaryColors.main} />
+          {/* Profile Card with Modern Design */}
+          <ModernCard variant="elevated" style={styles.profileCard}>
+            <View style={styles.profileHeader}>
+              <View style={styles.logoContainer}>
+                {hospital.logo_url || hospital.logo_path ? (
+                  <Image
+                    source={{
+                      uri: hospital.logo_url || `${BASE_BACKEND_URL}/app/${hospital.logo_path}`,
+                    }}
+                    style={styles.logo}
+                  />
+                ) : (
+                  <View style={styles.logoPlaceholder}>
+                    <Building2 size={48} color={PrimaryColors.main} />
+                  </View>
+                )}
+              </View>
+              <View style={styles.profileInfo}>
+                <Text style={styles.hospitalName}>{hospital.name || 'Hospital Name'}</Text>
+                <Text style={styles.hospitalEmail}>{hospital.email || 'No email'}</Text>
+                
+                {/* Verification Status Badge */}
+                <View style={[styles.statusBadge, { backgroundColor: `${getStatusColor(hospital.verification_status || 'pending')}15` }]}>
+                  {getStatusIcon(hospital.verification_status || 'pending')}
+                  <Text style={[styles.statusText, { color: getStatusColor(hospital.verification_status || 'pending') }]}>
+                    {hospital.verification_status === 'approved' ? 'Verified' : 
+                     hospital.verification_status === 'rejected' ? 'Rejected' : 'Pending Verification'}
+                  </Text>
                 </View>
-              )}
+              </View>
             </View>
-            <Text style={styles.hospitalName}>{hospital.name || 'Hospital Name'}</Text>
-            <Text style={styles.hospitalEmail}>{hospital.email || 'No email'}</Text>
-            
-            {/* Verification Status */}
-            <View style={[styles.statusBadge, { backgroundColor: `${getStatusColor(hospital.verification_status || 'pending')}15` }]}>
-              {getStatusIcon(hospital.verification_status || 'pending')}
-              <Text style={[styles.statusText, { color: getStatusColor(hospital.verification_status || 'pending') }]}>
-                {hospital.verification_status === 'approved' ? 'Verified' : 
-                 hospital.verification_status === 'rejected' ? 'Rejected' : 'Pending Verification'}
-              </Text>
-            </View>
-          </View>
+          </ModernCard>
 
           {/* Basic Information */}
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Basic Information</Text>
+          <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionIconContainer}>
+                <Building2 size={20} color={PrimaryColors.main} />
+              </View>
+              <Text style={styles.sectionTitle}>Basic Information</Text>
+            </View>
             
-            <View style={styles.infoRow}>
-              <Building2 size={20} color={PrimaryColors.main} />
-              <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Hospital Name</Text>
-                <Text style={styles.infoValue}>{hospital.name || 'N/A'}</Text>
+            <View style={styles.detailRow}>
+              <View style={styles.iconWrapper}>
+                <Building2 size={18} color={PrimaryColors.main} />
+              </View>
+              <View style={styles.detailContent}>
+                <Text style={styles.detailLabel}>Hospital Name</Text>
+                <Text style={styles.detailValue}>{hospital.name || 'N/A'}</Text>
               </View>
             </View>
 
-            <View style={styles.infoRow}>
-              <Mail size={20} color={PrimaryColors.main} />
-              <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Email</Text>
-                <Text style={styles.infoValue}>{hospital.email || 'N/A'}</Text>
+            <View style={styles.detailRow}>
+              <View style={styles.iconWrapper}>
+                <Mail size={18} color={PrimaryColors.main} />
+              </View>
+              <View style={styles.detailContent}>
+                <Text style={styles.detailLabel}>Email</Text>
+                <Text style={styles.detailValue}>{hospital.email || 'N/A'}</Text>
               </View>
             </View>
 
             {hospital.phone_number && (
-              <View style={styles.infoRow}>
-                <Phone size={20} color={PrimaryColors.main} />
-                <View style={styles.infoContent}>
-                  <Text style={styles.infoLabel}>Phone Number</Text>
-                  <Text style={styles.infoValue}>{hospital.phone_number}</Text>
+              <View style={styles.detailRow}>
+                <View style={styles.iconWrapper}>
+                  <Phone size={18} color={PrimaryColors.main} />
+                </View>
+                <View style={styles.detailContent}>
+                  <Text style={styles.detailLabel}>Phone Number</Text>
+                  <Text style={styles.detailValue}>{hospital.phone_number}</Text>
                 </View>
               </View>
             )}
 
             {hospital.address && (
-              <View style={styles.infoRow}>
-                <MapPin size={20} color={PrimaryColors.main} />
-                <View style={styles.infoContent}>
-                  <Text style={styles.infoLabel}>Address</Text>
-                  <Text style={styles.infoValue}>{hospital.address}</Text>
+              <View style={styles.detailRow}>
+                <View style={styles.iconWrapper}>
+                  <MapPin size={18} color={PrimaryColors.main} />
+                </View>
+                <View style={styles.detailContent}>
+                  <Text style={styles.detailLabel}>Address</Text>
+                  <Text style={styles.detailValue}>{hospital.address}</Text>
                 </View>
               </View>
             )}
 
             {(hospital.latitude && hospital.longitude) && (
-              <View style={styles.infoRow}>
-                <MapPin size={20} color={PrimaryColors.main} />
-                <View style={styles.infoContent}>
-                  <Text style={styles.infoLabel}>Location</Text>
-                  <Text style={styles.infoValue}>
+              <View style={[styles.detailRow, styles.lastDetailRow]}>
+                <View style={styles.iconWrapper}>
+                  <MapPin size={18} color={PrimaryColors.main} />
+                </View>
+                <View style={styles.detailContent}>
+                  <Text style={styles.detailLabel}>Location Coordinates</Text>
+                  <Text style={styles.detailValue}>
                     {parseFloat(String(hospital.latitude)).toFixed(6)}, {parseFloat(String(hospital.longitude)).toFixed(6)}
                   </Text>
                 </View>
               </View>
             )}
-          </View>
+          </ModernCard>
 
           {/* License Information */}
           {(hospital.license_number || hospital.license_status) && (
-            <View style={styles.card}>
-              <View style={styles.cardHeader}>
-                <Shield size={24} color={PrimaryColors.main} />
-                <Text style={styles.cardTitle}>License Information</Text>
+            <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionIconContainer}>
+                  <Shield size={20} color={PrimaryColors.main} />
+                </View>
+                <Text style={styles.sectionTitle}>License Information</Text>
               </View>
               
               {hospital.license_number && (
-                <View style={styles.infoRow}>
-                  <FileText size={20} color={PrimaryColors.main} />
-                  <View style={styles.infoContent}>
-                    <Text style={styles.infoLabel}>License Number</Text>
-                    <Text style={styles.infoValue}>{hospital.license_number}</Text>
+                <View style={styles.detailRow}>
+                  <View style={styles.iconWrapper}>
+                    <FileText size={18} color={PrimaryColors.main} />
+                  </View>
+                  <View style={styles.detailContent}>
+                    <Text style={styles.detailLabel}>License Number</Text>
+                    <Text style={styles.detailValue}>{hospital.license_number}</Text>
                   </View>
                 </View>
               )}
 
               {hospital.license_status && (
-                <View style={styles.infoRow}>
+                <View style={[styles.detailRow, styles.lastDetailRow]}>
                   <View style={[styles.statusBadge, { backgroundColor: `${getStatusColor(hospital.license_status)}15` }]}>
                     {getStatusIcon(hospital.license_status)}
                     <Text style={[styles.statusText, { color: getStatusColor(hospital.license_status) }]}>
@@ -298,24 +333,27 @@ export default function HospitalProfileScreen() {
 
               {hospital.license_document_url || hospital.license_document ? (
                 <TouchableOpacity style={styles.documentButton}>
-                  <FileText size={18} color={PrimaryColors.main} />
+                  <Eye size={18} color={PrimaryColors.main} />
                   <Text style={styles.documentButtonText}>View License Document</Text>
                 </TouchableOpacity>
               ) : null}
-            </View>
+            </ModernCard>
           )}
 
           {/* Switch Account Section */}
           {hasDoctorAccess && (
-            <View style={styles.card}>
-              <View style={styles.cardHeader}>
-                <User size={24} color={PrimaryColors.main} />
-                <Text style={styles.cardTitle}>Switch Account</Text>
+            <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionIconContainer}>
+                  <User size={20} color={PrimaryColors.main} />
+                </View>
+                <Text style={styles.sectionTitle}>Switch Account</Text>
               </View>
               
               <TouchableOpacity 
                 style={styles.switchButton}
                 onPress={handleSwitchToDoctor}
+                activeOpacity={0.8}
               >
                 <User size={18} color="#0066FF" />
                 <Text style={styles.switchButtonText}>Switch to Doctor Portal</Text>
@@ -323,42 +361,61 @@ export default function HospitalProfileScreen() {
               <Text style={styles.switchHint}>
                 Access your doctor dashboard and view job opportunities.
               </Text>
-            </View>
+            </ModernCard>
           )}
 
           {/* Security Section */}
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Lock size={24} color={PrimaryColors.main} />
-              <Text style={styles.cardTitle}>Security</Text>
+          <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionIconContainer}>
+                <Lock size={20} color={PrimaryColors.main} />
+              </View>
+              <Text style={styles.sectionTitle}>Security</Text>
             </View>
             
             <TouchableOpacity 
               style={styles.actionButton}
               onPress={() => Alert.alert('Change Password', 'Password change feature coming soon.')}
+              activeOpacity={0.8}
             >
               <Lock size={18} color={PrimaryColors.main} />
               <Text style={styles.actionButtonText}>Change Password</Text>
             </TouchableOpacity>
-          </View>
+          </ModernCard>
 
-          {/* Support Section */}
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Phone size={24} color={PrimaryColors.main} />
-              <Text style={styles.cardTitle}>Support</Text>
+          {/* Support Section - Modern Design */}
+          <ModernCard variant="elevated" padding="md" style={[styles.sectionCard, styles.supportCard]}>
+            <View style={styles.sectionHeader}>
+              <View style={[styles.sectionIconContainer, styles.supportIconContainer]}>
+                <Phone size={20} color="#10B981" />
+              </View>
+              <Text style={styles.sectionTitle}>Support</Text>
             </View>
             
-            <View style={styles.infoRow}>
-              <Mail size={18} color={PrimaryColors.main} />
-              <Text style={styles.infoText}>support@alverconnect.com</Text>
+            <Text style={styles.supportDescription}>
+              Need help? Contact our support team for assistance
+            </Text>
+            
+            <View style={styles.supportRow}>
+              <View style={styles.supportIconWrapper}>
+                <Mail size={20} color="#10B981" />
+              </View>
+              <View style={styles.supportContent}>
+                <Text style={styles.supportLabel}>Email</Text>
+                <Text style={styles.supportValue}>support@alverconnect.com</Text>
+              </View>
             </View>
             
-            <View style={styles.infoRow}>
-              <Phone size={18} color={PrimaryColors.main} />
-              <Text style={styles.infoText}>+91 1800-123-4567</Text>
+            <View style={[styles.supportRow, styles.lastDetailRow]}>
+              <View style={styles.supportIconWrapper}>
+                <Phone size={20} color="#10B981" />
+              </View>
+              <View style={styles.supportContent}>
+                <Text style={styles.supportLabel}>Phone</Text>
+                <Text style={styles.supportValue}>+91 1800-123-4567</Text>
+              </View>
             </View>
-          </View>
+          </ModernCard>
         </ScrollView>
       </View>
     </ScreenSafeArea>
@@ -389,11 +446,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: NeutralColors.textSecondary,
   },
-  header: {
-    backgroundColor: PrimaryColors.dark,
-    paddingTop: 50,
+  headerGradient: {
+    paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + 20 : 50,
     paddingBottom: 16,
     paddingHorizontal: 16,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+  },
+  headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -405,24 +465,37 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   editButton: {
-    padding: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#fff',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  editButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: PrimaryColors.main,
   },
   scrollView: {
     flex: 1,
   },
   content: {
     padding: 16,
+    paddingTop: 24,
+  },
+  profileCard: {
+    marginBottom: 20,
   },
   profileHeader: {
     alignItems: 'center',
-    marginBottom: 24,
-    paddingVertical: 24,
-    backgroundColor: PrimaryColors.dark,
-    marginHorizontal: -16,
-    marginTop: -16,
-    paddingTop: 32,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
+    paddingVertical: 8,
   },
   logoContainer: {
     marginBottom: 16,
@@ -432,28 +505,35 @@ const styles = StyleSheet.create({
     height: 120,
     borderRadius: 60,
     borderWidth: 4,
-    borderColor: '#fff',
+    borderColor: PrimaryColors.main,
+    backgroundColor: NeutralColors.background,
   },
   logoPlaceholder: {
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: `${PrimaryColors.main}15`,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 4,
-    borderColor: '#fff',
+    borderColor: PrimaryColors.main,
+  },
+  profileInfo: {
+    alignItems: 'center',
+    width: '100%',
   },
   hospitalName: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#fff',
+    color: NeutralColors.textPrimary,
     marginBottom: 4,
+    textAlign: 'center',
   },
   hospitalEmail: {
     fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.9)',
-    marginBottom: 16,
+    color: NeutralColors.textSecondary,
+    marginBottom: 12,
+    textAlign: 'center',
   },
   statusBadge: {
     flexDirection: 'row',
@@ -462,53 +542,67 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 20,
     gap: 6,
+    marginTop: 4,
   },
   statusText: {
     fontSize: 14,
     fontWeight: '600',
   },
-  card: {
-    backgroundColor: NeutralColors.cardBackground,
-    borderRadius: 16,
-    padding: 16,
+  sectionCard: {
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
   },
-  cardHeader: {
+  sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     marginBottom: 16,
   },
-  cardTitle: {
+  sectionIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: `${PrimaryColors.main}15`,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: NeutralColors.textPrimary,
-    marginBottom: 12,
   },
-  infoRow: {
+  detailRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 16,
+    alignItems: 'center',
     gap: 12,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
-  infoContent: {
+  lastDetailRow: {
+    borderBottomWidth: 0,
+  },
+  iconWrapper: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: `${PrimaryColors.main}15`,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  detailContent: {
     flex: 1,
   },
-  infoLabel: {
+  detailLabel: {
     fontSize: 12,
     fontWeight: '600',
     color: NeutralColors.textSecondary,
     marginBottom: 4,
   },
-  infoValue: {
+  detailValue: {
     fontSize: 15,
     color: NeutralColors.textPrimary,
     lineHeight: 22,
+    fontWeight: '500',
   },
   documentButton: {
     flexDirection: 'row',
@@ -529,11 +623,11 @@ const styles = StyleSheet.create({
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
     paddingVertical: 12,
     paddingHorizontal: 16,
     backgroundColor: `${PrimaryColors.main}10`,
     borderRadius: 10,
-    gap: 8,
   },
   actionButtonText: {
     fontSize: 15,
@@ -564,6 +658,50 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 8,
     lineHeight: 18,
+  },
+  supportCard: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#D1FAE5',
+  },
+  supportIconContainer: {
+    backgroundColor: '#D1FAE5',
+  },
+  supportDescription: {
+    fontSize: 14,
+    color: NeutralColors.textSecondary,
+    marginBottom: 12,
+    lineHeight: 20,
+  },
+  supportRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#D1FAE5',
+  },
+  supportIconWrapper: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#D1FAE5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  supportContent: {
+    flex: 1,
+  },
+  supportLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: NeutralColors.textSecondary,
+    marginBottom: 4,
+  },
+  supportValue: {
+    fontSize: 15,
+    color: '#059669',
+    fontWeight: '600',
   },
 });
 

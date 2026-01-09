@@ -14,7 +14,7 @@ import {
 
 type FileUploadButtonProps = {
   label: string;
-  onFileSelected: (uri: string, name: string) => void;
+  onFileSelected: (uri: string, name: string, type: string) => void;
   type?: 'image' | 'document' | 'both';
   acceptedTypes?: string[];
   uploadType?: 'doctor-photo' | 'doctor-document' | 'hospital-logo' | 'hospital-license' | 'none';
@@ -60,9 +60,10 @@ export function FileUploadButton({
       if (!result.canceled && result.assets[0]) {
         const uri = result.assets[0].uri;
         const name = result.assets[0].fileName || 'image.jpg';
+        const mimeType = result.assets[0].mimeType || 'image/jpeg';
         
         setSelectedImage(uri);
-        onFileSelected(uri, name);
+        onFileSelected(uri, name, mimeType);
 
         // Auto upload if uploadType is specified
         if (uploadType !== 'none') {
@@ -86,8 +87,9 @@ export function FileUploadButton({
       if (!result.canceled && result.assets[0]) {
         const uri = result.assets[0].uri;
         const name = result.assets[0].name;
+        const mimeType = result.assets[0].mimeType || 'application/pdf';
         
-        onFileSelected(uri, name);
+        onFileSelected(uri, name, mimeType);
 
         // Auto upload if uploadType is specified
         if (uploadType !== 'none') {

@@ -117,8 +117,9 @@ export default function HospitalRegisterScreen() {
         } as any);
       }
 
+      // Note: Don't set Content-Type manually - axios will set it automatically with boundary for FormData
       const response = await API.post('/hospital/register', data, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 120000,
       });
 
       const { token, hospital } = response.data;

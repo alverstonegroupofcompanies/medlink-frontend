@@ -22,7 +22,9 @@ if (!__DEV__) {
 const API = axios.create({
   baseURL: API_BASE_URL,
   headers: { 'Content-Type': 'application/json' },
-  timeout: 30000, // 30 second timeout for mobile connections
+  timeout: 120000, // 120 second timeout for file uploads (2 minutes)
+  maxContentLength: Infinity, // No limit on response size
+  maxBodyLength: Infinity, // No limit on request body size (for file uploads)
 });
 
 // Log the API base URL on initialization (for debugging)
@@ -55,6 +57,8 @@ API.interceptors.request.use(
         '/verify-otp',
         '/test',
         '/storage-test',
+        '/blogs',
+        '/blogs/',
       ];
       
       // Check if this is a public route
@@ -97,9 +101,26 @@ API.interceptors.request.use(
       }
     }
     
-    // Don't override Content-Type if it's multipart/form-data (for file uploads)
+    // For FormData, let axios set Content-Type automatically with boundary
+    // Don't manually set it, as axios needs to add the boundary parameter
+    // This is critical - manually setting Content-Type breaks FormData uploads
     if (config.data instanceof FormData) {
-      config.headers['Content-Type'] = 'multipart/form-data';
+      // Remove Content-Type header to let axios set it with proper boundary
+      delete config.headers['Content-Type'];
+      delete config.headers['content-type'];
+      
+      // Also remove from any nested headers object
+      if (config.headers && typeof config.headers === 'object') {
+        Object.keys(config.headers).forEach(key => {
+          if (key.toLowerCase() === 'content-type') {
+            delete config.headers[key];
+          }
+        });
+      }
+      
+      if (__DEV__) {
+        console.log('📦 FormData detected - Content-Type will be set automatically by axios');
+      }
     }
     
     // Log request in development
@@ -143,11 +164,54 @@ API.interceptors.response.use(
     // Convert technical errors to user-friendly messages
     const friendlyMessage = getUserFriendlyError(error);
     
-    // Only log technical details in development
-    if (__DEV__) {
-      if (!error.response) {
-        // Network error - backend not reachable
-        if (error.code === 'ECONNREFUSED' || error.message?.includes('Network Error') || error.message?.includes('Network request failed') || error.message?.includes('Failed to connect')) {
+    // Enhanced error logging for network errors
+    if (!error.response) {
+      // Network error - backend not reachable
+      const isNetworkError = 
+        error.code === 'ECONNREFUSED' || 
+        error.code === 'ERR_NETWORK' ||
+        error.message?.includes('Network Error') || 
+        error.message?.includes('Network request failed') || 
+        error.message?.includes('Failed to connect') ||
+        error.message?.includes('Unable to connect');
+      
+      if (isNetworkError) {
+        const relativePath = error.config?.url || 'Unknown';
+        const fullUrl = error.config?.baseURL 
+          ? `${error.config.baseURL}${relativePath.startsWith('/') ? '' : '/'}${relativePath}`
+          : `${API_BASE_URL}${relativePath.startsWith('/') ? '' : '/'}${relativePath}`;
+        
+        // Log detailed error information
+        console.error('═══════════════════════════════════════');
+        console.error('❌ NETWORK ERROR: Cannot connect to backend');
+        console.error('═══════════════════════════════════════');
+        console.error('📍 Error Code:', error.code);
+        console.error('📍 Error Message:', error.message);
+        console.error('📍 Relative Path:', relativePath);
+        console.error('🔗 Base URL:', error.config?.baseURL || API_BASE_URL);
+        console.error('🌐 Full URL Attempted:', fullUrl);
+        console.error('📦 Request Method:', error.config?.method?.toUpperCase());
+        console.error('📦 Request Data Type:', error.config?.data instanceof FormData ? 'FormData (file upload)' : 'JSON');
+        if (error.config?.data instanceof FormData) {
+          console.error('📦 FormData size: Large (file upload)');
+        }
+        
+        // Additional diagnostics
+        if (error.code === 'ERR_NETWORK') {
+          console.error('🔍 Possible Causes:');
+          console.error('   1. Server is down or unreachable');
+          console.error('   2. SSL certificate validation failed');
+          console.error('   3. DNS resolution failed');
+          console.error('   4. Network/firewall blocking connection');
+          console.error('   5. EAS secret not loaded (app needs rebuild)');
+          if (fullUrl.includes('https://')) {
+            console.error('   6. SSL/TLS handshake failed - check server certificate');
+          }
+        }
+        console.error('═══════════════════════════════════════');
+        
+        // Only log in development
+        if (__DEV__) {
           const relativePath = error.config?.url || 'Unknown';
           const fullUrl = error.config?.baseURL 
             ? `${error.config.baseURL}${relativePath.startsWith('/') ? '' : '/'}${relativePath}`

@@ -29,6 +29,7 @@ import { DatePicker } from '@/components/date-picker';
 import { TimePicker } from '@/components/time-picker';
 import { formatISTDateTime, formatISTDateOnly } from '@/utils/timezone';
 import { getFullImageUrl } from '@/utils/url-helper';
+import PromoCarousel from '@/components/promo-carousel';
 
 // Import MapView - Metro will automatically resolve .web or .native based on platform
 import { LocationPickerMap } from '@/components/LocationPickerMap';
@@ -1147,18 +1148,6 @@ export default function HospitalDashboard() {
               >
                 Live Tracking
               </Button>
-              <Button
-                mode="contained"
-                onPress={() => router.push('/hospital/blogs')}
-                style={styles.actionButton}
-                contentStyle={styles.actionButtonContent}
-                labelStyle={styles.actionButtonLabel}
-                buttonColor="#8B5CF6"
-                textColor="#fff"
-                icon={() => <FileText size={18} color="#fff" />}
-              >
-                Our Blogs
-              </Button>
             </View>
 
             {/* Job Sessions Section - Moved here after Quick Actions */}
@@ -1170,11 +1159,7 @@ export default function HospitalDashboard() {
                  </TouchableOpacity>
               </View>
               
-              {loadingSessions && sessions.length === 0 ? (
-                  <View style={{padding: 20, alignItems: 'center'}}>
-                      <ActivityIndicator size="small" color={PrimaryColors.main} />
-                  </View>
-              ) : (!sessions || sessions.length === 0) ? (
+              {(!sessions || sessions.length === 0) ? (
                   <Card style={styles.emptyCard} mode="outlined">
                     <Card.Content style={styles.emptyContent}>
                        <Clock size={40} color="#9CA3AF" />
@@ -1483,6 +1468,16 @@ export default function HospitalDashboard() {
             </Card.Content>
           </Card>
         )}
+
+        {/* Promo Carousel - At the bottom */}
+        <PromoCarousel 
+          onPromoPress={(promo) => {
+            router.push({
+              pathname: '/blog-detail',
+              params: { blogId: promo.id }
+            });
+          }}
+        />
       </ScrollView>
     </KeyboardAvoidingView>
     

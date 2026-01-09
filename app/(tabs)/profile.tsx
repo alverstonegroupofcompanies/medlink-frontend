@@ -270,13 +270,17 @@ export default function ProfileScreen() {
 
     setLoading(true);
     try {
+      // Prepare department IDs JSON first
+      const departmentIdsJson = JSON.stringify(selectedDepartmentIds);
+      
       const data = new FormData();
 
+      // Append all form fields except file fields
       Object.entries(formData).forEach(([key, value]) => {
         if (key === 'profile_photo' || key === 'degree_certificate' || key === 'id_proof' || key === 'medical_registration_certificate') {
           return;
         }
-        if (value) {
+        if (value !== null && value !== undefined && value !== '') {
           if (key === 'department_id') {
             console.log('📋 Sending department_id:', value);
           }
@@ -286,7 +290,9 @@ export default function ProfileScreen() {
       
       // Append selected department IDs as JSON string for robust handling
       // This ensures empty arrays are sent correctly and bypasses some FormData array quirks
-      data.append('department_ids_json', JSON.stringify(selectedDepartmentIds));
+      // Always append, even if empty array, so backend knows departments were updated
+      console.log('📋 Sending department_ids_json:', departmentIdsJson, 'Selected IDs:', selectedDepartmentIds);
+      data.append('department_ids_json', departmentIdsJson);
 
       // Only send profile photo if it's a new local file (different from original)
       // Check if it's a local file: file://, content://, or not http/https
@@ -324,50 +330,119 @@ export default function ProfileScreen() {
         }
       });
 
-      const response = await API.post('/doctor/update-profile', data);
+      // Log FormData contents for debugging (in development only)
+      if (__DEV__) {
+        console.log('📤 Preparing to send FormData with fields:', {
+          name: formData.name,
+          email: formData.email,
+          department_ids_json: departmentIdsJson,
+          selectedDepartmentIds: selectedDepartmentIds,
+          hasProfilePhoto: photoChanged && isLocalFile,
+          documentsCount: Object.keys(documents).length,
+        });
+      }
 
-      if (response.data?.doctor) {
-        const token = await AsyncStorage.getItem('doctorToken');
-        const updatedDoctor = response.data.doctor;
+      // Note: Don't set Content-Type header manually - axios will set it automatically with boundary for FormData
+      // Increase timeout for file uploads and add better error handling
+      try {
+        // Add retry logic for network errors
+        let lastError: any = null;
+        const maxRetries = 2;
+        let response: any = null;
         
-        if (token) {
-          await saveDoctorAuth(token, updatedDoctor);
-        } else {
-          await AsyncStorage.setItem('doctorInfo', JSON.stringify(updatedDoctor));
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+          try {
+            if (attempt > 0) {
+              // Wait before retry (exponential backoff)
+              const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+              console.log(`🔄 Retrying profile update (attempt ${attempt + 1}/${maxRetries + 1}) after ${delay}ms...`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+            }
+            
+            response = await API.post('/doctor/update-profile', data, {
+              timeout: 120000, // 120 second timeout for large file uploads
+            });
+            
+            // Success - break out of retry loop
+            break;
+          } catch (retryError: any) {
+            lastError = retryError;
+            
+            // Only retry on network errors, not validation errors
+            if (retryError.response) {
+              // Server responded with an error - don't retry
+              throw retryError;
+            }
+            
+            // Network error - retry if we have attempts left
+            if (attempt < maxRetries && (
+              retryError.code === 'ERR_NETWORK' ||
+              retryError.code === 'ECONNREFUSED' ||
+              retryError.code === 'ETIMEDOUT' ||
+              retryError.message?.includes('Network') ||
+              retryError.message?.includes('timeout')
+            )) {
+              console.warn(`⚠️ Network error on attempt ${attempt + 1}, will retry...`);
+              continue;
+            } else {
+              // No more retries or non-retryable error
+              throw retryError;
+            }
+          }
         }
         
-        setDoctor(updatedDoctor);
-        
-        // Immediately update profile photo URI from response with cache-busting
-        if (updatedDoctor.profile_photo) {
-          const photoUrl = getProfilePhotoUrl(updatedDoctor);
-          const cacheBustedUrl = photoUrl.includes('?') 
-            ? photoUrl.split('?')[0] + '?t=' + Date.now()
-            : photoUrl + '?t=' + Date.now();
-          setProfilePhotoUri(cacheBustedUrl);
-          setOriginalProfilePhotoUri(cacheBustedUrl);
-        } else {
-          // Clear if no photo
-          setProfilePhotoUri(null);
-          setOriginalProfilePhotoUri(null);
+        if (!response) {
+          throw lastError || new Error('Failed to update profile after retries');
         }
-        
-        setIsEditing(false);
-        
-        // Force reload doctor data from API to get fresh data
-        // Add small delay to ensure backend has processed the update
-        setTimeout(async () => {
-          await loadDoctor();
-        }, 500);
-        
-        const completion = calculateProfileCompletion(response.data.doctor);
-        const percentage = Math.round(completion * 100);
-        
-        Alert.alert(
-          'Success',
-          `Profile updated successfully!\nProfile Status: ${percentage}%`,
-          [{ text: 'OK' }]
-        );
+
+        if (response.data?.doctor) {
+          const token = await AsyncStorage.getItem('doctorToken');
+          const updatedDoctor = response.data.doctor;
+          
+          if (token) {
+            await saveDoctorAuth(token, updatedDoctor);
+          } else {
+            await AsyncStorage.setItem('doctorInfo', JSON.stringify(updatedDoctor));
+          }
+          
+          setDoctor(updatedDoctor);
+          
+          // Immediately update profile photo URI from response with cache-busting
+          if (updatedDoctor.profile_photo) {
+            const photoUrl = getProfilePhotoUrl(updatedDoctor);
+            const cacheBustedUrl = photoUrl.includes('?') 
+              ? photoUrl.split('?')[0] + '?t=' + Date.now()
+              : photoUrl + '?t=' + Date.now();
+            setProfilePhotoUri(cacheBustedUrl);
+            setOriginalProfilePhotoUri(cacheBustedUrl);
+          } else {
+            // Clear if no photo
+            setProfilePhotoUri(null);
+            setOriginalProfilePhotoUri(null);
+          }
+          
+          setIsEditing(false);
+          
+          // Force reload doctor data from API to get fresh data
+          // Add small delay to ensure backend has processed the update
+          setTimeout(async () => {
+            await loadDoctor();
+          }, 500);
+          
+          const completion = calculateProfileCompletion(response.data.doctor);
+          const percentage = Math.round(completion * 100);
+          
+          Alert.alert(
+            'Success',
+            `Profile updated successfully!\nProfile Status: ${percentage}%`,
+            [{ text: 'OK' }]
+          );
+        } else {
+          throw new Error('Invalid response from server');
+        }
+      } catch (requestError: any) {
+        // Re-throw to be caught by outer catch block
+        throw requestError;
       }
     } catch (error: any) {
       console.error('Update error:', error.response?.data || error.message);
@@ -376,11 +451,34 @@ export default function ProfileScreen() {
         response: error.response?.status,
         data: error.response?.data,
         url: error.config?.url,
+        code: error.code,
+        baseURL: error.config?.baseURL,
       });
       
       let errorMessage = 'Failed to update profile';
+      let showRetry = false;
       
-      if (error.response?.data?.message) {
+      // Check for network errors
+      if (!error.response) {
+        // Network error - no response from server
+        const baseUrl = error.config?.baseURL || 'server';
+        const endpoint = error.config?.url || '/doctor/update-profile';
+        const fullUrl = `${baseUrl}${endpoint}`;
+        
+        if (error.code === 'ECONNREFUSED' || error.code === 'ERR_NETWORK' || 
+            error.message?.includes('Network Error') || 
+            error.message?.includes('Network request failed') ||
+            error.message?.includes('Unable to connect')) {
+          errorMessage = `Unable to connect to server.\n\nTrying to reach: ${fullUrl}\n\nPlease check:\n1. Your internet connection\n2. Backend server is running\n3. Server URL is correct\n\nIf this persists, the server may be temporarily unavailable.`;
+          showRetry = true;
+        } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+          errorMessage = 'Request timed out. The file may be too large or connection is slow. Please try again with a smaller file or check your connection speed.';
+          showRetry = true;
+        } else {
+          errorMessage = `${error.message || 'Network error'}\n\nEndpoint: ${fullUrl}\n\nPlease check your connection and try again.`;
+          showRetry = true;
+        }
+      } else if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
       } else if (error.response?.data?.errors) {
         // Handle validation errors
@@ -392,7 +490,11 @@ export default function ProfileScreen() {
       
       Alert.alert(
         'Error',
-        errorMessage
+        errorMessage,
+        showRetry ? [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Retry', onPress: () => handleSave() }
+        ] : [{ text: 'OK' }]
       );
     } finally {
       setLoading(false);
@@ -424,10 +526,8 @@ export default function ProfileScreen() {
   };
 
   const saveDepartments = () => {
-    // Update the main form data's department_id for existing logic
-    // We'll set the primary department as the first selected one, or empty
-    const primaryId = selectedDepartmentIds.length > 0 ? selectedDepartmentIds[0] : '';
-    updateField('department_id', primaryId);
+    // Note: Primary department concept removed - only use selected departments
+    // Just save the selected departments, no need to set a primary one
     setShowDepartmentModal(false);
   };
 
@@ -614,23 +714,18 @@ export default function ProfileScreen() {
                   <Briefcase size={18} color={ModernColors.text.secondary} />
                   <Text style={styles.detailLabel}>Departments</Text>
                   <View style={{ flex: 1, alignItems: 'flex-end', gap: 4 }}>
-                    {/* Primary Department */}
-                    {doctor?.department && (
-                      <Text style={[styles.detailValue, { fontWeight: '700', color: ModernColors.primary.main }]}>
-                        {doctor.department.name || doctor.department} (Primary)
+                    {/* Selected Departments - All departments shown equally, no primary concept */}
+                    {doctor?.departments && Array.isArray(doctor.departments) && doctor.departments.length > 0 ? (
+                      doctor.departments.map((dept: any) => (
+                        <Text key={dept.id || dept.name} style={styles.detailValue}>
+                          {dept.name || dept.department?.name || 'N/A'}
+                        </Text>
+                      ))
+                    ) : (
+                      <Text style={[styles.detailValue, { color: ModernColors.text.secondary, fontStyle: 'italic' }]}>
+                        No departments selected
                       </Text>
                     )}
-                    
-                    {/* Additional Departments */}
-                    {doctor?.departments && Array.isArray(doctor.departments) && doctor.departments.map((dept: any) => {
-                       // Skip if same as primary
-                       if (doctor.department && (dept.id === doctor.department.id || dept.name === doctor.department.name)) return null;
-                       return (
-                         <Text key={dept.id || dept.name} style={styles.detailValue}>
-                           {dept.name}
-                         </Text>
-                       );
-                    })}
                   </View>
                 </View>
 

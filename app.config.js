@@ -76,6 +76,14 @@ module.exports = {
           }
         }
       ],
+      [
+        "expo-notifications",
+        {
+          icon: "./assets/images/icon.png",
+          color: "#0066FF",
+          defaultChannel: "default"
+        }
+      ],
     ],
     experiments: {
       typedRoutes: true,
@@ -83,12 +91,23 @@ module.exports = {
     },
     extra: {
       // Expose environment variables to the app via expo-constants
-      // In production builds, EAS secrets are automatically injected as process.env
-      // In development, these come from .env file via dotenv
+      // Priority order for environment variables:
+      // 1. EAS secrets (injected as process.env during build)
+      // 2. .env file (via dotenv in development)
+      // 3. Direct process.env (fallback)
+      
+      // Backend URL - CRITICAL: Must be set as EAS secret for production builds
+      // Command: eas secret:create --scope project --name EXPO_PUBLIC_BACKEND_URL --value https://your-api-url.com
+      EXPO_PUBLIC_BACKEND_URL: process.env.EXPO_PUBLIC_BACKEND_URL,
+      
+      // Optional: API Host and Port (used if BACKEND_URL is not set)
       EXPO_PUBLIC_API_HOST: process.env.EXPO_PUBLIC_API_HOST,
       EXPO_PUBLIC_API_PORT: process.env.EXPO_PUBLIC_API_PORT,
-      EXPO_PUBLIC_BACKEND_URL: process.env.EXPO_PUBLIC_BACKEND_URL,
+      
+      // Environment
       APP_ENV: process.env.APP_ENV || process.env.NODE_ENV || 'development',
+      
+      // EAS project ID
       eas: {
         projectId: "f054b741-c4cc-496b-b8c0-bcf5103ce78b"
       }

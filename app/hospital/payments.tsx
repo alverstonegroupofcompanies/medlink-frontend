@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, RefreshControl, ScrollView, Image } from 'react-native';
-import { useRouter } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, RefreshControl, ScrollView, Image, StatusBar, Platform } from 'react-native';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { ArrowLeft, CreditCard, Calendar, User, DollarSign, CheckCircle, Clock, AlertCircle, Building2, FileText, MapPin, TrendingUp, TrendingDown, ChevronDown, ChevronUp } from 'lucide-react-native';
 import API from '../api';
 import { ScreenSafeArea, useSafeBottomPadding } from '@/components/screen-safe-area';
@@ -34,6 +33,17 @@ export default function PaymentHistoryScreen() {
     loadPayments();
   }, []);
 
+  // Ensure status bar is always blue
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS === 'android') {
+        StatusBar.setBackgroundColor('#0066FF', true);
+        StatusBar.setBarStyle('light-content', true);
+        StatusBar.setTranslucent(false);
+      }
+    }, [])
+  );
+
   const onRefresh = () => {
     setRefreshing(true);
     loadPayments();
@@ -46,6 +56,7 @@ export default function PaymentHistoryScreen() {
       case 'held':
       case 'in_escrow':
       case 'pending': return '#F59E0B'; // Amber
+      case 'failed': return '#DC2626'; // Red
       case 'refunded': return '#DC2626'; // Red
       default: return '#64748B';
     }
@@ -58,6 +69,7 @@ export default function PaymentHistoryScreen() {
       case 'held':
       case 'in_escrow': return 'Held';
       case 'pending': return 'Pending';
+      case 'failed': return 'Failed';
       case 'refunded': return 'Refunded';
       default: return status.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
     }
@@ -70,6 +82,7 @@ export default function PaymentHistoryScreen() {
       case 'held':
       case 'in_escrow':
       case 'pending': return <Clock size={16} color="#F59E0B" />;
+      case 'failed': return <AlertCircle size={16} color="#DC2626" />;
       case 'refunded': return <AlertCircle size={16} color="#DC2626" />;
       default: return <AlertCircle size={16} color="#64748B" />;
     }
@@ -296,8 +309,8 @@ export default function PaymentHistoryScreen() {
   };
 
   return (
-    <ScreenSafeArea style={styles.container} backgroundColor="#F8FAFC">
-      <StatusBar style="light" backgroundColor="#0066FF" />
+    <ScreenSafeArea style={styles.container} backgroundColor="#F8FAFC" statusBarStyle="light-content">
+      <StatusBar barStyle="light-content" backgroundColor="#0066FF" translucent={false} />
       
       {/* Header */}
       <View style={styles.header}>

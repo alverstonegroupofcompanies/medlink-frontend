@@ -51,7 +51,16 @@ export default function JobDetailScreen() {
     React.useCallback(() => {
       loadApplication();
       getCurrentLocation();
-    }, [applicationId])
+      
+      // If application is selected but no session, reload after a short delay
+      if (application?.status === 'selected' && !application?.job_session?.id) {
+        const timer = setTimeout(() => {
+          console.log('Reloading application to find session...');
+          loadApplication();
+        }, 2000);
+        return () => clearTimeout(timer);
+      }
+    }, [applicationId, application?.status, application?.job_session?.id])
   );
 
   useEffect(() => {
@@ -157,15 +166,118 @@ export default function JobDetailScreen() {
     console.log('handleStartTracking called');
      // This is "Share Live Location"
     let sessionId = application.job_session?.id;
+    let currentApplication = application;
     console.log('Session ID:', sessionId);
+    console.log('Application status:', application.status);
+    
+    // If no session but application is selected, try multiple approaches to find it
+    if (!sessionId && application.status === 'selected') {
+      console.log('Application is selected but no session found, attempting to locate session...');
+      
+      // Try 1: Reload application data (most reliable)
+      try {
+        const response = await API.get(`/doctor/applications/${applicationId}`);
+        const updatedApp = response.data.application;
+        currentApplication = updatedApp;
+        sessionId = updatedApp?.job_session?.id;
+        
+        if (sessionId) {
+          console.log('Session found after reload:', sessionId);
+          setApplication(updatedApp);
+        } else {
+          // Try 2: Query sessions directly by job requirement
+          console.log('Trying to find session via sessions API...');
+          try {
+            const sessionsResponse = await API.get('/doctor/sessions');
+            const sessions = sessionsResponse.data.sessions || [];
+            const matchingSession = sessions.find((s: any) => 
+              s.job_requirement_id === application.job_requirement_id
+            );
+            
+            if (matchingSession?.id) {
+              console.log('Session found via sessions API:', matchingSession.id);
+              sessionId = matchingSession.id;
+              // Update application with session
+              const updatedAppWithSession = {
+                ...updatedApp,
+                job_session: matchingSession
+              };
+              setApplication(updatedAppWithSession);
+              currentApplication = updatedAppWithSession;
+            } else {
+              // Try 3: Wait and retry application reload
+              console.log('Waiting and retrying application reload...');
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              const retryResponse = await API.get(`/doctor/applications/${applicationId}`);
+              const retryApp = retryResponse.data.application;
+              currentApplication = retryApp;
+              sessionId = retryApp?.job_session?.id;
+              if (sessionId) {
+                console.log('Session found after retry:', sessionId);
+                setApplication(retryApp);
+              }
+            }
+          } catch (sessionsError) {
+            console.error('Error querying sessions:', sessionsError);
+            // Final retry with delay
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            const retryResponse = await API.get(`/doctor/applications/${applicationId}`);
+            const retryApp = retryResponse.data.application;
+            currentApplication = retryApp;
+            sessionId = retryApp?.job_session?.id;
+            if (sessionId) {
+              setApplication(retryApp);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error reloading application:', error);
+      }
+    } else if (!sessionId) {
+      // Try reload once even if not selected
+      try {
+        const response = await API.get(`/doctor/applications/${applicationId}`);
+        const updatedApp = response.data.application;
+        currentApplication = updatedApp;
+        sessionId = updatedApp?.job_session?.id;
+        if (sessionId) {
+          setApplication(updatedApp);
+        }
+      } catch (error) {
+        console.error('Error reloading application:', error);
+      }
+    }
     
     if (!sessionId) {
-      Alert.alert('Notice', 'No active session found for this job yet.');
+      if (application.status === 'selected') {
+        Alert.alert(
+          'Session Not Found', 
+          'Your application has been approved, but we couldn\'t find the session. Please pull down to refresh the page, or contact support if the issue persists.',
+          [
+            { text: 'Refresh', onPress: () => loadApplication() },
+            { text: 'OK', style: 'cancel' }
+          ]
+        );
+      } else if (application.status === 'pending') {
+        Alert.alert(
+          'Application Pending', 
+          'Your application is still pending hospital approval. Once approved, you will be able to share your live location.'
+        );
+      } else {
+        Alert.alert(
+          'No Active Session', 
+          'No active session found for this job. Please wait for hospital approval or check back later.'
+        );
+      }
       return;
     }
 
-    if (application.job_session?.tracking_started_at) {
+    // Check tracking status from the current application state
+    const isTracking = currentApplication?.job_session?.tracking_started_at || application.job_session?.tracking_started_at;
+    if (isTracking) {
       Alert.alert('Already Tracking', 'Location tracking is already active.');
+      // Reload to show updated status
+      loadApplication();
       return;
     }
 
@@ -218,16 +330,19 @@ export default function JobDetailScreen() {
 
       const { latitude, longitude } = location.coords;
 
-      await API.post('/doctor/start-tracking', {
+      const response = await API.post('/doctor/start-tracking', {
         job_session_id: sessionId,
         latitude,
         longitude,
       });
 
+      // Reload application to get updated session data
+      await loadApplication();
+
       Alert.alert(
         'Location Shared!',
         'You are now sharing your live location with the hospital.',
-        [{ text: 'OK', onPress: () => loadApplication() }]
+        [{ text: 'OK' }]
       );
     } catch (error: any) {
       console.error('Start tracking error:', error);
@@ -490,22 +605,84 @@ export default function JobDetailScreen() {
                 <View style={[styles.iconBox, { backgroundColor: '#DCFCE7' }]}>
                     <DollarSign size={20} color="#16A34A" />
                 </View>
-                {/* 
-                   Display Logic:
-                   - Gross Amount = session.payment_amount (Full Job Value)
-                   - Doctor Earning = Gross Amount * 0.8
-                   - We show "You Earn" to be transparent.
-                */}
                 <Text style={styles.gridLabel}>You Earn</Text>
                 <Text style={styles.gridValue}>
                   ₹
                   {(() => {
-                    const gross = Number(session?.payment_amount || application.job_requirement?.salary_range_min || 0);
+                    const gross = Number(session?.payment_amount || application.job_requirement?.payment_amount || application.job_requirement?.salary_range_min || 0);
                     const net = gross * 0.8;
                     return net.toFixed(0);
                   })()}
                 </Text>
             </View>
+        </View>
+
+        {/* Payment Details Section */}
+        <View style={styles.paymentDetailsSection}>
+            <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Payment Details</Text>
+            </View>
+            
+            {(() => {
+                const grossAmount = Number(session?.payment_amount || application.job_requirement?.payment_amount || application.job_requirement?.salary_range_min || 0);
+                const doctorEarning = grossAmount * 0.8;
+                const platformFee = grossAmount * 0.2;
+                
+                return (
+                    <View style={styles.paymentDetailsCard}>
+                        <View style={styles.paymentDetailRow}>
+                            <Text style={styles.paymentDetailLabel}>Total Job Value</Text>
+                            <Text style={styles.paymentDetailValue}>
+                                ₹{grossAmount.toLocaleString('en-IN')}
+                            </Text>
+                        </View>
+                        
+                        <View style={styles.paymentDetailRow}>
+                            <Text style={styles.paymentDetailLabel}>Platform Fee (20%)</Text>
+                            <Text style={[styles.paymentDetailValue, { color: '#64748B' }]}>
+                                - ₹{platformFee.toLocaleString('en-IN')}
+                            </Text>
+                        </View>
+                        
+                        <View style={styles.paymentDivider} />
+                        
+                        <View style={styles.paymentDetailRow}>
+                            <Text style={[styles.paymentDetailLabel, { fontWeight: '700', fontSize: 16 }]}>Your Earning</Text>
+                            <Text style={[styles.paymentDetailValue, { fontWeight: '700', fontSize: 18, color: '#16A34A' }]}>
+                                ₹{doctorEarning.toLocaleString('en-IN')}
+                            </Text>
+                        </View>
+                        
+                        {session?.payment_status && (
+                            <>
+                                <View style={styles.paymentDivider} />
+                                <View style={styles.paymentStatusRow}>
+                                    <Text style={styles.paymentDetailLabel}>Payment Status</Text>
+                                    <View style={[
+                                        styles.paymentStatusBadge,
+                                        (session.payment_status === 'approved' || session.payment_status === 'released' || session.payment_status === 'paid') 
+                                            ? { backgroundColor: '#DCFCE7', borderColor: '#86EFAC' }
+                                            : { backgroundColor: '#FEF3C7', borderColor: '#FCD34D' }
+                                    ]}>
+                                        <Text style={[
+                                            styles.paymentStatusText,
+                                            (session.payment_status === 'approved' || session.payment_status === 'released' || session.payment_status === 'paid')
+                                                ? { color: '#15803D' }
+                                                : { color: '#D97706' }
+                                        ]}>
+                                            {session.payment_status === 'approved' || session.payment_status === 'released' || session.payment_status === 'paid'
+                                                ? 'Approved'
+                                                : session.payment_status === 'pending'
+                                                ? 'Pending'
+                                                : 'Processing'}
+                                        </Text>
+                                    </View>
+                                </View>
+                            </>
+                        )}
+                    </View>
+                );
+            })()}
         </View>
 
         {/* Location & Map Section */}
@@ -1114,5 +1291,58 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#0F172A',
     lineHeight: 20,
+  },
+  paymentDetailsSection: {
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+    marginBottom: 24,
+  },
+  paymentDetailsCard: {
+    marginTop: 12,
+  },
+  paymentDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  paymentDetailLabel: {
+    fontSize: 14,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  paymentDetailValue: {
+    fontSize: 16,
+    color: '#0F172A',
+    fontWeight: '600',
+  },
+  paymentDivider: {
+    height: 1,
+    backgroundColor: '#E5E7EB',
+    marginVertical: 12,
+  },
+  paymentStatusRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  paymentStatusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  paymentStatusText: {
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'capitalize',
   },
 });
