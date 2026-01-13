@@ -1,9 +1,9 @@
 import Constants from 'expo-constants';
 
 // Try to get BACKEND_URL from multiple sources (in order of priority):
-// 1. Constants.expoConfig.extra (for EAS builds with secrets - this is the primary source for production)
+// 1. Constants.expoConfig.extra (for EAS builds with env variables - this is the primary source for production)
 // 2. Constants.manifest?.extra (for Expo Go and older builds)
-// 3. process.env (for development and local builds)
+// 3. process.env (for development and local builds via .env file)
 const BACKEND_URL = 
   Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL ||
   (Constants as any)?.manifest?.extra?.EXPO_PUBLIC_BACKEND_URL ||
@@ -81,9 +81,9 @@ if (__DEV__) {
   console.log("🔧 API CONFIG LOADED (Production)");
   console.log("API Base URL configured:", API_BASE_URL ? 'Yes' : 'No');
   console.log("URL source:", 
-    Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL ? 'EAS Secret (Constants.expoConfig.extra)' :
+    Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL ? 'EAS Env (Constants.expoConfig.extra)' :
     (Constants as any)?.manifest?.extra?.EXPO_PUBLIC_BACKEND_URL ? 'Expo Manifest' :
-    process.env.EXPO_PUBLIC_BACKEND_URL ? 'process.env' : 'Not Found'
+    process.env.EXPO_PUBLIC_BACKEND_URL ? 'process.env (.env file)' : 'Not Found'
   );
   // Store for potential debugging - can be accessed via error handlers if needed
   if (typeof global !== 'undefined') {

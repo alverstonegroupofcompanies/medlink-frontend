@@ -46,6 +46,7 @@ import { ModernColors, Spacing, BorderRadius, Shadows, Typography } from '@/cons
 import { getDoctorInfo, saveDoctorAuth, getProfilePhotoUrl } from '@/utils/auth';
 import { ModernCard } from '@/components/modern-card';
 import { ScreenSafeArea, useSafeBottomPadding } from '@/components/screen-safe-area';
+import { appendFileToFormData, logFormData } from '@/utils/form-data-helper';
 
 const { width } = Dimensions.get('window');
 
@@ -270,32 +271,26 @@ export default function ProfileScreen() {
 
     setLoading(true);
     try {
-      // Prepare department IDs JSON first
+      // Prepare department IDs JSON
       const departmentIdsJson = JSON.stringify(selectedDepartmentIds);
       
+      // Build FormData
       const data = new FormData();
 
-      // Append all form fields except file fields
+      // Append form fields (excluding file fields)
       Object.entries(formData).forEach(([key, value]) => {
         if (key === 'profile_photo' || key === 'degree_certificate' || key === 'id_proof' || key === 'medical_registration_certificate') {
           return;
         }
         if (value !== null && value !== undefined && value !== '') {
-          if (key === 'department_id') {
-            console.log('📋 Sending department_id:', value);
-          }
           data.append(key, String(value));
         }
       });
       
-      // Append selected department IDs as JSON string for robust handling
-      // This ensures empty arrays are sent correctly and bypasses some FormData array quirks
-      // Always append, even if empty array, so backend knows departments were updated
-      console.log('📋 Sending department_ids_json:', departmentIdsJson, 'Selected IDs:', selectedDepartmentIds);
+      // Append department IDs as JSON string
       data.append('department_ids_json', departmentIdsJson);
 
-      // Only send profile photo if it's a new local file (different from original)
-      // Check if it's a local file: file://, content://, or not http/https
+      // Add profile photo if changed and is a local file
       const isLocalFile = profilePhotoUri && (
         profilePhotoUri.startsWith('file://') || 
         profilePhotoUri.startsWith('content://') ||
@@ -305,187 +300,174 @@ export default function ProfileScreen() {
       const photoChanged = profilePhotoUri && profilePhotoUri !== originalProfilePhotoUri;
       
       if (photoChanged && isLocalFile) {
-        const filename = profilePhotoUri.split('/').pop() || 'profile.jpg';
-        const match = /\.(\w+)$/.exec(filename);
-        const type = match ? `image/${match[1]}` : 'image/jpeg';
-        console.log('📤 Sending new profile photo:', filename, 'URI:', profilePhotoUri.substring(0, 50) + '...');
-        data.append('profile_photo', {
-          uri: profilePhotoUri,
-          name: filename,
-          type,
-        } as any);
-      } else if (photoChanged) {
-        console.log('⚠️ Profile photo URI changed but is not a local file:', profilePhotoUri?.substring(0, 50));
-      } else {
-        console.log('ℹ️ Profile photo unchanged, skipping upload');
+        appendFileToFormData(data, 'profile_photo', { uri: profilePhotoUri });
       }
 
+      // Add documents if they are local files
       Object.entries(documents).forEach(([key, file]) => {
         if (file && file.uri && !file.uri.startsWith('http') && !file.uri.startsWith('https')) {
-          data.append(key, {
-            uri: file.uri,
-            name: file.name,
-            type: file.type,
-          } as any);
+          appendFileToFormData(data, key, file);
         }
       });
 
-      // Log FormData contents for debugging (in development only)
       if (__DEV__) {
-        console.log('📤 Preparing to send FormData with fields:', {
+        console.log('📤 Sending profile update:', {
           name: formData.name,
           email: formData.email,
-          department_ids_json: departmentIdsJson,
-          selectedDepartmentIds: selectedDepartmentIds,
           hasProfilePhoto: photoChanged && isLocalFile,
           documentsCount: Object.keys(documents).length,
         });
       }
 
-      // Note: Don't set Content-Type header manually - axios will set it automatically with boundary for FormData
-      // Increase timeout for file uploads and add better error handling
-      try {
-        // Add retry logic for network errors
-        let lastError: any = null;
-        const maxRetries = 2;
-        let response: any = null;
-        
-        for (let attempt = 0; attempt <= maxRetries; attempt++) {
-          try {
-            if (attempt > 0) {
-              // Wait before retry (exponential backoff)
-              const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
-              console.log(`🔄 Retrying profile update (attempt ${attempt + 1}/${maxRetries + 1}) after ${delay}ms...`);
-              await new Promise(resolve => setTimeout(resolve, delay));
+      // Retry logic: 2 attempts with exponential backoff
+      let lastError: any = null;
+      const maxRetries = 2;
+      let response: any = null;
+      
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          if (attempt > 0) {
+            const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+            if (__DEV__) {
+              console.log(`🔄 Retrying (attempt ${attempt + 1}/${maxRetries + 1}) after ${delay}ms...`);
             }
-            
-            response = await API.post('/doctor/update-profile', data, {
-              timeout: 120000, // 120 second timeout for large file uploads
-            });
-            
-            // Success - break out of retry loop
-            break;
-          } catch (retryError: any) {
-            lastError = retryError;
-            
-            // Only retry on network errors, not validation errors
-            if (retryError.response) {
-              // Server responded with an error - don't retry
-              throw retryError;
-            }
-            
-            // Network error - retry if we have attempts left
-            if (attempt < maxRetries && (
-              retryError.code === 'ERR_NETWORK' ||
-              retryError.code === 'ECONNREFUSED' ||
-              retryError.code === 'ETIMEDOUT' ||
-              retryError.message?.includes('Network') ||
-              retryError.message?.includes('timeout')
-            )) {
-              console.warn(`⚠️ Network error on attempt ${attempt + 1}, will retry...`);
-              continue;
-            } else {
-              // No more retries or non-retryable error
-              throw retryError;
-            }
+            await new Promise(resolve => setTimeout(resolve, delay));
           }
+          
+          response = await API.post('/doctor/update-profile', data, {
+            timeout: 120000,
+          });
+          
+          // Success
+          break;
+        } catch (retryError: any) {
+          lastError = retryError;
+          
+          // Don't retry validation errors
+          if (retryError.response && retryError.response.status !== 500) {
+            throw retryError;
+          }
+          
+          // Don't retry SSL/DNS errors
+          const errorType = retryError.errorType?.type || '';
+          if (errorType === 'SSL_ERROR' || errorType === 'NETWORK_ERROR_SSL_LIKELY' || errorType === 'DNS_ERROR') {
+            throw retryError;
+          }
+          
+          // Retry network errors if we have attempts left
+          if (attempt < maxRetries && !retryError.response && (
+            retryError.code === 'ERR_NETWORK' ||
+            retryError.code === 'ECONNREFUSED' ||
+            retryError.code === 'ETIMEDOUT' ||
+            retryError.code === 'ECONNABORTED'
+          )) {
+            continue;
+          }
+          
+          throw retryError;
         }
-        
-        if (!response) {
-          throw lastError || new Error('Failed to update profile after retries');
-        }
+      }
+      
+      if (!response) {
+        throw lastError || new Error('Failed to update profile');
+      }
 
-        if (response.data?.doctor) {
-          const token = await AsyncStorage.getItem('doctorToken');
-          const updatedDoctor = response.data.doctor;
-          
-          if (token) {
-            await saveDoctorAuth(token, updatedDoctor);
-          } else {
-            await AsyncStorage.setItem('doctorInfo', JSON.stringify(updatedDoctor));
-          }
-          
-          setDoctor(updatedDoctor);
-          
-          // Immediately update profile photo URI from response with cache-busting
-          if (updatedDoctor.profile_photo) {
-            const photoUrl = getProfilePhotoUrl(updatedDoctor);
-            const cacheBustedUrl = photoUrl.includes('?') 
-              ? photoUrl.split('?')[0] + '?t=' + Date.now()
-              : photoUrl + '?t=' + Date.now();
-            setProfilePhotoUri(cacheBustedUrl);
-            setOriginalProfilePhotoUri(cacheBustedUrl);
-          } else {
-            // Clear if no photo
-            setProfilePhotoUri(null);
-            setOriginalProfilePhotoUri(null);
-          }
-          
-          setIsEditing(false);
-          
-          // Force reload doctor data from API to get fresh data
-          // Add small delay to ensure backend has processed the update
-          setTimeout(async () => {
-            await loadDoctor();
-          }, 500);
-          
-          const completion = calculateProfileCompletion(response.data.doctor);
-          const percentage = Math.round(completion * 100);
-          
-          Alert.alert(
-            'Success',
-            `Profile updated successfully!\nProfile Status: ${percentage}%`,
-            [{ text: 'OK' }]
-          );
+      if (response.data?.doctor) {
+        const token = await AsyncStorage.getItem('doctorToken');
+        const updatedDoctor = response.data.doctor;
+        
+        if (token) {
+          await saveDoctorAuth(token, updatedDoctor);
         } else {
-          throw new Error('Invalid response from server');
+          await AsyncStorage.setItem('doctorInfo', JSON.stringify(updatedDoctor));
         }
-      } catch (requestError: any) {
-        // Re-throw to be caught by outer catch block
-        throw requestError;
+        
+        setDoctor(updatedDoctor);
+        
+        // Update profile photo URI
+        if (updatedDoctor.profile_photo) {
+          const photoUrl = getProfilePhotoUrl(updatedDoctor);
+          const cacheBustedUrl = photoUrl.includes('?') 
+            ? photoUrl.split('?')[0] + '?t=' + Date.now()
+            : photoUrl + '?t=' + Date.now();
+          setProfilePhotoUri(cacheBustedUrl);
+          setOriginalProfilePhotoUri(cacheBustedUrl);
+        } else {
+          setProfilePhotoUri(null);
+          setOriginalProfilePhotoUri(null);
+        }
+        
+        setIsEditing(false);
+        
+        // Reload doctor data
+        setTimeout(async () => {
+          await loadDoctor();
+        }, 500);
+        
+        const completion = calculateProfileCompletion(response.data.doctor);
+        const percentage = Math.round(completion * 100);
+        
+        Alert.alert(
+          'Success',
+          `Profile updated successfully!\nProfile Status: ${percentage}%`,
+          [{ text: 'OK' }]
+        );
+      } else {
+        throw new Error('Invalid response from server');
       }
     } catch (error: any) {
-      console.error('Update error:', error.response?.data || error.message);
-      console.error('Error details:', {
-        message: error.message,
-        response: error.response?.status,
-        data: error.response?.data,
-        url: error.config?.url,
-        code: error.code,
-        baseURL: error.config?.baseURL,
-      });
+      setLoading(false);
       
       let errorMessage = 'Failed to update profile';
       let showRetry = false;
       
-      // Check for network errors
-      if (!error.response) {
-        // Network error - no response from server
-        const baseUrl = error.config?.baseURL || 'server';
-        const endpoint = error.config?.url || '/doctor/update-profile';
-        const fullUrl = `${baseUrl}${endpoint}`;
-        
-        if (error.code === 'ECONNREFUSED' || error.code === 'ERR_NETWORK' || 
-            error.message?.includes('Network Error') || 
-            error.message?.includes('Network request failed') ||
-            error.message?.includes('Unable to connect')) {
-          errorMessage = `Unable to connect to server.\n\nTrying to reach: ${fullUrl}\n\nPlease check:\n1. Your internet connection\n2. Backend server is running\n3. Server URL is correct\n\nIf this persists, the server may be temporarily unavailable.`;
-          showRetry = true;
-        } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-          errorMessage = 'Request timed out. The file may be too large or connection is slow. Please try again with a smaller file or check your connection speed.';
-          showRetry = true;
-        } else {
-          errorMessage = `${error.message || 'Network error'}\n\nEndpoint: ${fullUrl}\n\nPlease check your connection and try again.`;
+      if (error.response) {
+        // Server responded with error
+        if (error.response.data?.message) {
+          errorMessage = error.response.data.message;
+        } else if (error.response.data?.errors) {
+          const errors = error.response.data.errors;
+          errorMessage = Object.values(errors).flat().join('\n');
+        } else if (error.response.status === 422) {
+          errorMessage = 'Please check your input and try again.';
+        } else if (error.response.status >= 500) {
+          errorMessage = 'Server error. Please try again later.';
           showRetry = true;
         }
-      } else if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.response?.data?.errors) {
-        // Handle validation errors
-        const errors = error.response.data.errors;
-        errorMessage = Object.values(errors).flat().join('\n');
-      } else if (error.message) {
-        errorMessage = error.message;
+      } else {
+        // Network error
+        const errorType = error.errorType?.type || '';
+        
+        if (errorType === 'SSL_ERROR' || errorType === 'NETWORK_ERROR_SSL_LIKELY') {
+          errorMessage = '🔒 SSL Certificate Issue\n\n';
+          errorMessage += 'Cannot connect securely to the server.\n\n';
+          errorMessage += 'This is a SERVER-SIDE problem that must be fixed by your server administrator.\n\n';
+          errorMessage += 'Common causes:\n';
+          errorMessage += '• SSL certificate is expired or invalid\n';
+          errorMessage += '• Incomplete certificate chain (missing intermediate certificates)\n';
+          errorMessage += '• Certificate doesn\'t match domain name\n';
+          errorMessage += '• Server not configured for large POST requests\n\n';
+          errorMessage += 'What to do:\n';
+          errorMessage += '1. Contact your server administrator\n';
+          errorMessage += '2. Ask them to fix the SSL certificate\n';
+          errorMessage += '3. Verify certificate is valid and complete\n';
+          errorMessage += '4. Try again after certificate is fixed';
+        } else if (errorType === 'TIMEOUT' || error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+          errorMessage = 'Request timed out. Please try again with a smaller file or check your connection.';
+          showRetry = true;
+        } else if (errorType === 'CONNECTION_REFUSED' || error.code === 'ECONNREFUSED') {
+          errorMessage = 'Cannot connect to server. Please check if the server is running.';
+          showRetry = true;
+        } else if (errorType === 'DNS_ERROR') {
+          errorMessage = 'Cannot find server. Please check your internet connection.';
+          showRetry = true;
+        } else if (error.code === 'ERR_NETWORK' || error.message?.includes('Network')) {
+          errorMessage = 'Network error. Please check your internet connection and try again.';
+          showRetry = true;
+        } else {
+          errorMessage = error.message || 'Unknown error occurred';
+          showRetry = true;
+        }
       }
       
       Alert.alert(

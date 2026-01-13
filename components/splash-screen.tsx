@@ -1,106 +1,22 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Animated, Dimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const { width, height } = Dimensions.get('window');
 
-// Generate distributed starting positions for bubbles across the screen
-// This will be called inside the component to ensure width/height are accurate
-const generateDistributedPositions = (screenWidth: number, screenHeight: number, bubbleSize: number = 140, count: number = 4) => {
-  const padding = bubbleSize / 2;
-  const positions: Array<{ x: number; y: number }> = [];
-  
-  // Divide screen into zones to ensure good distribution, avoiding center where main logo is
-  const zones = [
-    { xRange: [padding, screenWidth * 0.35], yRange: [padding, screenHeight * 0.35] }, // Top-left
-    { xRange: [screenWidth * 0.65, screenWidth - padding], yRange: [padding, screenHeight * 0.35] }, // Top-right
-    { xRange: [padding, screenWidth * 0.35], yRange: [screenHeight * 0.65, screenHeight - padding] }, // Bottom-left
-    { xRange: [screenWidth * 0.65, screenWidth - padding], yRange: [screenHeight * 0.65, screenHeight - padding] }, // Bottom-right
-  ];
-  
-  for (let i = 0; i < count; i++) {
-    const zone = zones[i % zones.length];
-    const x = zone.xRange[0] + Math.random() * (zone.xRange[1] - zone.xRange[0]);
-    const y = zone.yRange[0] + Math.random() * (zone.yRange[1] - zone.yRange[0]);
-    positions.push({ x, y });
-  }
-  
-  return positions;
-};
-
-// Other ventures configuration - positions will be set in component
-const otherVenturesBase = [
-  {
-    id: 1,
-    name: 'Pharmacare',
-    logo: require('@/assets/images/our-ventures/AGC-Compassion-meets-excellence.png'),
-    delay: 0,
-  },
-  {
-    id: 2,
-    name: 'Medcity',
-    logo: require('@/assets/images/our-ventures/04.Alverstone-Medcity-03.png'),
-    delay: 300,
-  },
-  {
-    id: 3,
-    name: 'Drug House',
-    logo: require('@/assets/images/our-ventures/ALVERSTONE-ISO-CERTIFIED-02.png'),
-    delay: 600,
-  },
-  {
-    id: 4,
-    name: 'LLC',
-    logo: require('@/assets/images/our-ventures/03.LLC full blue.png'),
-    delay: 900,
-  },
-];
-
 export function AppSplashScreen() {
-  // Calculate responsive bubble size based on screen dimensions
-  // Larger bubbles for better logo visibility
-  const isTablet = width >= 768;
-  const bubbleSize = isTablet 
-    ? Math.min(width * 0.22, 240) // Tablet: 22% of width, max 240px
-    : Math.min(width * 0.28, 200); // Mobile: 28% of width, max 200px
-  
-  const bubblePositions = generateDistributedPositions(width, height, bubbleSize, 4);
-  const otherVentures = otherVenturesBase.map((venture, index) => ({
-    ...venture,
-    x: bubblePositions[index].x,
-    y: bubblePositions[index].y,
-  }));
-
-  // Animation values for main logo (unchanged)
+  // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.5)).current;
-  const slideAnim = useRef(new Animated.Value(-width)).current;
+  const slideAnim = useRef(new Animated.Value(-width)).current; // Start from left
   const shimmerAnim = useRef(new Animated.Value(0)).current;
   const particle1 = useRef(new Animated.Value(0)).current;
   const particle2 = useRef(new Animated.Value(0)).current;
   const particle3 = useRef(new Animated.Value(0)).current;
 
-  // State to track z-index for bubbles (behind main logo when near center)
-  const [bubbleZIndices, setBubbleZIndices] = useState<number[]>(
-    Array(4).fill(5)
-  );
-
-  // Animation values for bubbles (static - no movement)
-  const bubbleAnims = useRef(
-    Array(4).fill(null).map(() => ({
-      fadeIn: new Animated.Value(0),
-      scale: new Animated.Value(0.8),
-    }))
-  ).current;
-
-  // Main logo center position (approximate)
-  const mainLogoCenterX = width / 2;
-  const mainLogoCenterY = height / 2;
-  const mainLogoRadius = 200; // Approximate radius of main logo area
-
   useEffect(() => {
-    // Shimmer effect (continuous) - unchanged
+    // Shimmer effect (continuous)
     Animated.loop(
       Animated.sequence([
         Animated.timing(shimmerAnim, {
@@ -116,7 +32,7 @@ export function AppSplashScreen() {
       ])
     ).start();
 
-    // Floating particles - unchanged
+    // Floating particles
     Animated.loop(
       Animated.parallel([
         Animated.sequence([
@@ -158,7 +74,7 @@ export function AppSplashScreen() {
       ])
     ).start();
 
-    // Main animation sequence - unchanged
+    // Main animation sequence
     Animated.sequence([
       // Slide in from left with fade
       Animated.parallel([
@@ -197,48 +113,6 @@ export function AppSplashScreen() {
       // Hold
       Animated.delay(400),
     ]).start();
-
-    // Floating bubbles animation for other ventures
-    bubbleAnims.forEach((anim, index) => {
-      const venture = otherVentures[index];
-      
-      // Fade in and scale up initially
-      Animated.sequence([
-        Animated.delay(venture.delay + 500), // Start after main logo appears
-        Animated.parallel([
-          Animated.timing(anim.fadeIn, {
-            toValue: 1,
-            duration: 600,
-            useNativeDriver: true,
-          }),
-          Animated.spring(anim.scale, {
-            toValue: 1,
-            friction: 5,
-            tension: 40,
-            useNativeDriver: true,
-          }),
-        ]),
-      ]).start();
-
-      // Check initial position to set z-index (bubbles stay still)
-      setTimeout(() => {
-        const currentX = venture.x;
-        const currentY = venture.y;
-        
-        // Calculate distance from main logo center
-        const distanceX = Math.abs(currentX - mainLogoCenterX);
-        const distanceY = Math.abs(currentY - mainLogoCenterY);
-        const distance = Math.sqrt(distanceX * distanceX + distanceY * distanceY);
-        
-        // If bubble is near main logo (within radius), put it behind (z-index 3)
-        // Otherwise, keep it in front (z-index 5)
-        setBubbleZIndices(prev => {
-          const newIndices = [...prev];
-          newIndices[index] = distance < mainLogoRadius ? 3 : 5;
-          return newIndices;
-        });
-      }, venture.delay + 1100);
-    });
   }, []);
 
   return (
@@ -368,50 +242,6 @@ export function AppSplashScreen() {
             ]}
           />
 
-          {/* Static Bubbles for Other Ventures */}
-          {otherVentures.map((venture, index) => {
-            const anim = bubbleAnims[index];
-            const bubblePadding = bubbleSize * 0.04; // 4% of bubble size for padding (small padding for better logo visibility)
-            const shineSize = bubbleSize * 0.33; // 33% of bubble size for shine
-            return (
-              <Animated.View
-                key={venture.id}
-                style={[
-                  styles.bubbleContainer,
-                  {
-                    left: venture.x,
-                    top: venture.y,
-                    opacity: anim.fadeIn,
-                    zIndex: bubbleZIndices[index],
-                    transform: [
-                      {
-                        scale: anim.scale,
-                      },
-                    ],
-                  },
-                ]}
-              >
-                <View style={[styles.bubble, { width: bubbleSize, height: bubbleSize, borderRadius: bubbleSize / 2 }]}>
-                  <View style={[styles.bubbleInner, { padding: bubblePadding }]}>
-                    <Image
-                      source={venture.logo}
-                      style={styles.bubbleLogo}
-                      contentFit="contain"
-                    />
-                  </View>
-                  {/* Bubble shine effect */}
-                  <View style={[styles.bubbleShine, { 
-                    width: shineSize, 
-                    height: shineSize, 
-                    borderRadius: shineSize / 2,
-                    top: -shineSize * 0.33,
-                    left: -shineSize * 0.33,
-                  }]} />
-                </View>
-              </Animated.View>
-            );
-          })}
-
           {/* Main logo container with slide and fade animation */}
           <Animated.View
             style={[
@@ -536,40 +366,5 @@ const styles = StyleSheet.create({
     height: 10,
     bottom: height * 0.28,
     left: width * 0.6,
-  },
-  // Styles for bouncing bubbles
-  bubbleContainer: {
-    position: 'absolute',
-    zIndex: 5,
-  },
-  bubble: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#0066FF',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: '#E6F4FE',
-  },
-  bubbleInner: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-  },
-  bubbleLogo: {
-    width: '100%',
-    height: '100%',
-  },
-  bubbleShine: {
-    position: 'absolute',
-    backgroundColor: 'rgba(255, 255, 255, 0.6)',
-    opacity: 0.8,
   },
 });

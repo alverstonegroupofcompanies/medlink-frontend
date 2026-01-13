@@ -54,8 +54,16 @@ module.exports = {
           useFrameworks: "static"
         },
         android: {
+          // Network Security Configuration
           // Allow cleartext (HTTP) traffic for development
-          usesCleartextTraffic: true
+          // HTTPS traffic is allowed by default on Android
+          // For production HTTPS, ensure server has valid SSL certificate
+          usesCleartextTraffic: true,
+          // Note: Android 9+ requires proper SSL certificate validation for HTTPS
+          // If POST requests with FormData fail over HTTPS, check:
+          // 1. Server SSL certificate is valid and not expired
+          // 2. Certificate chain is complete (includes intermediate certificates)
+          // 3. Certificate matches the server hostname
         }
       }],
       [
@@ -91,13 +99,21 @@ module.exports = {
     },
     extra: {
       // Expose environment variables to the app via expo-constants
-      // Priority order for environment variables:
-      // 1. EAS secrets (injected as process.env during build)
-      // 2. .env file (via dotenv in development)
+      // 
+      // IMPORTANT: Environment Variable Loading Priority
+      // 1. EAS env variables (available as process.env during EAS builds)
+      //    - Set via: eas env:create --scope project --name EXPO_PUBLIC_BACKEND_URL --value https://...
+      //    - Only works in EAS builds (production/preview), NOT in Expo Go
+      // 2. .env file (via dotenv - for Expo Go and local development)
+      //    - Create .env file in frontend/ directory
+      //    - Copy .env.example to .env and fill in your values
+      //    - Required for Expo Go to work
       // 3. Direct process.env (fallback)
+      //
+      // For Expo Go: You MUST create a .env file (EAS env variables won't work)
+      // For EAS builds: EAS env variables are automatically injected as process.env
       
-      // Backend URL - CRITICAL: Must be set as EAS secret for production builds
-      // Command: eas secret:create --scope project --name EXPO_PUBLIC_BACKEND_URL --value https://your-api-url.com
+      // Backend URL - CRITICAL
       EXPO_PUBLIC_BACKEND_URL: process.env.EXPO_PUBLIC_BACKEND_URL,
       
       // Optional: API Host and Port (used if BACKEND_URL is not set)

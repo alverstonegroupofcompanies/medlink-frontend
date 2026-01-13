@@ -219,7 +219,7 @@ export default function HospitalLoginScreen() {
               {/* Register Link */}
               <View style={styles.signupContainer}>
                 <ThemedText style={styles.signupText}>New Partner?{' '}</ThemedText>
-                <Link href="/hospital/register" asChild>
+                <Link href="/register/hospital/step1-email" asChild>
                   <ThemedText style={styles.signupLink}>
                     Register Facility
                   </ThemedText>

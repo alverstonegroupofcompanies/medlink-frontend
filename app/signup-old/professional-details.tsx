@@ -118,9 +118,15 @@ export default function ProfessionalDetailsScreen() {
         if (key === 'department_ids') {
              // Handle array properly for FormData
              // Note: Primary department concept removed - only use selected departments
-             (value as number[]).forEach((id, index) => {
-                 data.append(`department_ids[${index}]`, id.toString());
-             });
+             // Laravel expects department_ids as array, send each ID with indexed key
+             if (Array.isArray(value) && value.length > 0) {
+                 (value as number[]).forEach((id, index) => {
+                     data.append(`department_ids[${index}]`, id.toString());
+                 });
+                 
+                 // Also send as JSON string as fallback (Laravel can parse both)
+                 data.append('department_ids_json', JSON.stringify(value));
+             }
         } else if (value !== null && value !== '') {
           data.append(key, value as string);
         }
@@ -207,10 +213,29 @@ export default function ProfessionalDetailsScreen() {
       
       // Log request details for debugging
       if (__DEV__) {
-        console.log('📤 Sending registration request...');
-        console.log('📦 FormData entries:', Object.keys(files).length, 'files');
+        console.log('═══════════════════════════════════════');
+        console.log('📤 DOCTOR REGISTRATION REQUEST');
+        console.log('═══════════════════════════════════════');
         console.log('🔗 Endpoint:', '/doctor/register');
         console.log('🌐 Base URL:', API_BASE_URL);
+        console.log('📦 FormData entries:', Object.keys(files).length, 'files');
+        console.log('📝 Form fields:', {
+          name: params.fullName,
+          email: params.emailId,
+          has_password: !!params.password,
+          phone_number: params.phoneNumber,
+          has_otp: !!params.otp,
+          otp_length: params.otp ? (params.otp as string).length : 0,
+          department_ids: formData.department_ids,
+          department_ids_type: typeof formData.department_ids,
+          department_ids_count: Array.isArray(formData.department_ids) ? formData.department_ids.length : 'not_array',
+        });
+        console.log('📎 Files:', Object.keys(files).map(key => ({
+          key,
+          name: files[key]?.name,
+          type: files[key]?.type,
+        })));
+        console.log('═══════════════════════════════════════');
       }
       
       // Add retry logic for network errors
@@ -282,17 +307,38 @@ export default function ProfessionalDetailsScreen() {
         ]
       );
     } catch (err: any) {
-      console.error('❌ Registration error:', err);
-      console.error('Error details:', {
-        message: err.message,
-        code: err.code,
-        response: err.response?.status,
-        responseData: err.response?.data,
-        config: err.config?.url,
-        timeout: err.code === 'ECONNABORTED' ? 'Request timeout' : 'No timeout',
-        url: err.config?.url,
-        baseURL: err.config?.baseURL,
-      });
+      console.error('═══════════════════════════════════════');
+      console.error('❌ DOCTOR REGISTRATION ERROR');
+      console.error('═══════════════════════════════════════');
+      console.error('Error message:', err.message);
+      console.error('Error code:', err.code);
+      console.error('Response status:', err.response?.status);
+      console.error('Response data:', err.response?.data);
+      console.error('Request URL:', err.config?.url);
+      console.error('Base URL:', err.config?.baseURL);
+      console.error('Full URL:', err.config?.baseURL ? `${err.config.baseURL}${err.config.url}` : 'unknown');
+      console.error('Timeout:', err.code === 'ECONNABORTED' ? 'Request timeout' : 'No timeout');
+      console.error('Step failed:', err.response?.data?.step || 'unknown');
+      console.error('Error code from server:', err.response?.data?.error_code || 'none');
+      
+      // Log server error details if available
+      if (err.response?.data) {
+        console.error('Server error details:', {
+          status: err.response.data.status,
+          message: err.response.data.message,
+          step: err.response.data.step,
+          error_code: err.response.data.error_code,
+          errors: err.response.data.errors,
+          file: err.response.data.file,
+          line: err.response.data.line,
+        });
+      }
+      
+      // Log full error for debugging
+      if (__DEV__) {
+        console.error('Full error object:', JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
+      }
+      console.error('═══════════════════════════════════════');
       
       // Enhanced error handling with better messages
       const baseUrl = err.config?.baseURL || API_BASE_URL;
@@ -330,18 +376,38 @@ export default function ProfessionalDetailsScreen() {
             err.message?.includes('Network') || err.message?.includes('Unable to connect')) {
           message = `Unable to connect to server.\n\n`;
           message += `Trying to reach: ${fullUrl}\n\n`;
-          message += `Please check:\n`;
-          message += `1. Your internet connection\n`;
-          message += `2. Backend server is running\n`;
-          message += `3. Server URL is correct\n\n`;
           
-          if (isFileUpload) {
-            message += `File upload failed. Try:\n`;
-            message += `• Smaller file sizes\n`;
-            message += `• Better internet connection\n`;
+          // Check if this is likely a FormData upload issue
+          if (isFileUpload && fullUrl.startsWith('https://')) {
+            message += `⚠️ File Upload Connection Issue\n\n`;
+            message += `The server SSL certificate is valid (Grade A), but the connection failed.\n\n`;
+            message += `Possible causes:\n`;
+            message += `• Request timeout (120 seconds)\n`;
+            message += `• File size too large\n`;
+            message += `• Network connectivity issue\n`;
+            message += `• React Native SSL validation (mobile-specific)\n\n`;
+            message += `Try:\n`;
+            message += `1. Check your internet connection\n`;
+            message += `2. Reduce file sizes (compress images)\n`;
+            message += `3. Try again (network may be unstable)\n`;
+            message += `4. Use WiFi instead of mobile data\n\n`;
+            message += `Server: medlink.alverstones.com\n`;
+            message += `Error Code: ${errorCode || 'Unknown'}`;
+          } else {
+            message += `Please check:\n`;
+            message += `1. Your internet connection\n`;
+            message += `2. Backend server is running\n`;
+            message += `3. Server URL is correct\n\n`;
+            
+            if (isFileUpload) {
+              message += `File upload failed. Try:\n`;
+              message += `• Smaller file sizes\n`;
+              message += `• Better internet connection\n`;
+            }
+            
+            message += `\nIf this persists, the server may be temporarily unavailable.`;
           }
           
-          message += `\nIf this persists, the server may be temporarily unavailable.`;
           showRetry = true;
         } else {
           message = `Network error: ${err.message || 'Unknown error'}\n\n`;
@@ -364,19 +430,64 @@ export default function ProfessionalDetailsScreen() {
             message += '4. Server not accepting multipart/form-data\n';
           }
         }
-      } else if (err.response?.data?.message) {
-        // Server responded with error message
-        message = err.response.data.message;
-      } else if (err.response?.data?.errors) {
+      } else if (err.response?.data) {
+        // Server responded with error
+        const serverData = err.response.data;
+        
+        // Use server-provided message if available
+        if (serverData.message) {
+          message = serverData.message;
+        }
+        
+        // Add step information if available
+        if (serverData.step) {
+          message += `\n\nFailed at step: ${serverData.step}`;
+        }
+        
+        // Add error code if available
+        if (serverData.error_code) {
+          message += `\n\nError code: ${serverData.error_code}`;
+        }
+        
         // Handle validation errors
-        const errors = err.response.data.errors;
-        message = Object.values(errors).flat().join('\n');
-      } else if (err.response?.status === 500) {
-        title = 'Server Error';
-        message = 'Server encountered an error. Please try again later or contact support.';
-      } else if (err.response?.status === 422) {
-        title = 'Validation Error';
-        message = 'Please check all fields and try again.';
+        if (serverData.errors) {
+          const errors = serverData.errors;
+          const errorMessages = Object.values(errors).flat();
+          if (errorMessages.length > 0) {
+            message = errorMessages.join('\n');
+          }
+        }
+        
+        // Handle OTP errors specifically
+        if (serverData.error_code === 'OTP_INVALID') {
+          title = 'OTP Verification Error';
+          message = serverData.message || 'Invalid or expired OTP.';
+          if (serverData.otp_exists === false) {
+            message += '\n\nNo OTP found for this email. Please request a new OTP.';
+          } else if (serverData.otp_expired) {
+            message += '\n\nThe OTP has expired. Please request a new one.';
+          }
+        }
+        
+        // Handle validation errors
+        if (serverData.error_code === 'VALIDATION_ERROR' || err.response?.status === 422) {
+          title = 'Validation Error';
+          if (serverData.errors) {
+            const errors = serverData.errors;
+            message = Object.values(errors).flat().join('\n');
+          } else {
+            message = serverData.message || 'Please check all fields and try again.';
+          }
+        }
+        
+        // Handle server errors
+        if (err.response?.status === 500) {
+          title = 'Server Error';
+          message = serverData.message || 'Server encountered an error. Please try again later or contact support.';
+          if (serverData.file && serverData.line) {
+            message += `\n\nError location: ${serverData.file}:${serverData.line}`;
+          }
+        }
       }
       
       Alert.alert(

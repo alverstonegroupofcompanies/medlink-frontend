@@ -41,6 +41,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ModernCard } from '@/components/modern-card';
 
 import { LocationPickerMap } from '@/components/LocationPickerMap';
+import { appendFileToFormData, logFormData } from '@/utils/form-data-helper';
 
 const HOSPITAL_INFO_KEY = 'hospitalInfo';
 const { width } = Dimensions.get('window');
@@ -105,11 +106,57 @@ export default function HospitalProfileEditScreen() {
       await AsyncStorage.setItem(HOSPITAL_INFO_KEY, JSON.stringify(hospitalData));
     } catch (error: any) {
       if (__DEV__) {
-        console.error('Error loading hospital profile:', error);
+        console.error('❌ Error loading hospital profile:', error);
+        console.error('Error details:', {
+          status: error?.response?.status,
+          statusText: error?.response?.statusText,
+          data: error?.response?.data,
+          message: error?.message,
+        });
       }
-      const message = error?.userFriendlyMessage || error?.response?.data?.message || 'Unable to load profile. Please try again.';
-      Alert.alert('Unable to Load', message);
-      router.back();
+      
+      // If it's a 500 error, try to load from cache as fallback
+      if (error?.response?.status === 500) {
+        try {
+          const cached = await AsyncStorage.getItem(HOSPITAL_INFO_KEY);
+          if (cached) {
+            const hospitalData = JSON.parse(cached);
+            setHospital(hospitalData);
+            setFormData({
+              name: hospitalData.name || '',
+              email: hospitalData.email || '',
+              phone_number: hospitalData.phone_number || '',
+              address: hospitalData.address || '',
+              latitude: hospitalData.latitude ? String(hospitalData.latitude) : '',
+              longitude: hospitalData.longitude ? String(hospitalData.longitude) : '',
+              license_number: hospitalData.license_number || '',
+            });
+            
+            Alert.alert(
+              'Server Error',
+              'Unable to load latest data from server (Error 500). Showing cached data instead.\n\nYou can still edit and save, but the server may have issues.',
+              [{ text: 'OK' }]
+            );
+            setLoading(false);
+            return;
+          }
+        } catch (cacheError) {
+          console.error('Failed to load from cache:', cacheError);
+        }
+      }
+      
+      const message = error?.response?.status === 500
+        ? 'The server encountered an error (500). This is a backend issue. Please contact the administrator or try again later.'
+        : error?.userFriendlyMessage || error?.response?.data?.message || 'Unable to load profile. Please try again.';
+      
+      Alert.alert(
+        error?.response?.status === 500 ? 'Server Error' : 'Unable to Load',
+        message,
+        [
+          { text: 'Go Back', onPress: () => router.back(), style: 'cancel' },
+          { text: 'Retry', onPress: () => loadProfile() }
+        ]
+      );
     } finally {
       setLoading(false);
     }
@@ -237,82 +284,25 @@ export default function HospitalProfileEditScreen() {
         data.append('license_number', formData.license_number.trim());
       }
 
-      // Add logo if selected - handle file URI properly for React Native
+      // Add logo if selected
       if (selectedLogo) {
-        let uri = selectedLogo;
-        const filename = uri.split('/').pop() || 'logo.jpg';
-        const match = /\.(\w+)$/i.exec(filename);
-        const extension = match ? match[1].toLowerCase() : 'jpg';
-        const mimeTypes: Record<string, string> = {
-          jpg: 'image/jpeg',
-          jpeg: 'image/jpeg',
-          png: 'image/png',
-          webp: 'image/webp',
-          gif: 'image/gif',
-        };
-        const type = mimeTypes[extension] || 'image/jpeg';
-
-        // Fix URI for Android/iOS
-        if (Platform.OS === 'android') {
-           if (!uri.startsWith('file://')) {
-             uri = `file://${uri}`;
-           }
-        } else if (Platform.OS === 'ios') {
-           uri = uri.replace('file://', '');
-        }
-
-        data.append('logo_path', {
-          uri: uri,
-          name: filename,
-          type: type,
-        } as any);
+        appendFileToFormData(data, 'logo_path', { uri: selectedLogo });
       }
 
-      // Add license document if selected - handle file URI properly
+      // Add license document if selected
       if (licenseDocument) {
-        let uri = licenseDocument.uri;
-        
-        // Fix URI for Android/iOS
-        if (Platform.OS === 'android') {
-           if (!uri.startsWith('file://')) {
-             uri = `file://${uri}`;
-           }
-        } else if (Platform.OS === 'ios') {
-           uri = uri.replace('file://', '');
-        }
-        
-        data.append('license_document', {
-          uri: uri,
-          name: licenseDocument.name,
-          type: licenseDocument.type,
-        } as any);
+        appendFileToFormData(data, 'license_document', licenseDocument);
       }
 
-      // Add method spoofing for Laravel to handle multipart/form-data with PUT
-      data.append('_method', 'PUT');
-
-      // Debug: Log FormData contents (development only)
       if (__DEV__) {
         console.log('📤 Sending hospital profile update:', {
-          method: 'POST (spoofed PUT)',
           url: '/hospital/profile',
           hasLogo: !!selectedLogo,
           hasLicenseDoc: !!licenseDocument,
-          formFields: {
-            name: formData.name,
-            email: formData.email,
-            phone_number: formData.phone_number,
-            address: formData.address,
-            latitude: formData.latitude,
-            longitude: formData.longitude,
-            license_number: formData.license_number,
-          },
         });
       }
 
-      // Use POST method with _method=PUT for file uploads in Laravel
-      // Note: Don't set Content-Type manually - axios will set it automatically with boundary for FormData
-      // Add retry logic for network errors
+      // Retry logic: 2 attempts with exponential backoff
       let lastError: any = null;
       const maxRetries = 2;
       let response: any = null;
@@ -320,53 +310,49 @@ export default function HospitalProfileEditScreen() {
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
           if (attempt > 0) {
-            // Wait before retry (exponential backoff)
             const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
-            console.log(`🔄 Retrying hospital profile update (attempt ${attempt + 1}/${maxRetries + 1}) after ${delay}ms...`);
+            if (__DEV__) {
+              console.log(`🔄 Retrying (attempt ${attempt + 1}/${maxRetries + 1}) after ${delay}ms...`);
+            }
             await new Promise(resolve => setTimeout(resolve, delay));
           }
           
-          response = await API.request({
-            method: 'POST',
-            url: '/hospital/profile',
-            data: data,
+          response = await API.post('/hospital/profile', data, {
             timeout: 120000,
-            headers: {
-              'Accept': 'application/json',
-              // Content-Type will be set automatically by axios for FormData
-            },
           });
           
-          // Success - break out of retry loop
+          // Success
           break;
         } catch (retryError: any) {
           lastError = retryError;
           
-          // Only retry on network errors, not validation errors
-          if (retryError.response) {
-            // Server responded with an error - don't retry
+          // Don't retry validation errors
+          if (retryError.response && retryError.response.status !== 500) {
             throw retryError;
           }
           
-          // Network error - retry if we have attempts left
-          if (attempt < maxRetries && (
+          // Don't retry SSL/DNS errors
+          const errorType = retryError.errorType?.type || '';
+          if (errorType === 'SSL_ERROR' || errorType === 'NETWORK_ERROR_SSL_LIKELY' || errorType === 'DNS_ERROR') {
+            throw retryError;
+          }
+          
+          // Retry network errors if we have attempts left
+          if (attempt < maxRetries && !retryError.response && (
             retryError.code === 'ERR_NETWORK' ||
             retryError.code === 'ECONNREFUSED' ||
             retryError.code === 'ETIMEDOUT' ||
-            retryError.message?.includes('Network') ||
-            retryError.message?.includes('timeout')
+            retryError.code === 'ECONNABORTED'
           )) {
-            console.warn(`⚠️ Network error on attempt ${attempt + 1}, will retry...`);
             continue;
-          } else {
-            // No more retries or non-retryable error
-            throw retryError;
           }
+          
+          throw retryError;
         }
       }
       
       if (!response) {
-        throw lastError || new Error('Failed to update profile after retries');
+        throw lastError || new Error('Failed to update profile');
       }
 
       // Check response structure
@@ -406,31 +392,7 @@ export default function HospitalProfileEditScreen() {
         if (selectedHospitalPicture) {
           try {
             const pictureFormData = new FormData();
-            let uri = selectedHospitalPicture;
-            const filename = uri.split('/').pop() || 'hospital_picture.jpg';
-            const match = /\.(\w+)$/i.exec(filename);
-            const extension = match ? match[1].toLowerCase() : 'jpg';
-            const mimeTypes: Record<string, string> = {
-              jpg: 'image/jpeg',
-              jpeg: 'image/jpeg',
-              png: 'image/png',
-              webp: 'image/webp',
-            };
-            const type = mimeTypes[extension] || 'image/jpeg';
-
-            if (Platform.OS === 'android') {
-              if (!uri.startsWith('file://')) {
-                uri = `file://${uri}`;
-              }
-            } else if (Platform.OS === 'ios') {
-              uri = uri.replace('file://', '');
-            }
-
-            pictureFormData.append('hospital_picture', {
-              uri: uri,
-              name: filename,
-              type: type,
-            } as any);
+            appendFileToFormData(pictureFormData, 'hospital_picture', { uri: selectedHospitalPicture });
 
             // Note: Don't set Content-Type manually - axios will set it automatically with boundary for FormData
             await API.post('/hospital/upload/picture', pictureFormData, {
@@ -467,52 +429,61 @@ export default function HospitalProfileEditScreen() {
     } catch (error: any) {
       setSaving(false);
       
-      if (__DEV__) {
-        console.error('❌ Update error:', {
-          message: error.message,
-          code: error.code,
-          response: error.response ? {
-            status: error.response.status,
-            statusText: error.response.statusText,
-            data: error.response.data,
-          } : null,
-        });
-      }
-      
-      // Use user-friendly error message
-      const friendlyMessage = error?.userFriendlyMessage || getUserFriendlyError(error);
-      
-      // Determine appropriate title and retry option
-      let errorTitle = 'Unable to Update';
+      let errorMessage = 'Failed to update profile';
       let showRetry = false;
-      let errorMessage = friendlyMessage;
       
-      if (error.response?.status === 422) {
-        errorTitle = 'Please Check Your Input';
-      } else if (!error.response) {
-        errorTitle = 'Connection Problem';
-        const baseUrl = error.config?.baseURL || 'server';
-        const endpoint = error.config?.url || '/hospital/profile';
-        const fullUrl = `${baseUrl}${endpoint}`;
-        
-        if (error.code === 'ERR_NETWORK' || error.code === 'ECONNREFUSED' || 
-            error.message?.includes('Network') || error.message?.includes('Unable to connect')) {
-          errorMessage = `Unable to connect to server.\n\nTrying to reach: ${fullUrl}\n\nPlease check:\n1. Your internet connection\n2. Backend server is running\n3. Server URL is correct\n\nIf this persists, the server may be temporarily unavailable.`;
-          showRetry = true;
-        } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-          errorMessage = 'Request timed out. The file may be too large or connection is slow. Please try again with a smaller file or check your connection speed.';
-          showRetry = true;
-        } else {
-          errorMessage = `${error.message || 'Network error'}\n\nEndpoint: ${fullUrl}\n\nPlease check your connection and try again.`;
+      if (error.response) {
+        // Server responded with error
+        if (error.response.data?.message) {
+          errorMessage = error.response.data.message;
+        } else if (error.response.data?.errors) {
+          const errors = error.response.data.errors;
+          errorMessage = Object.values(errors).flat().join('\n');
+        } else if (error.response.status === 422) {
+          errorMessage = 'Please check your input and try again.';
+        } else if (error.response.status >= 500) {
+          errorMessage = 'Server error. Please try again later.';
           showRetry = true;
         }
-      } else if (error.response.status >= 500) {
-        errorTitle = 'Server Error';
+      } else {
+        // Network error
+        const errorType = error.errorType?.type || '';
+        
+        if (errorType === 'SSL_ERROR' || errorType === 'NETWORK_ERROR_SSL_LIKELY') {
+          errorMessage = '🔒 SSL Certificate Issue\n\n';
+          errorMessage += 'Cannot connect securely to the server.\n\n';
+          errorMessage += 'This is a SERVER-SIDE problem that must be fixed by your server administrator.\n\n';
+          errorMessage += 'Common causes:\n';
+          errorMessage += '• SSL certificate is expired or invalid\n';
+          errorMessage += '• Incomplete certificate chain (missing intermediate certificates)\n';
+          errorMessage += '• Certificate doesn\'t match domain name\n';
+          errorMessage += '• Server not configured for large POST requests\n\n';
+          errorMessage += 'What to do:\n';
+          errorMessage += '1. Contact your server administrator\n';
+          errorMessage += '2. Ask them to fix the SSL certificate\n';
+          errorMessage += '3. Verify certificate is valid and complete\n';
+          errorMessage += '4. Try again after certificate is fixed';
+        } else if (errorType === 'TIMEOUT' || error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+          errorMessage = 'Request timed out. Please try again with a smaller file or check your connection.';
+          showRetry = true;
+        } else if (errorType === 'CONNECTION_REFUSED' || error.code === 'ECONNREFUSED') {
+          errorMessage = 'Cannot connect to server. Please check if the server is running.';
+          showRetry = true;
+        } else if (errorType === 'DNS_ERROR') {
+          errorMessage = 'Cannot find server. Please check your internet connection.';
+          showRetry = true;
+        } else if (error.code === 'ERR_NETWORK' || error.message?.includes('Network')) {
+          errorMessage = 'Network error. Please check your internet connection and try again.';
+          showRetry = true;
+        } else {
+          errorMessage = error.message || 'Unknown error occurred';
+          showRetry = true;
+        }
       }
       
       Alert.alert(
-        errorTitle, 
-        errorMessage, 
+        'Error',
+        errorMessage,
         showRetry ? [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Retry', onPress: () => handleSave() }

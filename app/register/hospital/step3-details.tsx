@@ -1,0 +1,603 @@
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  Alert,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+} from 'react-native';
+import { router } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { ArrowLeft, Building2, Camera, MapPin } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import API from '../../api';
+import { HospitalPrimaryColors as PrimaryColors } from '@/constants/hospital-theme';
+import { LocationPickerMap } from '@/components/LocationPickerMap';
+
+export default function HospitalDetailsScreen() {
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    password: '',
+    confirmPassword: '',
+    phone_number: '',
+    address: '',
+    latitude: '',
+    longitude: '',
+    license_number: '',
+  });
+  const [logoUri, setLogoUri] = useState<string | null>(null);
+  const [licenseDocument, setLicenseDocument] = useState<{ uri: string; name: string; type: string } | null>(null);
+  const [registrationData, setRegistrationData] = useState<any>(null);
+
+  useEffect(() => {
+    loadRegistrationData();
+  }, []);
+
+  const loadRegistrationData = async () => {
+    try {
+      const stored = await AsyncStorage.getItem('hospitalRegistrationData');
+      if (stored) {
+        const data = JSON.parse(stored);
+        setRegistrationData(data);
+        if (data.email && data.otp) {
+          // Data is valid, continue
+        } else {
+          Alert.alert('Error', 'Registration session expired. Please start over.');
+          router.replace('/register/hospital/step1-email');
+        }
+      } else {
+        Alert.alert('Error', 'Registration session missing. Please start over.');
+        router.replace('/register/hospital/step1-email');
+      }
+    } catch (e) {
+      console.error('Failed to load registration data', e);
+      router.replace('/register/hospital/step1-email');
+    }
+  };
+
+  const handleInputChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleLocationSelect = (lat: number, lng: number) => {
+    setFormData(prev => ({
+      ...prev,
+      latitude: lat.toString(),
+      longitude: lng.toString(),
+    }));
+  };
+
+  const handlePickLogo = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'We need camera roll permissions to upload photos');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions?.Images || 'images',
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const fileSizeMB = (result.assets[0].fileSize || 0) / (1024 * 1024);
+        if (fileSizeMB > 5) {
+          Alert.alert('File Too Large', 'Logo must be less than 5MB. Please compress the image.');
+          return;
+        }
+        setLogoUri(result.assets[0].uri);
+      }
+    } catch (error: any) {
+      Alert.alert('Error', 'Failed to pick image: ' + error.message);
+    }
+  };
+
+  const handlePickLicenseDocument = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'We need camera roll permissions to upload documents');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions?.All || 'all',
+        allowsEditing: false,
+        quality: 1,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const fileSizeMB = (result.assets[0].fileSize || 0) / (1024 * 1024);
+        if (fileSizeMB > 5) {
+          Alert.alert('File Too Large', 'Document must be less than 5MB. Please compress the file.');
+          return;
+        }
+        const filename = result.assets[0].uri.split('/').pop() || 'license.pdf';
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match && match[1].toLowerCase() === 'pdf' ? 'application/pdf' : 'image/jpeg';
+        setLicenseDocument({
+          uri: result.assets[0].uri,
+          name: filename,
+          type,
+        });
+      }
+    } catch (error: any) {
+      Alert.alert('Error', 'Failed to pick document: ' + error.message);
+    }
+  };
+
+  const handleSubmit = async () => {
+    // Validation
+    if (!formData.name || !formData.password) {
+      Alert.alert('Validation Error', 'Hospital Name and Password are required');
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      Alert.alert('Validation Error', 'Password must be at least 6 characters');
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      Alert.alert('Validation Error', 'Passwords do not match');
+      return;
+    }
+
+    if (!registrationData?.email || !registrationData?.otp) {
+      Alert.alert('Error', 'Registration session expired. Please start over.');
+      router.replace('/register/hospital/step1-email');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const data = new FormData();
+
+      // Basic Details
+      data.append('email', registrationData.email);
+      data.append('otp', registrationData.otp);
+      data.append('name', formData.name);
+      data.append('password', formData.password);
+      if (formData.phone_number) data.append('phone_number', formData.phone_number);
+      if (formData.address) data.append('address', formData.address);
+      if (formData.latitude) data.append('latitude', formData.latitude);
+      if (formData.longitude) data.append('longitude', formData.longitude);
+      if (formData.license_number) data.append('license_number', formData.license_number);
+
+      // Logo
+      if (logoUri) {
+        let fileUri = logoUri;
+        if (Platform.OS === 'android' && !fileUri.startsWith('file://')) {
+          fileUri = `file://${fileUri}`;
+        } else if (Platform.OS === 'ios') {
+          fileUri = fileUri.replace('file://', '');
+        }
+        data.append('logo_path', {
+          uri: fileUri,
+          name: 'logo.jpg',
+          type: 'image/jpeg',
+        } as any);
+      }
+
+      // License Document
+      if (licenseDocument) {
+        let fileUri = licenseDocument.uri;
+        if (Platform.OS === 'android' && !fileUri.startsWith('file://')) {
+          fileUri = `file://${fileUri}`;
+        } else if (Platform.OS === 'ios') {
+          fileUri = fileUri.replace('file://', '');
+        }
+        data.append('license_document', {
+          uri: fileUri,
+          name: licenseDocument.name,
+          type: licenseDocument.type,
+        } as any);
+      }
+
+      // Try registration with retry logic for SSL/network issues
+      let response = null;
+      let lastError = null;
+      const maxRetries = 3;
+      
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          if (attempt > 0) {
+            console.log(`🔄 Retry attempt ${attempt + 1}/${maxRetries + 1}...`);
+            await new Promise(resolve => setTimeout(resolve, 3000 * attempt));
+          }
+          
+          response = await API.post('/hospital/registration/register', data, {
+            timeout: 180000, // 3 minutes
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity,
+            headers: {
+              'Accept': 'application/json',
+            },
+          });
+          
+          break;
+        } catch (error: any) {
+          lastError = error;
+          
+          if (error.response && error.response.status >= 400 && error.response.status < 500) {
+            throw error;
+          }
+          
+          const isNetworkError = 
+            error.code === 'ERR_NETWORK' ||
+            error.message?.includes('Network') ||
+            error.message?.includes('Unable to connect') ||
+            !error.response;
+          
+          if (attempt < maxRetries && isNetworkError) {
+            continue;
+          }
+          
+          throw error;
+        }
+      }
+      
+      if (!response) {
+        throw lastError || new Error('Registration failed after retries');
+      }
+
+      if (response.data.status) {
+        // Clear registration data
+        await AsyncStorage.removeItem('hospitalRegistrationData');
+        
+        Alert.alert(
+          'Success',
+          'Registration successful! Please login to continue.',
+          [
+            { text: 'OK', onPress: () => router.replace('/hospital/login') }
+          ]
+        );
+      } else {
+        Alert.alert('Error', response.data.message || 'Registration failed');
+      }
+    } catch (error: any) {
+      console.error('Registration error:', error);
+      
+      let message = error.response?.data?.message || error.message || 'Registration failed';
+      if (error.response?.data?.errors) {
+        const errors = Object.values(error.response.data.errors).flat();
+        message = errors.join('\n');
+      }
+
+      Alert.alert('Registration Error', message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardView}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <ArrowLeft size={24} color="#333" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Complete Registration</Text>
+          <View style={{ width: 40 }} />
+        </View>
+
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+          {/* Logo */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Hospital Logo</Text>
+            <View style={styles.logoContainer}>
+              {logoUri ? (
+                <View style={styles.logoPreview}>
+                  <Text style={styles.logoText}>Logo Selected</Text>
+                </View>
+              ) : (
+                <View style={styles.logoPlaceholder}>
+                  <Building2 size={40} color={PrimaryColors.main} />
+                </View>
+              )}
+              <TouchableOpacity style={styles.logoButton} onPress={handlePickLogo}>
+                <Camera size={18} color={PrimaryColors.main} />
+                <Text style={styles.logoButtonText}>Choose Logo</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Basic Information */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Basic Information</Text>
+            <InputField
+              label="Hospital Name *"
+              value={formData.name}
+              onChangeText={(text) => handleInputChange('name', text)}
+              placeholder="Enter hospital name"
+            />
+            <InputField
+              label="Password *"
+              value={formData.password}
+              onChangeText={(text) => handleInputChange('password', text)}
+              placeholder="Minimum 6 characters"
+              secureTextEntry
+            />
+            <InputField
+              label="Confirm Password *"
+              value={formData.confirmPassword}
+              onChangeText={(text) => handleInputChange('confirmPassword', text)}
+              placeholder="Re-enter password"
+              secureTextEntry
+            />
+            <InputField
+              label="Phone Number"
+              value={formData.phone_number}
+              onChangeText={(text) => handleInputChange('phone_number', text)}
+              placeholder="Enter phone number"
+              keyboardType="phone-pad"
+            />
+            <View style={styles.textAreaContainer}>
+              <Text style={styles.label}>Address</Text>
+              <TextInput
+                style={styles.textArea}
+                value={formData.address}
+                onChangeText={(text) => handleInputChange('address', text)}
+                placeholder="Enter hospital address"
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+              />
+            </View>
+          </View>
+
+          {/* Location */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Location</Text>
+            <LocationPickerMap
+              initialLatitude={formData.latitude ? parseFloat(formData.latitude) : undefined}
+              initialLongitude={formData.longitude ? parseFloat(formData.longitude) : undefined}
+              onLocationSelect={handleLocationSelect}
+              height={250}
+            />
+            {(formData.latitude || formData.longitude) && (
+              <View style={styles.locationInfo}>
+                <MapPin size={16} color={PrimaryColors.main} />
+                <Text style={styles.locationText}>
+                  {formData.latitude}, {formData.longitude}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* License Information */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>License Information</Text>
+            <InputField
+              label="License Number"
+              value={formData.license_number}
+              onChangeText={(text) => handleInputChange('license_number', text)}
+              placeholder="Enter license number"
+            />
+            <TouchableOpacity
+              style={styles.documentButton}
+              onPress={handlePickLicenseDocument}
+            >
+              <Text style={styles.documentButtonText}>
+                {licenseDocument ? 'License Document Selected' : 'Upload License Document (PDF/Image)'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Submit Button */}
+          <TouchableOpacity
+            style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+            onPress={handleSubmit}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.submitButtonText}>Complete Registration</Text>
+            )}
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+function InputField({ label, value, onChangeText, placeholder, keyboardType, secureTextEntry }: any) {
+  return (
+    <View style={styles.inputContainer}>
+      <Text style={styles.label}>{label}</Text>
+      <TextInput
+        style={styles.input}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor="#94a3b8"
+        keyboardType={keyboardType}
+        secureTextEntry={secureTextEntry}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+    backgroundColor: '#fff',
+  },
+  backButton: {
+    padding: 8,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1e293b',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 32,
+  },
+  section: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginBottom: 16,
+  },
+  logoContainer: {
+    alignItems: 'center',
+  },
+  logoPreview: {
+    width: 100,
+    height: 100,
+    borderRadius: 12,
+    backgroundColor: PrimaryColors.lightest,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: PrimaryColors.main,
+  },
+  logoText: {
+    color: PrimaryColors.main,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  logoPlaceholder: {
+    width: 100,
+    height: 100,
+    borderRadius: 12,
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+  },
+  logoButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    backgroundColor: PrimaryColors.lightest,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: PrimaryColors.main,
+  },
+  logoButtonText: {
+    marginLeft: 8,
+    fontSize: 14,
+    fontWeight: '600',
+    color: PrimaryColors.main,
+  },
+  inputContainer: {
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#475569',
+    marginBottom: 8,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    color: '#1e293b',
+    backgroundColor: '#fff',
+  },
+  textAreaContainer: {
+    marginBottom: 16,
+  },
+  textArea: {
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    color: '#1e293b',
+    backgroundColor: '#fff',
+    minHeight: 80,
+  },
+  locationInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: PrimaryColors.lightest,
+    borderRadius: 8,
+  },
+  locationText: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: PrimaryColors.main,
+    fontWeight: '500',
+  },
+  documentButton: {
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 8,
+    padding: 16,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+  },
+  documentButtonText: {
+    fontSize: 14,
+    color: PrimaryColors.main,
+    fontWeight: '600',
+  },
+  submitButton: {
+    backgroundColor: PrimaryColors.main,
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 32,
+  },
+  submitButtonDisabled: {
+    opacity: 0.6,
+  },
+  submitButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});

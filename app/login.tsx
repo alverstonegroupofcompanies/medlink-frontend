@@ -147,7 +147,7 @@ export default function LoginScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity 
                     style={styles.toggleInactive} 
-                    onPress={() => router.push('/signup/basic-details')}
+                    onPress={() => router.push('/register/doctor/step1-email')}
                 >
                   <ThemedText style={styles.toggleTextInactive}>Sign Up</ThemedText>
                 </TouchableOpacity>
@@ -224,7 +224,7 @@ export default function LoginScreen() {
               {/* Sign Up Prompt */}
               <View style={styles.signupPrompt}>
                 <ThemedText style={styles.signupPromptText}>New here? </ThemedText>
-                <TouchableOpacity onPress={() => router.push('/signup/basic-details')}>
+                <TouchableOpacity onPress={() => router.push('/register/doctor/step1-email')}>
                   <ThemedText style={styles.signupLink}>Create an account</ThemedText>
                 </TouchableOpacity>
               </View>
