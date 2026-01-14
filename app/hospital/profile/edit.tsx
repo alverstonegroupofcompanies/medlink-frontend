@@ -32,7 +32,7 @@ import {
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
-import API from '../../api';
+import { API_BASE_URL } from '@/config/api';
 import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors } from '@/constants/hospital-theme';
 import { ScreenSafeArea, useSafeBottomPadding } from '@/components/screen-safe-area';
 import { BASE_BACKEND_URL } from '@/config/api';
@@ -302,10 +302,12 @@ export default function HospitalProfileEditScreen() {
         });
       }
 
-      // Retry logic: 2 attempts with exponential backoff
+      // Use fetch API for FormData - more reliable than Axios in React Native
       let lastError: any = null;
       const maxRetries = 2;
-      let response: any = null;
+      let responseData: any = null;
+      const token = await AsyncStorage.getItem('hospitalToken');
+      const url = `${API_BASE_URL}/hospital/profile`;
       
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
@@ -317,33 +319,110 @@ export default function HospitalProfileEditScreen() {
             await new Promise(resolve => setTimeout(resolve, delay));
           }
           
-          response = await API.post('/hospital/profile', data, {
-            timeout: 120000,
-          });
+          // Use AbortController for timeout
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 seconds
           
-          // Success
-          break;
+          try {
+            const response = await fetch(url, {
+              method: 'POST',
+              body: data, // FormData - don't set Content-Type, fetch handles it
+              headers: {
+                'Accept': 'application/json',
+                ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                // Don't set Content-Type - let fetch handle it automatically for FormData
+              },
+              signal: controller.signal,
+            });
+            
+            clearTimeout(timeoutId);
+            
+            // Parse response
+            responseData = await response.json();
+            
+            // Check if response is ok
+            if (!response.ok) {
+              // Don't retry on validation errors (4xx)
+              if (response.status >= 400 && response.status < 500) {
+                throw {
+                  response: {
+                    status: response.status,
+                    data: responseData,
+                  },
+                  message: responseData?.message || 'Validation failed',
+                };
+              }
+              
+              // Retry on server errors (5xx)
+              if (response.status >= 500) {
+                if (attempt < maxRetries) {
+                  if (__DEV__) {
+                    console.warn(`⚠️ Server error ${response.status} on attempt ${attempt + 1}, will retry...`);
+                  }
+                  continue;
+                } else {
+                  throw {
+                    response: {
+                      status: response.status,
+                      data: responseData,
+                    },
+                    message: responseData?.message || 'Server error',
+                  };
+                }
+              }
+            }
+            
+            // Success
+            break;
+          } catch (fetchError: any) {
+            clearTimeout(timeoutId);
+            
+            // Handle AbortError (timeout)
+            if (fetchError.name === 'AbortError') {
+              throw {
+                code: 'ETIMEDOUT',
+                message: 'Request timeout',
+              };
+            }
+            
+            throw fetchError;
+          }
         } catch (retryError: any) {
           lastError = retryError;
           
-          // Don't retry validation errors
-          if (retryError.response && retryError.response.status !== 500) {
-            throw retryError;
-          }
-          
-          // Don't retry SSL/DNS errors
-          const errorType = retryError.errorType?.type || '';
-          if (errorType === 'SSL_ERROR' || errorType === 'NETWORK_ERROR_SSL_LIKELY' || errorType === 'DNS_ERROR') {
-            throw retryError;
+          // Don't retry client errors (4xx), but allow retry for server errors (5xx) and network errors
+          if (retryError.response) {
+            const status = retryError.response.status;
+            // Don't retry validation/authentication errors (4xx)
+            if (status >= 400 && status < 500) {
+              throw retryError;
+            }
+            // Allow retry for server errors (5xx) - these are transient
+            if (status >= 500) {
+              if (attempt < maxRetries) {
+                if (__DEV__) {
+                  console.warn(`⚠️ Server error ${status} on attempt ${attempt + 1}, will retry...`);
+                }
+                continue;
+              } else {
+                throw retryError;
+              }
+            }
           }
           
           // Retry network errors if we have attempts left
-          if (attempt < maxRetries && !retryError.response && (
+          if (attempt < maxRetries && (
             retryError.code === 'ERR_NETWORK' ||
             retryError.code === 'ECONNREFUSED' ||
             retryError.code === 'ETIMEDOUT' ||
-            retryError.code === 'ECONNABORTED'
+            retryError.code === 'ECONNABORTED' ||
+            retryError.name === 'AbortError' ||
+            retryError.message?.includes('Network') ||
+            retryError.message?.includes('timeout')
           )) {
+            if (__DEV__) {
+              console.warn(`⚠️ Network error on attempt ${attempt + 1}, will retry...`);
+            }
             continue;
           }
           
@@ -351,13 +430,13 @@ export default function HospitalProfileEditScreen() {
         }
       }
       
-      if (!response) {
+      if (!responseData) {
         throw lastError || new Error('Failed to update profile');
       }
 
       // Check response structure
-      if (response?.data) {
-        const hospitalData = response.data.hospital || response.data;
+      if (responseData) {
+        const hospitalData = responseData.hospital || responseData;
         
         if (!hospitalData) {
           Alert.alert('Error', 'Invalid response from server. Please try again.');
@@ -394,17 +473,47 @@ export default function HospitalProfileEditScreen() {
             const pictureFormData = new FormData();
             appendFileToFormData(pictureFormData, 'hospital_picture', { uri: selectedHospitalPicture });
 
-            // Note: Don't set Content-Type manually - axios will set it automatically with boundary for FormData
-            await API.post('/hospital/upload/picture', pictureFormData, {
-              timeout: 120000,
-            });
-
-            // Update hospital picture URI
-            const pictureResponse = await API.get('/hospital/profile');
-            if (pictureResponse.data?.hospital?.hospital_picture_url || pictureResponse.data?.hospital?.hospital_picture) {
-              const pictureUrl = pictureResponse.data.hospital.hospital_picture_url || 
-                `${BASE_BACKEND_URL}/app/${pictureResponse.data.hospital.hospital_picture}`;
-              setHospitalPictureUri(pictureUrl + `?t=${Date.now()}`);
+            // Use fetch API for FormData
+            const pictureUrl = `${API_BASE_URL}/hospital/upload/picture`;
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 120000);
+            
+            try {
+              const pictureResponse = await fetch(pictureUrl, {
+                method: 'POST',
+                body: pictureFormData,
+                headers: {
+                  'Accept': 'application/json',
+                  ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                },
+                signal: controller.signal,
+              });
+              
+              clearTimeout(timeoutId);
+              
+              if (!pictureResponse.ok) {
+                throw new Error('Failed to upload hospital picture');
+              }
+              
+              // Update hospital picture URI
+              const profileResponse = await fetch(`${API_BASE_URL}/hospital/profile`, {
+                headers: {
+                  'Accept': 'application/json',
+                  ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                },
+              });
+              
+              if (profileResponse.ok) {
+                const profileData = await profileResponse.json();
+                if (profileData?.hospital?.hospital_picture_url || profileData?.hospital?.hospital_picture) {
+                  const pictureUrl = profileData.hospital.hospital_picture_url || 
+                    `${BASE_BACKEND_URL}/app/${profileData.hospital.hospital_picture}`;
+                  setHospitalPictureUri(pictureUrl + `?t=${Date.now()}`);
+                }
+              }
+            } catch (fetchError: any) {
+              clearTimeout(timeoutId);
+              throw fetchError;
             }
           } catch (error: any) {
             if (__DEV__) {
@@ -418,6 +527,9 @@ export default function HospitalProfileEditScreen() {
         setSelectedLogo(null);
         setSelectedHospitalPicture(null);
         setLicenseDocument(null);
+        
+        // Set saving to false BEFORE showing alert for immediate UI feedback
+        setSaving(false);
         
         Alert.alert('Success', 'Profile updated successfully!', [
           { text: 'OK', onPress: () => router.back() },

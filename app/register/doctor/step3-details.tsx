@@ -16,7 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, User, Camera, Upload } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import API from '../../api';
+import { API_BASE_URL } from '@/config/api';
 import { DoctorPrimaryColors as PrimaryColors } from '@/constants/doctor-theme';
 import { MultiDepartmentPicker } from '@/components/multi-department-picker';
 import { FileUploadButton } from '@/components/file-upload-button';
@@ -196,10 +196,11 @@ export default function DoctorDetailsScreen() {
         }
       });
 
-      // Try registration with retry logic for SSL/network issues
-      let response = null;
-      let lastError = null;
+      // Try registration with retry logic using fetch API
+      let responseData: any = null;
+      let lastError: any = null;
       const maxRetries = 3;
+      const url = `${API_BASE_URL}/doctor/registration/register`;
       
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
@@ -211,23 +212,71 @@ export default function DoctorDetailsScreen() {
           
           console.log(`📤 Attempting registration (attempt ${attempt + 1})...`);
           
-          response = await API.post('/doctor/registration/register', data, {
-            timeout: 180000, // 3 minutes timeout
-            maxContentLength: Infinity,
-            maxBodyLength: Infinity,
-            // Don't set Content-Type - let axios handle it for FormData
-            headers: {
-              'Accept': 'application/json',
-              // Explicitly don't set Content-Type for FormData
-            },
-          });
+          // Use AbortController for timeout
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 minutes
           
-          // Success - break retry loop
-          console.log('✅ Registration request successful!');
-          break;
+          try {
+            const response = await fetch(url, {
+              method: 'POST',
+              body: data, // FormData - don't set Content-Type, fetch handles it
+              headers: {
+                'Accept': 'application/json',
+                // Don't set Content-Type - let fetch handle it automatically for FormData
+              },
+              signal: controller.signal,
+            });
+            
+            clearTimeout(timeoutId);
+            
+            // Parse response
+            responseData = await response.json();
+            
+            // Check if response is ok
+            if (!response.ok) {
+              // Don't retry on validation errors (4xx)
+              if (response.status >= 400 && response.status < 500) {
+                console.log('⚠️ Validation error - not retrying');
+                throw {
+                  response: {
+                    status: response.status,
+                    data: responseData,
+                  },
+                  message: responseData?.message || 'Validation failed',
+                };
+              }
+              
+              // Retry on server errors (5xx)
+              if (response.status >= 500) {
+                throw {
+                  response: {
+                    status: response.status,
+                    data: responseData,
+                  },
+                  message: responseData?.message || 'Server error',
+                };
+              }
+            }
+            
+            // Success - break retry loop
+            console.log('✅ Registration request successful!');
+            break;
+          } catch (fetchError: any) {
+            clearTimeout(timeoutId);
+            
+            // Handle AbortError (timeout)
+            if (fetchError.name === 'AbortError') {
+              throw {
+                code: 'ETIMEDOUT',
+                message: 'Request timeout',
+              };
+            }
+            
+            throw fetchError;
+          }
         } catch (error: any) {
           lastError = error;
-          console.error(`❌ Registration attempt ${attempt + 1} failed:`, error.message);
+          console.error(`❌ Registration attempt ${attempt + 1} failed:`, error.message || error);
           
           // Don't retry on validation errors (4xx) - these are real errors
           if (error.response && error.response.status >= 400 && error.response.status < 500) {
@@ -239,10 +288,14 @@ export default function DoctorDetailsScreen() {
           const isNetworkError = 
             error.code === 'ERR_NETWORK' ||
             error.code === 'NETWORK_ERROR' ||
+            error.code === 'ETIMEDOUT' ||
+            error.code === 'ECONNREFUSED' ||
+            error.name === 'AbortError' ||
             error.message?.includes('Network') ||
             error.message?.includes('Unable to connect') ||
             error.message?.includes('SSL') ||
             error.message?.includes('certificate') ||
+            error.message?.includes('timeout') ||
             !error.response; // No response = network error
           
           if (attempt < maxRetries && isNetworkError) {
@@ -256,11 +309,11 @@ export default function DoctorDetailsScreen() {
         }
       }
       
-      if (!response) {
+      if (!responseData) {
         throw lastError || new Error('Registration failed after all retries');
       }
 
-      if (response.data.status) {
+      if (responseData.status) {
         // Clear registration data
         await AsyncStorage.removeItem('doctorRegistrationData');
         
@@ -272,7 +325,7 @@ export default function DoctorDetailsScreen() {
           ]
         );
       } else {
-        Alert.alert('Error', response.data.message || 'Registration failed');
+        Alert.alert('Error', responseData.message || 'Registration failed');
       }
     } catch (error: any) {
       console.error('Registration error:', error);

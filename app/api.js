@@ -3,127 +3,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../config/api';
 import { getUserFriendlyError } from '../utils/errorMessages';
 
-/**
- * Detect the specific type of network error
- * @param {Error} error - The axios error object
- * @returns {Object} Error type information
- */
-function detectErrorType(error) {
-  const code = error.code || '';
-  const message = (error.message || '').toLowerCase();
-  const fullMessage = JSON.stringify(error).toLowerCase();
-  
-  // SSL/Certificate errors
-  if (
-    code === 'ERR_CERT' ||
-    code === 'CERT_HAS_EXPIRED' ||
-    code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' ||
-    message.includes('certificate') ||
-    message.includes('ssl') ||
-    message.includes('tls') ||
-    message.includes('handshake') ||
-    fullMessage.includes('certificate') ||
-    fullMessage.includes('ssl') ||
-    fullMessage.includes('tls')
-  ) {
-    return {
-      type: 'SSL_ERROR',
-      likelyCause: 'SSL certificate validation failed. Server certificate may be invalid, expired, or have an incomplete chain.',
-      severity: 'high',
-      canRetry: false,
-      requiresServerFix: true,
-    };
-  }
-  
-  // Timeout errors
-  if (
-    code === 'ECONNABORTED' ||
-    code === 'ETIMEDOUT' ||
-    message.includes('timeout') ||
-    message.includes('timed out')
-  ) {
-    return {
-      type: 'TIMEOUT',
-      likelyCause: 'Request timed out. File may be too large or connection too slow.',
-      severity: 'medium',
-      canRetry: true,
-      requiresServerFix: false,
-    };
-  }
-  
-  // Connection refused
-  if (
-    code === 'ECONNREFUSED' ||
-    message.includes('connection refused') ||
-    message.includes('refused')
-  ) {
-    return {
-      type: 'CONNECTION_REFUSED',
-      likelyCause: 'Server is not accepting connections. Server may be down or not running.',
-      severity: 'high',
-      canRetry: true,
-      requiresServerFix: true,
-    };
-  }
-  
-  // DNS errors
-  if (
-    code === 'ENOTFOUND' ||
-    code === 'EAI_AGAIN' ||
-    message.includes('dns') ||
-    message.includes('getaddrinfo') ||
-    message.includes('hostname')
-  ) {
-    return {
-      type: 'DNS_ERROR',
-      likelyCause: 'DNS resolution failed. Cannot resolve server hostname.',
-      severity: 'high',
-      canRetry: true,
-      requiresServerFix: false,
-    };
-  }
-  
-  // Network unavailable
-  if (
-    code === 'ERR_NETWORK' ||
-    message.includes('network') ||
-    message.includes('unable to connect') ||
-    message.includes('network request failed')
-  ) {
-    // Check if it's specifically a POST with FormData over HTTPS
-    const isPostFormData = error.config?.method?.toUpperCase() === 'POST' && 
-                          error.config?.data instanceof FormData;
-    const isHttps = (error.config?.baseURL || API_BASE_URL).startsWith('https://');
-    
-    if (isPostFormData && isHttps) {
-      return {
-        type: 'NETWORK_ERROR_SSL_LIKELY',
-        likelyCause: 'Network error on POST with FormData over HTTPS. Likely SSL certificate issue or server configuration problem.',
-        severity: 'high',
-        canRetry: true,
-        requiresServerFix: true,
-      };
-    }
-    
-    return {
-      type: 'NETWORK_ERROR',
-      likelyCause: 'General network error. Check internet connection and server availability.',
-      severity: 'medium',
-      canRetry: true,
-      requiresServerFix: false,
-    };
-  }
-  
-  // Unknown error
-  return {
-    type: 'UNKNOWN_ERROR',
-    likelyCause: 'Unknown network error. Check error message for details.',
-    severity: 'medium',
-    canRetry: true,
-    requiresServerFix: false,
-  };
-}
-
 // Disable console errors in production
 if (!__DEV__) {
   const originalError = console.error;
@@ -172,34 +51,25 @@ API.interceptors.request.use(
       const publicRoutes = [
         '/doctor/login',
         '/doctor/register',
-        '/doctor/registration/send-otp',
-        '/doctor/registration/verify-otp',
-        '/doctor/registration/register',
         '/hospital/login',
         '/hospital/register',
-        '/hospital/registration/send-otp',
-        '/hospital/registration/verify-otp',
-        '/hospital/registration/register',
-        '/departments',
         '/send-otp',
         '/verify-otp',
         '/test',
         '/storage-test',
         '/blogs',
         '/blogs/',
+        '/departments',
+        '/doctor/registration/send-otp',
+        '/doctor/registration/verify-otp',
+        '/doctor/registration/register',
+        '/hospital/registration/send-otp',
+        '/hospital/registration/verify-otp',
+        '/hospital/registration/register',
       ];
       
-      // Normalize URL for comparison (remove leading/trailing slashes)
-      const normalizedUrl = url.startsWith('/') ? url : '/' + url;
-      
-      // Check if this is a public route (exact match or starts with)
-      const isPublicRoute = publicRoutes.some(route => {
-        const normalizedRoute = route.startsWith('/') ? route : '/' + route;
-        // Check exact match, starts with, or contains
-        return normalizedUrl === normalizedRoute || 
-               normalizedUrl.startsWith(normalizedRoute + '/') || 
-               normalizedUrl.includes(normalizedRoute);
-      });
+      // Check if this is a public route
+      const isPublicRoute = publicRoutes.some(route => url.includes(route));
       
       // Check if this is a hospital route
       if (url.includes('/hospital/')) {
@@ -228,11 +98,8 @@ API.interceptors.request.use(
           }
         }
       } else if (__DEV__ && !isPublicRoute) {
-        // Only warn if it's not a public route (login/register/departments don't need tokens)
-        console.warn('⚠️ No token found for route:', url, '(This route may require authentication)');
-      } else if (__DEV__ && isPublicRoute) {
-        // Public route - no token needed, suppress warning
-        // Don't log every time to avoid console spam
+        // Only warn if it's not a public route (login/register don't need tokens)
+        console.warn('⚠️ No token found for route:', url);
       }
     } catch (error) {
       // Silently handle token errors - don't log in production
@@ -260,8 +127,6 @@ API.interceptors.request.use(
       
       if (__DEV__) {
         console.log('📦 FormData detected - Content-Type will be set automatically by axios');
-        // Remove Content-Type header for FormData - axios will set it with boundary
-        delete config.headers['Content-Type'];
       }
     }
     
@@ -323,61 +188,84 @@ API.interceptors.response.use(
           ? `${error.config.baseURL}${relativePath.startsWith('/') ? '' : '/'}${relativePath}`
           : `${API_BASE_URL}${relativePath.startsWith('/') ? '' : '/'}${relativePath}`;
         
-        // Enhanced error type detection
-        const errorType = detectErrorType(error);
-        const isFormData = error.config?.data instanceof FormData;
-        const isPostRequest = error.config?.method?.toUpperCase() === 'POST';
-        const isHttps = fullUrl.startsWith('https://');
-        
-        // Store error type for use in error handling
-        error.errorType = errorType;
-        
-        // Consolidated error logging - only in development
-        if (__DEV__) {
-          const errorDetails = [
-            `❌ NETWORK ERROR: ${errorType.type}`,
-            `📍 Path: ${relativePath}`,
-            `🔗 URL: ${fullUrl}`,
-            `📦 Method: ${error.config?.method?.toUpperCase() || 'UNKNOWN'}`,
-            `📦 Type: ${isFormData ? 'FormData (file upload)' : 'JSON'}`,
-            `⚠️ Cause: ${errorType.likelyCause}`,
-          ];
-          
-          if (isPostRequest && isFormData && isHttps) {
-            errorDetails.push('');
-            errorDetails.push('🔒 SSL CERTIFICATE ISSUE DETECTED');
-            errorDetails.push('This is a SERVER-SIDE problem that must be fixed by your server administrator.');
-            errorDetails.push('');
-            errorDetails.push('Common causes:');
-            errorDetails.push('1. SSL certificate is expired or invalid');
-            errorDetails.push('2. Incomplete certificate chain (missing intermediate certificates)');
-            errorDetails.push('3. Certificate doesn\'t match domain name');
-            errorDetails.push('4. Server not configured for large POST requests');
-            errorDetails.push('');
-            errorDetails.push('Solution: Contact server admin to fix SSL certificate on:');
-            errorDetails.push(`   ${fullUrl.split('/api')[0]}`);
-          }
-          
-          console.error(errorDetails.join('\n'));
+        // Log detailed error information
+        console.error('═══════════════════════════════════════');
+        console.error('❌ NETWORK ERROR: Cannot connect to backend');
+        console.error('═══════════════════════════════════════');
+        console.error('📍 Error Code:', error.code);
+        console.error('📍 Error Message:', error.message);
+        console.error('📍 Relative Path:', relativePath);
+        console.error('🔗 Base URL:', error.config?.baseURL || API_BASE_URL);
+        console.error('🌐 Full URL Attempted:', fullUrl);
+        console.error('📦 Request Method:', error.config?.method?.toUpperCase());
+        console.error('📦 Request Data Type:', error.config?.data instanceof FormData ? 'FormData (file upload)' : 'JSON');
+        if (error.config?.data instanceof FormData) {
+          console.error('📦 FormData size: Large (file upload)');
         }
         
-        // Log to backend error logger (skip error-logs endpoint to prevent loops)
-        // Only log in development to avoid spamming when network is down
-        if (__DEV__ && relativePath && !relativePath.includes('/error-logs')) {
-          try {
-            const { logConsoleError } = require('@/utils/error-logger');
-            // Function handles errors internally and has rate limiting
-            logConsoleError(
-              `Network Error: ${errorType.type} - ${error.message}`,
-              'network',
-              {
-                endpoint: relativePath,
-                method: error.config?.method?.toUpperCase(),
-                errorType: errorType.type,
-              }
-            );
-          } catch (logError) {
-            // Silently fail - network might be down
+        // Additional diagnostics
+        if (error.code === 'ERR_NETWORK') {
+          console.error('🔍 Possible Causes:');
+          console.error('   1. Server is down or unreachable');
+          console.error('   2. SSL certificate validation failed');
+          console.error('   3. DNS resolution failed');
+          console.error('   4. Network/firewall blocking connection');
+          console.error('   5. EAS secret not loaded (app needs rebuild)');
+          if (fullUrl.includes('https://')) {
+            console.error('   6. SSL/TLS handshake failed - check server certificate');
+          }
+        }
+        console.error('═══════════════════════════════════════');
+        
+        // Only log in development
+        if (__DEV__) {
+          const relativePath = error.config?.url || 'Unknown';
+          const fullUrl = error.config?.baseURL 
+            ? `${error.config.baseURL}${relativePath.startsWith('/') ? '' : '/'}${relativePath}`
+            : `${API_BASE_URL}${relativePath.startsWith('/') ? '' : '/'}${relativePath}`;
+          
+          console.warn('═══════════════════════════════════════');
+          console.warn('❌ NETWORK ERROR: Cannot connect to backend');
+          console.warn('═══════════════════════════════════════');
+          console.warn('📍 Relative Path:', relativePath);
+          console.warn('🔗 Base URL:', error.config?.baseURL || API_BASE_URL);
+          console.warn('🌐 Full URL Attempted:', fullUrl);
+          console.warn('═══════════════════════════════════════');
+          
+          // Log network errors (but skip if it's the error-logs endpoint to prevent loops)
+          if (relativePath && !relativePath.includes('/error-logs')) {
+            try {
+              const { logConsoleError } = require('@/utils/error-logger');
+              logConsoleError(
+                `Network Error: Cannot connect to ${fullUrl}`,
+                'network',
+                {
+                  endpoint: relativePath,
+                  method: error.config?.method?.toUpperCase(),
+                }
+              );
+            } catch (logError) {
+              // Silently fail
+            }
+          }
+        } else {
+          console.warn('❌ Request Error:', error.message);
+          
+          // Log other request errors (but skip if it's the error-logs endpoint to prevent loops)
+          if (error.config?.url && !error.config.url.includes('/error-logs')) {
+            try {
+              const { logConsoleError } = require('@/utils/error-logger');
+              logConsoleError(
+                error.message || 'Request Error',
+                'api',
+                {
+                  endpoint: error.config?.url,
+                  method: error.config?.method?.toUpperCase(),
+                }
+              );
+            } catch (logError) {
+              // Silently fail
+            }
           }
         }
       } else if (error.response) {
@@ -385,11 +273,9 @@ API.interceptors.response.use(
         console.error(`❌ API Error ${error.response.status}:`, error.response.data);
         
         // Log API errors to backend (but skip if it's the error-logs endpoint to prevent loops)
-        // Only log in development to avoid spamming
-        if (__DEV__ && error.config?.url && !error.config.url.includes('/error-logs')) {
+        if (error.config?.url && !error.config.url.includes('/error-logs')) {
           try {
             const { logConsoleError } = require('@/utils/error-logger');
-            // Function handles errors internally and has rate limiting
             logConsoleError(
               error.response.data?.message || error.message || 'API Error',
               'api',
