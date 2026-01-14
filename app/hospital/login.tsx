@@ -3,13 +3,14 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedTextInput } from '@/components/themed-text-input';
 import { ThemedView } from '@/components/themed-view';
 import { Link, router } from 'expo-router';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TouchableOpacity, View, StatusBar, useWindowDimensions, Image, TextInput } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors } from '@/constants/hospital-theme';
 import API from '../api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Eye, EyeOff, Mail, Lock, ArrowLeft } from 'lucide-react-native';
+import { SuccessModal } from '@/components/SuccessModal';
 
 const HOSPITAL_TOKEN_KEY = 'hospitalToken';
 const HOSPITAL_INFO_KEY = 'hospitalInfo';
@@ -19,28 +20,32 @@ export default function HospitalLoginScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const isTablet = width >= 900;
+  
+  // Memoize tablet check to prevent unnecessary recalculations
+  const isTablet = useMemo(() => width >= 900, [width]);
 
-  const safeAreaStyle = [
+  // Memoize style arrays to prevent re-creation on every render
+  const safeAreaStyle = useMemo(() => [
     styles.safeArea,
     {
       paddingTop: Math.max(insets.top, Platform.OS === 'android' ? 16 : 12),
       paddingBottom: Math.max(insets.bottom, 16),
       paddingHorizontal: isTablet ? 32 : 0,
     },
-  ];
+  ], [insets.top, insets.bottom, isTablet]);
 
-  const scrollContentStyle = [
+  const scrollContentStyle = useMemo(() => [
     styles.scrollContent,
     isTablet && styles.scrollContentTablet,
-  ];
+  ], [isTablet]);
 
-  const formStyle = [
+  const formStyle = useMemo(() => [
     styles.form,
     isTablet && styles.formTablet,
-  ];
+  ], [isTablet]);
 
   // No auto-login - user must always login manually
   // Removed auto-login check to ensure users always see login screen
@@ -76,13 +81,8 @@ export default function HospitalLoginScreen() {
 
       setLoading(false);
       
-      // Show success alert
-      Alert.alert('✅ Login Successful', 'Welcome back!');
-      
-      // Navigate after alert
-      setTimeout(() => {
-        router.replace('/hospital/dashboard');
-      }, 500);
+      // Show success modal
+      setShowSuccessModal(true);
     } catch (error: any) {
       setLoading(false);
       console.log('Login error:', error.response?.data || error.message);
@@ -102,9 +102,21 @@ export default function HospitalLoginScreen() {
     }
   };
 
+  const handleSuccessModalClose = () => {
+    setShowSuccessModal(false);
+    router.replace('/hospital/dashboard');
+  };
+
   return (
     <View style={styles.mainContainer}>
       <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
+      <SuccessModal
+        visible={showSuccessModal}
+        title="Welcome Back"
+        message="Login successful!"
+        onClose={handleSuccessModalClose}
+        buttonText="OK"
+      />
       <SafeAreaView style={safeAreaStyle} edges={['top', 'right', 'left', 'bottom']}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -115,6 +127,8 @@ export default function HospitalLoginScreen() {
             contentContainerStyle={scrollContentStyle}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
+            removeClippedSubviews={true}
+            scrollEventThrottle={16}
           >
             {/* Back Button */}
             <TouchableOpacity 
@@ -132,6 +146,7 @@ export default function HospitalLoginScreen() {
                 }}
                 style={styles.hospitalImage}
                 resizeMode="cover"
+                fadeDuration={200}
               />
             </View>
 

@@ -54,7 +54,7 @@ export default function HospitalTabLayout() {
           left: 0,
           right: 0,
         },
-        tabBarActiveTintColor: '#7B61FF',
+        tabBarActiveTintColor: '#2563EB',
         tabBarInactiveTintColor: '#9CA3AF',
         tabBarLabelStyle: {
           fontSize: 11,
@@ -131,21 +131,8 @@ export default function HospitalTabLayout() {
       <Tabs.Screen
         name="notifications"
         options={{
-          title: 'Notifications',
-          tabBarIcon: ({ color, focused }) => (
-            <View
-              style={{
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: 36,
-                height: 36,
-                borderRadius: 18,
-                backgroundColor: focused ? 'rgba(123, 97, 255, 0.1)' : 'transparent',
-              }}
-            >
-              <Bell size={24} color={color} fill={focused ? color : 'transparent'} />
-            </View>
-          ),
+          href: null,
+          tabBarStyle: { display: 'none' },
         }}
       />
       <Tabs.Screen

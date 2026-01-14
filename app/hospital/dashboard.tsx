@@ -14,6 +14,7 @@ import {
   Image,
   ActivityIndicator,
   StatusBar,
+  DeviceEventEmitter,
 } from 'react-native';
 import { Card, Surface, Button, useTheme, Chip, Avatar, FAB } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -23,6 +24,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect } from 'expo-router';
 import { Plus, MapPin, Building2, Clock, X, Navigation, Bell, LogOut, CreditCard, Users, CheckCircle2, FileText } from 'lucide-react-native';
 import { ScreenSafeArea, useSafeBottomPadding } from '@/components/screen-safe-area';
+import { StatusBarHandler } from '@/components/StatusBarHandler';
 import * as Location from 'expo-location';
 import { DepartmentPicker } from '@/components/department-picker';
 import { DatePicker } from '@/components/date-picker';
@@ -475,6 +477,51 @@ export default function HospitalDashboard() {
     checkAuth();
   }, []);
 
+  // Listen for hospital data updates (logo, verification status, etc.)
+  useEffect(() => {
+    const subscription = DeviceEventEmitter.addListener('hospitalDataUpdated', async () => {
+      // Reload hospital data when updated from profile edit or admin verification
+      await loadHospital(true); // Silent reload
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
+  // Poll for verification status changes more frequently (every 5 seconds)
+  useEffect(() => {
+    if (!hospital) return;
+
+    const checkVerificationStatus = async () => {
+      try {
+        const response = await API.get('/hospital/profile');
+        if (response.data?.hospital) {
+          const newVerificationStatus = response.data.hospital.verification_status;
+          const currentVerificationStatus = hospital?.verification_status;
+          
+          // If verification status changed, update hospital data
+          if (newVerificationStatus !== currentVerificationStatus) {
+            const hospitalData = response.data.hospital;
+            await AsyncStorage.setItem(HOSPITAL_INFO_KEY, JSON.stringify(hospitalData));
+            setHospital({
+              ...hospitalData,
+              _lastUpdated: Date.now(),
+            });
+          }
+        }
+      } catch (error) {
+        // Silently fail - don't spam errors
+      }
+    };
+
+    const intervalId = setInterval(checkVerificationStatus, 5000); // Check every 5 seconds
+    
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [hospital?.verification_status]);
+
   // Poll for updates when screen is focused
   useFocusEffect(
     useCallback(() => {
@@ -484,6 +531,7 @@ export default function HospitalDashboard() {
             if (!isActive) return;
             // Silent refresh to avoid flickering
             await Promise.all([
+                isActive && loadHospital(),
                 isActive && loadSessions(true),
                 isActive && loadRequirements(true),
                 // isActive && loadNotifications(true) // Temporarily disabled
@@ -595,9 +643,7 @@ export default function HospitalDashboard() {
     }
   };
   
-  const loadHospital = async () => {
-    // Clear hospital state first to prevent showing old data
-    setHospital(null);
+  const loadHospital = async (silent = false) => {
     try {
       // Try to load fresh data from API first
       try {
@@ -606,7 +652,15 @@ export default function HospitalDashboard() {
           const hospitalData = response.data.hospital;
           // Save to AsyncStorage for offline access
           await AsyncStorage.setItem(HOSPITAL_INFO_KEY, JSON.stringify(hospitalData));
-          setHospital(hospitalData);
+          
+          // Update hospital state - this will trigger re-render with new logo/verification status
+          setHospital(prev => {
+            // Force update by adding timestamp to trigger image refresh
+            return {
+              ...hospitalData,
+              _lastUpdated: Date.now(), // Cache buster for images
+            };
+          });
           
           // Use hospital location as default if available
           if (hospitalData.latitude && hospitalData.longitude) {
@@ -617,15 +671,20 @@ export default function HospitalDashboard() {
           }
           return;
         }
-      } catch (apiError) {
-        console.log('⚠️ API fetch failed, using cached data:', apiError);
+      } catch (apiError: any) {
+        if (!silent) {
+          console.log('⚠️ API fetch failed, using cached data:', apiError);
+        }
       }
 
       // Fallback to cached data from AsyncStorage
       const info = await AsyncStorage.getItem(HOSPITAL_INFO_KEY);
       if (info) {
         const hospitalData = JSON.parse(info);
-        setHospital(hospitalData);
+        setHospital(prev => ({
+          ...hospitalData,
+          _lastUpdated: Date.now(), // Cache buster
+        }));
         
         // Use hospital location as default if available
         if (hospitalData.latitude && hospitalData.longitude) {
@@ -636,7 +695,9 @@ export default function HospitalDashboard() {
         }
       }
     } catch (error) {
-      console.error('Error loading hospital:', error);
+      if (!silent) {
+        console.error('Error loading hospital:', error);
+      }
     }
   };
 
@@ -932,11 +993,10 @@ export default function HospitalDashboard() {
 
   return (
     <ScreenSafeArea backgroundColor="#2563EB" statusBarStyle="light-content" edges={['top', 'left', 'right']}>
-      {/* Ensure status bar stays blue always */}
-      <StatusBar 
-        barStyle="light-content" 
+      {/* Status bar handler */}
+      <StatusBarHandler 
         backgroundColor="#2563EB" 
-        translucent={false}
+        barStyle="light-content"
       />
       {/* Custom Logout Confirmation Modal - appears on top of everything */}
       <Modal
@@ -993,15 +1053,18 @@ export default function HospitalDashboard() {
           <View style={styles.headerContent}>
             <TouchableOpacity onPress={() => router.push('/hospital/profile')} style={styles.profileButton}>
                {(() => {
-                 const rawSrc = hospital?.profile_photo || hospital?.logo_path || hospital?.logo;
-                 const fullUrl = getFullImageUrl(rawSrc);
+                 const rawSrc = hospital?.profile_photo || hospital?.logo_path || hospital?.logo || hospital?.logo_url;
+                 const fullUrl = rawSrc ? getFullImageUrl(rawSrc) : null;
+                 // Add cache buster to force image refresh when hospital data updates
+                 const cacheBuster = hospital?._lastUpdated || Date.now();
+                 const imageUrl = fullUrl ? `${fullUrl}${fullUrl.includes('?') ? '&' : '?'}t=${cacheBuster}` : null;
                  
-                 if (rawSrc) {
+                 if (imageUrl) {
                    return (
                      <Avatar.Image 
-                       key={`hospital-${hospital?.id || 'no-id'}-${rawSrc}`}
+                       key={`hospital-${hospital?.id || 'no-id'}-${hospital?._lastUpdated || Date.now()}`}
                        size={56} 
-                       source={{ uri: fullUrl }}
+                       source={{ uri: imageUrl }}
                        onError={(e) => console.log('[Dashboard Header] Image Error:', e.nativeEvent.error)}
                        style={{ backgroundColor: '#fff', borderWidth: 3, borderColor: 'rgba(255,255,255,0.3)' }} 
                      />
@@ -1053,9 +1116,14 @@ export default function HospitalDashboard() {
           </View>
         </LinearGradient>
 
-        {/* Enhanced Statistics Cards - 2x2 Grid with Gradient */}
+        {/* Enhanced Statistics Cards - 3x2 Grid */}
         <View style={styles.statsGrid}>
-          <Card style={[styles.statCard, styles.statCard1]} mode="elevated" elevation={3}>
+          <Card 
+            style={[styles.statCard, styles.statCard1]} 
+            mode="elevated" 
+            elevation={3}
+            onPress={() => {}}
+          >
             <Card.Content style={styles.statContent}>
               <View style={[styles.statIcon, styles.statIcon1]}>
                 <Building2 size={26} color="#2563EB" />
@@ -1068,18 +1136,12 @@ export default function HospitalDashboard() {
               </View>
             </Card.Content>
           </Card>
-          <Card style={[styles.statCard, styles.statCard2]} mode="elevated" elevation={3}>
-            <Card.Content style={styles.statContent}>
-              <View style={[styles.statIcon, styles.statIcon2]}>
-                <Bell size={26} color="#10B981" />
-              </View>
-              <View style={styles.statText}>
-                <Text style={styles.statValue}>{notificationCount}</Text>
-                <Text style={styles.statLabel}>Notifications</Text>
-              </View>
-            </Card.Content>
-          </Card>
-          <Card style={[styles.statCard, styles.statCard3]} mode="elevated" elevation={3}>
+          <Card 
+            style={[styles.statCard, styles.statCard3]} 
+            mode="elevated" 
+            elevation={3}
+            onPress={() => {}}
+          >
             <Card.Content style={styles.statContent}>
               <View style={[styles.statIcon, styles.statIcon3]}>
                 <CheckCircle2 size={26} color="#F59E0B" />
@@ -1092,7 +1154,12 @@ export default function HospitalDashboard() {
               </View>
             </Card.Content>
           </Card>
-          <Card style={[styles.statCard, styles.statCard4]} mode="elevated" elevation={3}>
+          <Card 
+            style={[styles.statCard, styles.statCard4]} 
+            mode="elevated" 
+            elevation={3}
+            onPress={() => {}}
+          >
             <Card.Content style={styles.statContent}>
               <View style={[styles.statIcon, styles.statIcon4]}>
                 <Clock size={26} color="#DC2626" />
@@ -1102,6 +1169,46 @@ export default function HospitalDashboard() {
                   {sessions.filter((s: any) => s.status === 'completed' && !s.hospital_confirmed).length}
                 </Text>
                 <Text style={styles.statLabel}>Pending Review</Text>
+              </View>
+            </Card.Content>
+          </Card>
+          <Card 
+            style={[styles.statCard, styles.statCard5]} 
+            mode="elevated" 
+            elevation={3}
+            onPress={() => {
+              if (hospital?.verification_status !== 'approved') {
+                Alert.alert(
+                  'Verification Required',
+                  'Your hospital account needs to be verified before you can post job requirements. Please wait for admin approval.',
+                  [{ text: 'OK' }]
+                );
+              } else {
+                setShowForm(true);
+              }
+            }}
+          >
+            <Card.Content style={styles.statContent}>
+              <View style={[styles.statIcon, styles.statIcon5]}>
+                <Plus size={26} color="#10B981" />
+              </View>
+              <View style={styles.statText}>
+                <Text style={styles.statLabel}>Post Job</Text>
+              </View>
+            </Card.Content>
+          </Card>
+          <Card 
+            style={[styles.statCard, styles.statCard6]} 
+            mode="elevated" 
+            elevation={3}
+            onPress={() => router.push('/hospital/live-tracking')}
+          >
+            <Card.Content style={styles.statContent}>
+              <View style={[styles.statIcon, styles.statIcon6]}>
+                <Navigation size={26} color="#8B5CF6" />
+              </View>
+              <View style={styles.statText}>
+                <Text style={styles.statLabel}>Live Tracking</Text>
               </View>
             </Card.Content>
           </Card>
@@ -1569,10 +1676,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   statCard: {
-    width: '47%',
+    width: '31%',
     borderRadius: 16,
     borderWidth: 0,
     backgroundColor: '#FFFFFF',
+    minWidth: 100,
   },
   statContent: {
     flexDirection: 'row',
@@ -1599,6 +1707,12 @@ const styles = StyleSheet.create({
   statIcon4: {
     backgroundColor: '#FEE2E2',
   },
+  statIcon5: {
+    backgroundColor: '#ECFDF5',
+  },
+  statIcon6: {
+    backgroundColor: '#F3E8FF',
+  },
   statCard1: {
     backgroundColor: '#FFFFFF',
     borderLeftWidth: 4,
@@ -1618,6 +1732,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderLeftWidth: 4,
     borderLeftColor: '#DC2626',
+  },
+  statCard5: {
+    backgroundColor: '#FFFFFF',
+    borderLeftWidth: 4,
+    borderLeftColor: '#10B981',
+  },
+  statCard6: {
+    backgroundColor: '#FFFFFF',
+    borderLeftWidth: 4,
+    borderLeftColor: '#8B5CF6',
   },
   statText: {
     flex: 1,

@@ -19,6 +19,7 @@ import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
 import { API_BASE_URL, BASE_BACKEND_URL } from '../../../../config/api';
 import { ArrowLeft, Save, Camera, User } from 'lucide-react-native';
+import { ImageCropPicker } from '@/components/ImageCropPicker';
 
 export default function EditDoctor() {
   const router = useRouter();
@@ -86,39 +87,13 @@ export default function EditDoctor() {
     }
   };
 
-  const pickImage = async () => {
-    try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'We need camera roll permissions to upload photos');
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions?.Images || 'images',
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
-      });
-
-      if (!result.canceled && result.assets[0]) {
-        const fileSizeMB = (result.assets[0].fileSize || 0) / (1024 * 1024);
-        const maxSizeMB = 5;
-
-        if (fileSizeMB > maxSizeMB) {
-          Alert.alert(
-            'File Too Large',
-            `Profile photo must be less than ${maxSizeMB}MB. Your file is ${fileSizeMB.toFixed(2)}MB. Please compress the image and try again.`,
-            [{ text: 'OK' }]
-          );
-          return;
-        }
-
-        setProfilePhotoUri(result.assets[0].uri);
-        setProfilePhoto(result.assets[0].uri);
-      }
-    } catch (error: any) {
-      Alert.alert('Error', 'Failed to pick image: ' + error.message);
+  const handleProfilePhotoSelected = (uri: string) => {
+    if (uri) {
+      setProfilePhotoUri(uri);
+      setProfilePhoto(uri);
+    } else {
+      setProfilePhotoUri(null);
+      setProfilePhoto(null);
     }
   };
 
@@ -213,22 +188,15 @@ export default function EditDoctor() {
         {/* Profile Photo Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Profile Photo</Text>
-          <View style={styles.photoContainer}>
-            {profilePhotoUri ? (
-              <Image source={{ uri: profilePhotoUri }} style={styles.profileImage} />
-            ) : (
-              <View style={styles.profilePlaceholder}>
-                <User size={40} color="#2563eb" />
-              </View>
-            )}
-            <TouchableOpacity style={styles.changePhotoButton} onPress={pickImage}>
-              <Camera size={18} color="#2563eb" />
-              <Text style={styles.changePhotoText}>Change Photo</Text>
-            </TouchableOpacity>
-            <Text style={styles.fileSizeHint}>
-              Maximum file size: 5MB (JPEG, PNG, JPG, or WEBP)
-            </Text>
-          </View>
+          <ImageCropPicker
+            onImageSelected={handleProfilePhotoSelected}
+            aspectRatio={[1, 1]}
+            circular={true}
+            width={400}
+            height={400}
+            showControls={true}
+            initialImage={profilePhotoUri || profilePhoto}
+          />
         </View>
 
         {/* Basic Information */}

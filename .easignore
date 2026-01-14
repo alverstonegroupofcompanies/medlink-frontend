@@ -1,0 +1,62 @@
+# EAS Build ignore file
+# Files and directories that should not be uploaded to EAS Build
+
+# Dependencies (will be installed on build server)
+node_modules/
+
+# Build outputs
+.expo/
+dist/
+web-build/
+*.tsbuildinfo
+
+# Native folders (generated during build)
+ios/
+android/
+.kotlin/
+
+# Development files
+.env*.local
+*.pem
+*.key
+*.p8
+*.p12
+*.jks
+*.mobileprovision
+*.orig.*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+*.log
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Documentation and scripts (not needed for build)
+*.md
+*.txt
+*.ps1
+*.sh
+
+# Test files
+__tests__/
+*.test.*
+*.spec.*
+
+# Metro cache
+.metro-health-check*
+
+# Temporary files
+*.tmp
+*.temp
+android.os.Handler

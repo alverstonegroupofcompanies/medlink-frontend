@@ -19,6 +19,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '@/config/api';
 import { HospitalPrimaryColors as PrimaryColors } from '@/constants/hospital-theme';
 import { LocationPickerMap } from '@/components/LocationPickerMap';
+import { ImageCropPicker } from '@/components/ImageCropPicker';
 
 export default function HospitalDetailsScreen() {
   const [loading, setLoading] = useState(false);
@@ -74,31 +75,11 @@ export default function HospitalDetailsScreen() {
     }));
   };
 
-  const handlePickLogo = async () => {
-    try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'We need camera roll permissions to upload photos');
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions?.Images || 'images',
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
-      });
-
-      if (!result.canceled && result.assets[0]) {
-        const fileSizeMB = (result.assets[0].fileSize || 0) / (1024 * 1024);
-        if (fileSizeMB > 5) {
-          Alert.alert('File Too Large', 'Logo must be less than 5MB. Please compress the image.');
-          return;
-        }
-        setLogoUri(result.assets[0].uri);
-      }
-    } catch (error: any) {
-      Alert.alert('Error', 'Failed to pick image: ' + error.message);
+  const handleLogoSelected = (uri: string) => {
+    if (uri) {
+      setLogoUri(uri);
+    } else {
+      setLogoUri(null);
     }
   };
 
@@ -368,21 +349,15 @@ export default function HospitalDetailsScreen() {
           {/* Logo */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Hospital Logo</Text>
-            <View style={styles.logoContainer}>
-              {logoUri ? (
-                <View style={styles.logoPreview}>
-                  <Text style={styles.logoText}>Logo Selected</Text>
-                </View>
-              ) : (
-                <View style={styles.logoPlaceholder}>
-                  <Building2 size={40} color={PrimaryColors.main} />
-                </View>
-              )}
-              <TouchableOpacity style={styles.logoButton} onPress={handlePickLogo}>
-                <Camera size={18} color={PrimaryColors.main} />
-                <Text style={styles.logoButtonText}>Choose Logo</Text>
-              </TouchableOpacity>
-            </View>
+            <ImageCropPicker
+              onImageSelected={handleLogoSelected}
+              aspectRatio={[1, 1]}
+              circular={false}
+              width={400}
+              height={400}
+              showControls={true}
+              initialImage={logoUri}
+            />
           </View>
 
           {/* Basic Information */}

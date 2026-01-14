@@ -20,6 +20,7 @@ import { API_BASE_URL } from '@/config/api';
 import { DoctorPrimaryColors as PrimaryColors } from '@/constants/doctor-theme';
 import { MultiDepartmentPicker } from '@/components/multi-department-picker';
 import { FileUploadButton } from '@/components/file-upload-button';
+import { ImageCropPicker } from '@/components/ImageCropPicker';
 
 export default function DoctorDetailsScreen() {
   const [loading, setLoading] = useState(false);
@@ -74,31 +75,11 @@ export default function DoctorDetailsScreen() {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handlePickProfilePhoto = async () => {
-    try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'We need camera roll permissions to upload photos');
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions?.Images || 'images',
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
-      });
-
-      if (!result.canceled && result.assets[0]) {
-        const fileSizeMB = (result.assets[0].fileSize || 0) / (1024 * 1024);
-        if (fileSizeMB > 5) {
-          Alert.alert('File Too Large', 'Profile photo must be less than 5MB. Please compress the image.');
-          return;
-        }
-        setProfilePhoto(result.assets[0].uri);
-      }
-    } catch (error: any) {
-      Alert.alert('Error', 'Failed to pick image: ' + error.message);
+  const handleProfilePhotoSelected = (uri: string) => {
+    if (uri) {
+      setProfilePhoto(uri);
+    } else {
+      setProfilePhoto(null);
     }
   };
 
@@ -361,21 +342,15 @@ export default function DoctorDetailsScreen() {
           {/* Profile Photo */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Profile Photo</Text>
-            <View style={styles.photoContainer}>
-              {profilePhoto ? (
-                <View style={styles.photoPreview}>
-                  <Text style={styles.photoText}>Photo Selected</Text>
-                </View>
-              ) : (
-                <View style={styles.photoPlaceholder}>
-                  <User size={40} color={PrimaryColors.main} />
-                </View>
-              )}
-              <TouchableOpacity style={styles.photoButton} onPress={handlePickProfilePhoto}>
-                <Camera size={18} color={PrimaryColors.main} />
-                <Text style={styles.photoButtonText}>Choose Photo</Text>
-              </TouchableOpacity>
-            </View>
+            <ImageCropPicker
+              onImageSelected={handleProfilePhotoSelected}
+              aspectRatio={[1, 1]}
+              circular={true}
+              width={400}
+              height={400}
+              showControls={true}
+              initialImage={profilePhoto}
+            />
           </View>
 
           {/* Basic Information */}

@@ -501,6 +501,9 @@ export default function ProfileScreen() {
           const completion = calculateProfileCompletion(responseData.doctor);
           const percentage = Math.round(completion * 100);
           
+          // Set loading to false BEFORE showing alert for immediate UI feedback
+          setLoading(false);
+          
           Alert.alert(
             'Success',
             `Profile updated successfully!\nProfile Status: ${percentage}%`,

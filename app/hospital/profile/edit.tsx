@@ -13,6 +13,7 @@ import {
   StatusBar,
   Dimensions,
   ActivityIndicator,
+  DeviceEventEmitter,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
@@ -33,6 +34,7 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { API_BASE_URL } from '@/config/api';
+import API from '../../api';
 import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors } from '@/constants/hospital-theme';
 import { ScreenSafeArea, useSafeBottomPadding } from '@/components/screen-safe-area';
 import { BASE_BACKEND_URL } from '@/config/api';
@@ -76,7 +78,17 @@ export default function HospitalProfileEditScreen() {
     try {
       setLoading(true);
       const response = await API.get('/hospital/profile');
-      const hospitalData = response.data.hospital;
+      
+      if (!response || !response.data) {
+        throw new Error('Invalid response from server');
+      }
+      
+      const hospitalData = response.data.hospital || response.data;
+      
+      if (!hospitalData) {
+        throw new Error('Hospital data not found in response');
+      }
+      
       setHospital(hospitalData);
       
       setFormData({
@@ -145,13 +157,42 @@ export default function HospitalProfileEditScreen() {
         }
       }
       
-      const message = error?.response?.status === 500
-        ? 'The server encountered an error (500). This is a backend issue. Please contact the administrator or try again later.'
-        : error?.userFriendlyMessage || error?.response?.data?.message || 'Unable to load profile. Please try again.';
+      let errorMessage = 'Unable to load profile. Please try again.';
+      let errorTitle = 'Unable to Load';
+      
+      if (error?.response) {
+        const status = error.response.status;
+        if (status === 401) {
+          errorTitle = 'Authentication Error';
+          errorMessage = 'Your session has expired. Please login again.';
+          // Redirect to login after a short delay
+          setTimeout(() => {
+            router.replace('/hospital/login');
+          }, 2000);
+        } else if (status === 404) {
+          errorTitle = 'Not Found';
+          errorMessage = 'Hospital profile not found. Please contact support.';
+        } else if (status === 500) {
+          errorTitle = 'Server Error';
+          errorMessage = 'The server encountered an error (500). This is a backend issue. Please contact the administrator or try again later.';
+        } else if (error.response.data?.message) {
+          errorMessage = error.response.data.message;
+        }
+      } else if (error?.message) {
+        errorMessage = error.message;
+      } else if (error?.userFriendlyMessage) {
+        errorMessage = error.userFriendlyMessage;
+      }
+      
+      // Check for network errors
+      if (error?.code === 'ERR_NETWORK' || error?.message?.includes('Network')) {
+        errorTitle = 'Network Error';
+        errorMessage = 'Cannot connect to server. Please check your internet connection and try again.';
+      }
       
       Alert.alert(
-        error?.response?.status === 500 ? 'Server Error' : 'Unable to Load',
-        message,
+        errorTitle,
+        errorMessage,
         [
           { text: 'Go Back', onPress: () => router.back(), style: 'cancel' },
           { text: 'Retry', onPress: () => loadProfile() }
@@ -528,8 +569,24 @@ export default function HospitalProfileEditScreen() {
         setSelectedHospitalPicture(null);
         setLicenseDocument(null);
         
+        // Reload hospital data one more time to get the latest picture URL if uploaded
+        try {
+          const finalResponse = await API.get('/hospital/profile');
+          if (finalResponse.data?.hospital) {
+            const finalHospitalData = finalResponse.data.hospital;
+            await AsyncStorage.setItem(HOSPITAL_INFO_KEY, JSON.stringify(finalHospitalData));
+            setHospital(finalHospitalData);
+          }
+        } catch (error) {
+          // Ignore error - we already have the data
+        }
+        
         // Set saving to false BEFORE showing alert for immediate UI feedback
         setSaving(false);
+        
+        // Emit event to notify other screens (dashboard) that hospital data was updated
+        // This will trigger dashboard to reload hospital data and refresh the logo
+        DeviceEventEmitter.emit('hospitalDataUpdated');
         
         Alert.alert('Success', 'Profile updated successfully!', [
           { text: 'OK', onPress: () => router.back() },
