@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, RefreshControl, ScrollView, Image, StatusBar, Platform } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { ArrowLeft, CreditCard, Calendar, User, DollarSign, CheckCircle, Clock, AlertCircle, Building2, FileText, MapPin, TrendingUp, TrendingDown, ChevronDown, ChevronUp } from 'lucide-react-native';
+import { ArrowLeft, CreditCard, Calendar, User, DollarSign, CheckCircle, Clock, AlertCircle, Building2, FileText, MapPin, TrendingUp, TrendingDown, ChevronDown } from 'lucide-react-native';
 import API from '../api';
 import { ScreenSafeArea, useSafeBottomPadding } from '@/components/screen-safe-area';
 import { HospitalPrimaryColors as PrimaryColors } from '@/constants/hospital-theme';
@@ -18,7 +18,16 @@ export default function PaymentHistoryScreen() {
   const loadPayments = async () => {
     try {
       const response = await API.get('/hospital/payments');
-      setPayments(response.data.payments || []);
+      const paymentsData = response.data.payments || [];
+      
+      // Debug: Log payment data structure to understand what we're receiving
+      if (__DEV__ && paymentsData.length > 0) {
+        console.log('📊 Payment data sample:', JSON.stringify(paymentsData[0], null, 2));
+        console.log('👨‍⚕️ Doctor data in first payment:', paymentsData[0]?.doctor);
+        console.log('📋 Job Session in first payment:', paymentsData[0]?.job_session);
+      }
+      
+      setPayments(paymentsData);
     } catch (error) {
       if (__DEV__) {
         console.error('Error loading payments:', error);
@@ -120,193 +129,196 @@ export default function PaymentHistoryScreen() {
     setExpandedItems(newExpanded);
   };
 
-  const renderItem = ({ item }: { item: any }) => {
+  // Helper function to get doctor name
+  const getDoctorName = (item: any) => {
+    const doctor = item.doctor;
+    const jobSession = item.job_session;
+    
+    const formatDoctorName = (name: string | null | undefined) => {
+      if (!name || typeof name !== 'string' || name.trim() === '') {
+        return null;
+      }
+      const trimmedName = name.trim();
+      if (trimmedName.startsWith('Doctor (ID:')) {
+        return trimmedName;
+      }
+      return `Dr. ${trimmedName}`;
+    };
+    
+    if (doctor && doctor.name) {
+      const formattedName = formatDoctorName(doctor.name);
+      if (formattedName) return formattedName;
+    }
+    
+    if (jobSession?.doctor?.name) {
+      const formattedName = formatDoctorName(jobSession.doctor.name);
+      if (formattedName) return formattedName;
+    }
+    
+    if (jobSession?.doctor_id && !jobSession.doctor) {
+      return 'Doctor (ID: ' + jobSession.doctor_id + ')';
+    }
+    
+    if (item.doctor_id) {
+      return 'Doctor (ID: ' + item.doctor_id + ')';
+    }
+    
+    return 'Unknown Doctor';
+  };
+
+  const renderItem = ({ item, index }: { item: any; index: number }) => {
     const isHeld = item.status === 'held' || item.status === 'in_escrow' || item.status === 'pending';
     const isReleased = item.status === 'released' || item.status === 'paid';
-    const doctor = item.doctor;
     const jobSession = item.job_session;
     const jobRequirement = item.job_requirement;
     const isExpanded = expandedItems.has(item.id);
+    const hasDetails = jobSession || jobRequirement;
+    const doctorName = getDoctorName(item);
+    const department = jobRequirement?.department || jobSession?.job_requirement?.department;
+    
+    // Get payment description
+    const getPaymentDescription = () => {
+      if (department) {
+        return `Payment for ${department}`;
+      }
+      if (jobSession?.session_date) {
+        return `Payment for job session`;
+      }
+      return 'Payment';
+    };
 
     return (
-      <TouchableOpacity 
-        style={styles.paymentCard}
-        activeOpacity={0.7}
-        onPress={() => toggleExpand(item.id)}
-      >
-        {/* Compact Header - Always Visible */}
-        <View style={styles.cardHeader}>
-          <View style={styles.doctorInfo}>
-            {doctor?.profile_photo ? (
-              <Image
-                source={{ uri: doctor.profile_photo.startsWith('http') ? doctor.profile_photo : `${BASE_BACKEND_URL}/app/${doctor.profile_photo}` }}
-                style={styles.doctorAvatar}
-                onError={() => {}}
-              />
-            ) : (
-              <View style={styles.avatarPlaceholder}>
-                <User size={16} color={PrimaryColors.main} />
-              </View>
-            )}
-            <View style={styles.doctorDetails}>
-              <Text style={styles.doctorName} numberOfLines={1}>
-                {doctor?.name ? `Dr. ${doctor.name}` : (item.doctor_id ? 'Doctor (ID: ' + item.doctor_id + ')' : 'Unknown Doctor')}
+      <View key={item.id}>
+        <TouchableOpacity
+          style={styles.transactionRow}
+          onPress={() => hasDetails && toggleExpand(item.id)}
+          activeOpacity={hasDetails ? 0.7 : 1}
+        >
+          <View style={styles.transactionLeft}>
+            <View style={styles.transactionDateColumn}>
+              <Text style={styles.transactionDateDay}>
+                {item.created_at ? new Date(item.created_at).getDate() : '--'}
               </Text>
-              {(jobRequirement?.department || jobSession?.job_requirement?.department) && (
-                <Text style={styles.department} numberOfLines={1}>
-                  {jobRequirement?.department || jobSession?.job_requirement?.department}
+              <Text style={styles.transactionDateMonth}>
+                {item.created_at ? new Date(item.created_at).toLocaleDateString('en-IN', { month: 'short' }).toUpperCase() : '---'}
+              </Text>
+            </View>
+            <View style={styles.transactionInfoColumn}>
+              <Text style={styles.transactionDescription} numberOfLines={1}>
+                {getPaymentDescription()}
+              </Text>
+              {doctorName && (
+                <Text style={styles.transactionDoctor} numberOfLines={1}>
+                  {doctorName}
                 </Text>
               )}
+              {department && !doctorName && (
+                <Text style={styles.transactionDoctor} numberOfLines={1}>
+                  {department}
+                </Text>
+              )}
+              <View style={styles.transactionStatusRow}>
+                <View style={[styles.transactionStatusDot, { 
+                  backgroundColor: isReleased ? '#16A34A' : isHeld ? '#F59E0B' : '#9CA3AF' 
+                }]} />
+                <Text style={[styles.transactionStatusText, { 
+                  color: isReleased ? '#16A34A' : isHeld ? '#F59E0B' : '#6B7280' 
+                }]}>
+                  {getStatusLabel(item.status)}
+                </Text>
+              </View>
             </View>
           </View>
-          <View style={styles.headerRight}>
-            <View style={[styles.statusBadge, { backgroundColor: `${getStatusColor(item.status)}15` }]}>
-              {getStatusIcon(item.status)}
-              <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-                {getStatusLabel(item.status)}
+          <View style={styles.transactionRight}>
+            <Text
+              style={[
+                styles.transactionAmount,
+                {
+                  color: isReleased ? '#16A34A' : '#1F2937',
+                },
+              ]}
+            >
+              -₹{parseFloat(item.amount || 0).toFixed(2)}
+            </Text>
+            {hasDetails && (
+              <ChevronDown 
+                size={18} 
+                color="#9CA3AF" 
+                style={[styles.expandIcon, isExpanded && { transform: [{ rotate: '180deg' }] }]}
+              />
+            )}
+          </View>
+        </TouchableOpacity>
+        
+        {isExpanded && hasDetails && (
+          <View style={styles.transactionDetails}>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Date & Time:</Text>
+              <Text style={styles.detailValue}>
+                {item.created_at ? new Date(item.created_at).toLocaleDateString('en-IN', {
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                }) : 'N/A'}
               </Text>
             </View>
-            {isExpanded ? (
-              <ChevronUp size={20} color="#64748B" style={styles.expandIcon} />
-            ) : (
-              <ChevronDown size={20} color="#64748B" style={styles.expandIcon} />
-            )}
-          </View>
-        </View>
-
-        {/* Compact Amount - Always Visible */}
-        <View style={styles.amountSectionCompact}>
-          <Text style={styles.amountValueCompact}>₹{parseFloat(item.amount || 0).toFixed(2)}</Text>
-          {item.created_at && (
-            <Text style={styles.dateCompact}>
-              {new Date(item.created_at).toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-              })}
-            </Text>
-          )}
-        </View>
-
-        {/* Expandable Details - Horizontal Layout */}
-        {isExpanded && (
-          <View style={styles.expandedContent}>
-            {/* Payment Details - Horizontal Grid */}
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              style={styles.detailsHorizontal}
-              contentContainerStyle={styles.detailsHorizontalContent}
-            >
-              {item.created_at && (
-                <View style={styles.detailCardHorizontal}>
-                  <Calendar size={16} color={PrimaryColors.main} />
-                  <Text style={styles.detailLabelHorizontal}>Payment Date</Text>
-                  <Text style={styles.detailValueHorizontal}>
-                    {new Date(item.created_at).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric',
-                    })}
-                  </Text>
-                </View>
-              )}
-
-              {jobSession?.session_date && (
-                <View style={styles.detailCardHorizontal}>
-                  <Clock size={16} color={PrimaryColors.main} />
-                  <Text style={styles.detailLabelHorizontal}>Job Date</Text>
-                  <Text style={styles.detailValueHorizontal}>
-                    {new Date(jobSession.session_date).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric',
-                    })}
-                  </Text>
-                </View>
-              )}
-
-              {item.payment_method && (
-                <View style={styles.detailCardHorizontal}>
-                  <CreditCard size={16} color={PrimaryColors.main} />
-                  <Text style={styles.detailLabelHorizontal}>Method</Text>
-                  <Text style={styles.detailValueHorizontal}>
-                    {item.payment_method.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
-                  </Text>
-                </View>
-              )}
-
-              {jobSession?.id && (
-                <View style={styles.detailCardHorizontal}>
-                  <FileText size={16} color={PrimaryColors.main} />
-                  <Text style={styles.detailLabelHorizontal}>Session ID</Text>
-                  <Text style={styles.detailValueHorizontal}>#{jobSession.id}</Text>
-                </View>
-              )}
-            </ScrollView>
-
-            {/* Approval Status */}
-            {(isHeld || isReleased) && (
-              <View style={styles.approvalSection}>
-            <Text style={styles.approvalTitle}>Approval Status</Text>
-            <View style={styles.approvalTimeline}>
-              <View style={styles.approvalStep}>
-                <View style={[styles.approvalDot, item.hospital_approved_at ? styles.approvalDotActive : styles.approvalDotPending]} />
-                <View style={styles.approvalStepContent}>
-                  <Text style={styles.approvalStepLabel}>Hospital Approval</Text>
-                  {item.hospital_approved_at ? (
-                    <Text style={styles.approvalStepTime}>
-                      {new Date(item.hospital_approved_at).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: 'numeric',
-                        minute: '2-digit',
-                      })}
-                    </Text>
-                  ) : (
-                    <Text style={styles.approvalStepPending}>Pending</Text>
-                  )}
-                </View>
+            {doctorName && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Doctor:</Text>
+                <Text style={styles.detailValue}>{doctorName}</Text>
               </View>
-
-              {item.released_at && (
-                <View style={styles.approvalStep}>
-                  <View style={[styles.approvalDot, styles.approvalDotReleased]} />
-                  <View style={styles.approvalStepContent}>
-                    <Text style={styles.approvalStepLabel}>Released</Text>
-                    <Text style={styles.approvalStepTime}>
-                      {new Date(item.released_at).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: 'numeric',
-                        minute: '2-digit',
-                      })}
-                    </Text>
-                  </View>
-                </View>
-              )}
-            </View>
-          </View>
-        )}
-
-            {/* Payment Breakdown */}
-            {(item.admin_amount || item.doctor_amount) && (
-              <View style={styles.breakdownSection}>
-                <Text style={styles.breakdownTitle}>Payment Breakdown</Text>
-                <View style={styles.breakdownRow}>
-                  <Text style={styles.breakdownLabel}>Doctor Payment (80%)</Text>
-                  <Text style={styles.breakdownValue}>₹{parseFloat(item.doctor_amount || 0).toFixed(2)}</Text>
-                </View>
-                <View style={styles.breakdownRow}>
-                  <Text style={styles.breakdownLabel}>Platform Fee (20%)</Text>
-                  <Text style={styles.breakdownValue}>₹{parseFloat(item.admin_amount || 0).toFixed(2)}</Text>
-                </View>
+            )}
+            {department && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Department:</Text>
+                <Text style={styles.detailValue}>{department}</Text>
+              </View>
+            )}
+            {jobSession?.session_date && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Job Date:</Text>
+                <Text style={styles.detailValue}>
+                  {new Date(jobSession.session_date).toLocaleDateString('en-IN', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                  })}
+                </Text>
+              </View>
+            )}
+            {item.payment_method && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Payment Method:</Text>
+                <Text style={styles.detailValue}>
+                  {item.payment_method.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                </Text>
+              </View>
+            )}
+            {item.released_at && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Released At:</Text>
+                <Text style={styles.detailValue}>
+                  {new Date(item.released_at).toLocaleDateString('en-IN', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </Text>
               </View>
             )}
           </View>
         )}
-      </TouchableOpacity>
+        
+        {index < filteredPayments.length - 1 && (
+          <View style={styles.transactionDivider} />
+        )}
+      </View>
     );
-  };
+
 
   return (
     <ScreenSafeArea style={styles.container} backgroundColor="#F8FAFC" statusBarStyle="light-content">
@@ -390,11 +402,9 @@ export default function PaymentHistoryScreen() {
               </Text>
             </View>
           ) : (
-            filteredPayments.map((item) => (
-              <View key={item.id}>
-                {renderItem({ item })}
-              </View>
-            ))
+            <View style={styles.transactionsSection}>
+              {filteredPayments.map((item, index) => renderItem({ item, index }))}
+            </View>
           )}
         </ScrollView>
       )}
@@ -439,6 +449,13 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
     paddingBottom: 40,
+  },
+  transactionsSection: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   
   // Stats Container
@@ -527,226 +544,119 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 
-  // Payment Card - Compact
-  paymentCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  cardHeader: {
+  // Bank Transaction Style
+  transactionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    paddingVertical: 16,
+    paddingHorizontal: 4,
   },
-  doctorInfo: {
+  transactionLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
     flex: 1,
+    minWidth: 0,
+    flexShrink: 1,
+    marginRight: 12,
   },
-  doctorAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F1F5F9',
-  },
-  avatarPlaceholder: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#EFF6FF',
-    justifyContent: 'center',
+  transactionDateColumn: {
+    width: 50,
     alignItems: 'center',
+    marginRight: 16,
+    paddingRight: 16,
+    borderRightWidth: 1,
+    borderRightColor: '#E5E7EB',
   },
-  doctorDetails: {
-    flex: 1,
-  },
-  doctorName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginBottom: 2,
-  },
-  department: {
-    fontSize: 12,
-    color: '#64748B',
-    fontWeight: '500',
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  statusText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  expandIcon: {
-    marginLeft: 4,
-  },
-
-  // Compact Amount Section
-  amountSectionCompact: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderColor: '#F3F4F6',
-  },
-  amountValueCompact: {
+  transactionDateDay: {
     fontSize: 20,
     fontWeight: '700',
-    color: PrimaryColors.main,
-    letterSpacing: -0.3,
+    color: '#1F2937',
+    lineHeight: 24,
   },
-  dateCompact: {
+  transactionDateMonth: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#6B7280',
+    letterSpacing: 0.5,
+    marginTop: 2,
+  },
+  transactionInfoColumn: {
+    flex: 1,
+    minWidth: 0,
+  },
+  transactionDescription: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  transactionDoctor: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginBottom: 6,
+  },
+  transactionStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  transactionStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  transactionStatusText: {
     fontSize: 12,
-    color: '#64748B',
     fontWeight: '500',
   },
-
-  // Expanded Content
-  expandedContent: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderColor: '#F3F4F6',
+  transactionRight: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    gap: 6,
+    flexShrink: 0,
+    minWidth: 100,
   },
-  detailsHorizontal: {
-    marginBottom: 12,
+  expandIcon: {
+    marginTop: 4,
   },
-  detailsHorizontalContent: {
-    gap: 10,
-    paddingRight: 4,
+  transactionAmount: {
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+    textAlign: 'right',
   },
-  detailCardHorizontal: {
-    backgroundColor: '#F8FAFC',
-    padding: 12,
-    borderRadius: 10,
-    minWidth: 140,
-    alignItems: 'center',
+  transactionDivider: {
+    height: 1,
+    backgroundColor: '#E5E7EB',
+    marginLeft: 66,
+  },
+  transactionDetails: {
+    backgroundColor: '#F9FAFB',
+    padding: 16,
+    marginTop: 8,
+    marginBottom: 8,
+    marginLeft: 66,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
-  detailLabelHorizontal: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#9CA3AF',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginTop: 6,
-    marginBottom: 4,
-  },
-  detailValueHorizontal: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#374151',
-    textAlign: 'center',
-  },
-
-  // Approval Section
-  approvalSection: {
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderColor: '#F3F4F6',
-    marginBottom: 16,
-  },
-  approvalTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginBottom: 12,
-  },
-  approvalTimeline: {
-    gap: 12,
-  },
-  approvalStep: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  approvalDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginTop: 4,
-  },
-  approvalDotActive: {
-    backgroundColor: '#16A34A',
-  },
-  approvalDotPending: {
-    backgroundColor: '#E5E7EB',
-    borderWidth: 2,
-    borderColor: '#CBD5E1',
-  },
-  approvalDotReleased: {
-    backgroundColor: '#2563EB',
-  },
-  approvalStepContent: {
-    flex: 1,
-  },
-  approvalStepLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 4,
-  },
-  approvalStepTime: {
-    fontSize: 12,
-    color: '#16A34A',
-    fontWeight: '500',
-  },
-  approvalStepPending: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    fontWeight: '500',
-  },
-
-  // Breakdown Section
-  breakdownSection: {
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderColor: '#F3F4F6',
-  },
-  breakdownTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginBottom: 12,
-  },
-  breakdownRow: {
+  detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
+    marginBottom: 8,
   },
-  breakdownLabel: {
+  detailLabel: {
     fontSize: 13,
-    color: '#64748B',
+    color: '#6B7280',
     fontWeight: '500',
   },
-  breakdownValue: {
-    fontSize: 14,
+  detailValue: {
+    fontSize: 13,
+    color: '#1F2937',
     fontWeight: '600',
-    color: '#0F172A',
+    flex: 1,
+    textAlign: 'right',
   },
 
   // Empty State

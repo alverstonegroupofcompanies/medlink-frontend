@@ -1390,12 +1390,6 @@ export default function HospitalDashboard() {
                           <Plus size={14} color="#FFFFFF" />
                           <Text style={[styles.deptText, { color: '#FFFFFF' }]}>New Job</Text>
                         </View>
-                        <View style={[styles.statusBadge, { backgroundColor: 'rgba(255, 255, 255, 0.25)', borderColor: '#FFFFFF' }]}>
-                          <Plus size={12} color="#FFFFFF" />
-                          <Text style={[styles.statusText, { color: '#FFFFFF' }]}>
-                            Post
-                          </Text>
-                        </View>
                       </View>
                     </View>
 
@@ -1427,13 +1421,7 @@ export default function HospitalDashboard() {
                       <View style={styles.headerLeft}>
                         <View style={[styles.deptBadge, styles.deptBadgeLight]}>
                           <Navigation size={14} color="#FFFFFF" />
-                          <Text style={[styles.deptText, { color: '#FFFFFF' }]}>Tracking</Text>
-                        </View>
-                        <View style={[styles.statusBadge, { backgroundColor: 'rgba(255, 255, 255, 0.25)', borderColor: '#FFFFFF' }]}>
-                          <Navigation size={12} color="#FFFFFF" />
-                          <Text style={[styles.statusText, { color: '#FFFFFF' }]}>
-                            Live
-                          </Text>
+                          <Text style={[styles.deptText, { color: '#FFFFFF' }]}>Live Tracking</Text>
                         </View>
                       </View>
                     </View>
@@ -1811,7 +1799,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#2563EB',
     paddingTop: Platform.OS === 'ios' ? 60 : 50,
     paddingBottom: 24,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
   },
   headerContent: {
     flexDirection: 'row',
@@ -1882,14 +1870,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginTop: 16,
     marginBottom: 16,
+    justifyContent: 'space-between',
   },
   statCard: {
-    flex: 1,
-    minWidth: '22%',
-    maxWidth: '48%',
+    width: '47%',
     borderRadius: 12,
     backgroundColor: '#FFFFFF',
-    padding: 10,
+    padding: 12,
     borderWidth: 1,
     borderColor: NeutralColors.border,
     shadowColor: '#000',
@@ -1897,6 +1884,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 3,
     elevation: 2,
+    alignItems: 'flex-start',
   },
   statIcon: {
     width: 36,
@@ -1904,7 +1892,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 8,
+    alignSelf: 'flex-start',
   },
   statIcon1: {
     backgroundColor: '#DBEAFE',
@@ -1949,8 +1938,8 @@ const styles = StyleSheet.create({
     borderLeftColor: '#8B5CF6',
   },
   statTextContainer: {
-    flex: 1,
-    minWidth: 0,
+    width: '100%',
+    marginTop: 4,
   },
   statValue: {
     fontSize: 20,
@@ -1966,21 +1955,19 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   actionsSection: {
-    paddingHorizontal: 20,
-    marginTop: 8,
-    marginBottom: 20,
-  },
-  actionsSection: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     marginTop: 8,
     marginBottom: 20,
   },
   actionsRow: {
     flexDirection: 'row',
     gap: 12,
+    justifyContent: 'space-between',
   },
   actionCard: {
     flex: 1,
+    minWidth: 0,
+    maxWidth: '48%',
   },
   actionCardContent: {
     backgroundColor: NeutralColors.cardBackground,
@@ -1993,7 +1980,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 4,
     elevation: 2,
-    minHeight: 140,
+    minHeight: 120,
+    height: 120,
   },
   actionCardDescription: {
     fontSize: 12,
@@ -2049,7 +2037,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
   section: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     marginTop: 24,
     marginBottom: 24,
   },
