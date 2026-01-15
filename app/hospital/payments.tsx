@@ -21,10 +21,32 @@ export default function PaymentHistoryScreen() {
       const paymentsData = response.data.payments || [];
       
       // Debug: Log payment data structure to understand what we're receiving
-      if (__DEV__ && paymentsData.length > 0) {
-        console.log('📊 Payment data sample:', JSON.stringify(paymentsData[0], null, 2));
-        console.log('👨‍⚕️ Doctor data in first payment:', paymentsData[0]?.doctor);
-        console.log('📋 Job Session in first payment:', paymentsData[0]?.job_session);
+      if (__DEV__) {
+        console.log('📊 Total payments loaded:', paymentsData.length);
+        if (paymentsData.length > 0) {
+          const firstPayment = paymentsData[0];
+          console.log('📊 First payment full data:', JSON.stringify(firstPayment, null, 2));
+          console.log('👨‍⚕️ First payment doctor:', firstPayment?.doctor);
+          console.log('   - doctor?.id:', firstPayment?.doctor?.id);
+          console.log('   - doctor?.name:', firstPayment?.doctor?.name);
+          console.log('📋 First payment job_session:', firstPayment?.job_session);
+          console.log('   - job_session?.doctor_id:', firstPayment?.job_session?.doctor_id);
+          console.log('   - job_session?.doctor:', firstPayment?.job_session?.doctor);
+          console.log('   - job_session?.doctor?.id:', firstPayment?.job_session?.doctor?.id);
+          console.log('   - job_session?.doctor?.name:', firstPayment?.job_session?.doctor?.name);
+          console.log('🔑 First payment doctor_id:', firstPayment?.doctor_id);
+          
+          // Log all payments doctor data
+          paymentsData.forEach((payment: any, idx: number) => {
+            console.log(`💳 Payment #${idx + 1} (ID: ${payment.id}):`);
+            console.log(`   - doctor_id: ${payment.doctor_id}`);
+            console.log(`   - doctor:`, payment.doctor);
+            console.log(`   - job_session?.doctor_id: ${payment.job_session?.doctor_id}`);
+            console.log(`   - job_session?.doctor:`, payment.job_session?.doctor);
+          });
+        } else {
+          console.log('⚠️ No payments found in response');
+        }
       }
       
       setPayments(paymentsData);
@@ -130,40 +152,45 @@ export default function PaymentHistoryScreen() {
   };
 
   // Helper function to get doctor name
-  const getDoctorName = (item: any) => {
-    const doctor = item.doctor;
+  const getDoctorId = (item: any) => {
     const jobSession = item.job_session;
+    const doctor = item.doctor;
     
-    const formatDoctorName = (name: string | null | undefined) => {
-      if (!name || typeof name !== 'string' || name.trim() === '') {
-        return null;
-      }
-      const trimmedName = name.trim();
-      if (trimmedName.startsWith('Doctor (ID:')) {
-        return trimmedName;
-      }
-      return `Dr. ${trimmedName}`;
-    };
-    
-    if (doctor && doctor.name) {
-      const formattedName = formatDoctorName(doctor.name);
-      if (formattedName) return formattedName;
+    // Debug logging
+    if (__DEV__) {
+      console.log('🔍 getDoctorId - Payment ID:', item.id);
+      console.log('   - item.doctor_id:', item.doctor_id);
+      console.log('   - item.doctor:', doctor);
+      console.log('   - item.job_session:', jobSession);
+      console.log('   - jobSession?.doctor_id:', jobSession?.doctor_id);
+      console.log('   - jobSession?.doctor:', jobSession?.doctor);
     }
     
-    if (jobSession?.doctor?.name) {
-      const formattedName = formatDoctorName(jobSession.doctor.name);
-      if (formattedName) return formattedName;
+    // Priority 1: Get ID from jobSession.doctor
+    if (jobSession?.doctor?.id) {
+      if (__DEV__) console.log('   ✅ Found doctor ID from jobSession.doctor.id:', jobSession.doctor.id);
+      return `Doctor ID: ${jobSession.doctor.id}`;
     }
     
-    if (jobSession?.doctor_id && !jobSession.doctor) {
-      return 'Doctor (ID: ' + jobSession.doctor_id + ')';
+    // Priority 2: Get ID from direct payment.doctor relationship
+    if (doctor?.id) {
+      if (__DEV__) console.log('   ✅ Found doctor ID from doctor.id:', doctor.id);
+      return `Doctor ID: ${doctor.id}`;
+    }
+    
+    // Priority 3: Fallback to doctor_id fields
+    if (jobSession?.doctor_id) {
+      if (__DEV__) console.log('   ✅ Found doctor ID from jobSession.doctor_id:', jobSession.doctor_id);
+      return `Doctor ID: ${jobSession.doctor_id}`;
     }
     
     if (item.doctor_id) {
-      return 'Doctor (ID: ' + item.doctor_id + ')';
+      if (__DEV__) console.log('   ✅ Found doctor ID from item.doctor_id:', item.doctor_id);
+      return `Doctor ID: ${item.doctor_id}`;
     }
     
-    return 'Unknown Doctor';
+    if (__DEV__) console.log('   ❌ No doctor ID found for payment:', item.id);
+    return null;
   };
 
   const renderItem = ({ item, index }: { item: any; index: number }) => {
@@ -173,8 +200,17 @@ export default function PaymentHistoryScreen() {
     const jobRequirement = item.job_requirement;
     const isExpanded = expandedItems.has(item.id);
     const hasDetails = jobSession || jobRequirement;
-    const doctorName = getDoctorName(item);
+    const doctorId = getDoctorId(item);
     const department = jobRequirement?.department || jobSession?.job_requirement?.department;
+    
+    // Debug logging for render
+    if (__DEV__ && index === 0) {
+      console.log('🎨 Rendering payment item:', item.id);
+      console.log('   - doctorId result:', doctorId);
+      console.log('   - item.doctor:', item.doctor);
+      console.log('   - item.job_session:', item.job_session);
+      console.log('   - item.job_session?.doctor:', item.job_session?.doctor);
+    }
     
     // Get payment description
     const getPaymentDescription = () => {
@@ -207,12 +243,20 @@ export default function PaymentHistoryScreen() {
               <Text style={styles.transactionDescription} numberOfLines={1}>
                 {getPaymentDescription()}
               </Text>
-              {doctorName && (
-                <Text style={styles.transactionDoctor} numberOfLines={1}>
-                  {doctorName}
-                </Text>
-              )}
-              {department && !doctorName && (
+              {(() => {
+                if (__DEV__ && index === 0) {
+                  console.log('📝 Rendering doctor ID section for payment:', item.id);
+                  console.log('   - doctorId value:', doctorId);
+                  console.log('   - doctorId type:', typeof doctorId);
+                  console.log('   - Will render?', !!doctorId);
+                }
+                return doctorId ? (
+                  <Text style={styles.transactionDoctor} numberOfLines={1}>
+                    {doctorId}
+                  </Text>
+                ) : null;
+              })()}
+              {department && !doctorId && (
                 <Text style={styles.transactionDoctor} numberOfLines={1}>
                   {department}
                 </Text>
@@ -264,10 +308,10 @@ export default function PaymentHistoryScreen() {
                 }) : 'N/A'}
               </Text>
             </View>
-            {doctorName && (
+            {doctorId && (
               <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Doctor:</Text>
-                <Text style={styles.detailValue}>{doctorName}</Text>
+                <Text style={styles.detailLabel}>Doctor ID:</Text>
+                <Text style={styles.detailValue}>{doctorId.replace('Doctor ID: ', '')}</Text>
               </View>
             )}
             {department && (
@@ -318,7 +362,7 @@ export default function PaymentHistoryScreen() {
         )}
       </View>
     );
-
+  };
 
   return (
     <ScreenSafeArea style={styles.container} backgroundColor="#F8FAFC" statusBarStyle="light-content">
