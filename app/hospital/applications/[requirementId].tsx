@@ -943,14 +943,8 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 30,
     marginRight: 12,
-    backgroundColor: PrimaryColors.dark, // Dark blue background like in image
-    borderWidth: 2,
-    borderColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
+    backgroundColor: 'transparent',
+    overflow: 'hidden',
   },
   doctorDetails: {
     flex: 1,
@@ -1143,7 +1137,8 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: NeutralColors.border,
+    backgroundColor: 'transparent',
+    overflow: 'hidden',
   },
   modalDoctorDetails: {
     flex: 1,

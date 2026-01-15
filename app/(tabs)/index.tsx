@@ -47,6 +47,7 @@ export default function DoctorHome() {
   const hasLoaded = React.useRef(false);
   const [refreshing, setRefreshing] = useState(false);
   const [scheduleModalVisible, setScheduleModalVisible] = useState(false);
+  const [expandedApplicationId, setExpandedApplicationId] = useState<number | null>(null);
 
 
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -1304,10 +1305,17 @@ export default function DoctorHome() {
                       statusColor = '#F59E0B';
                     }
 
+                    const isExpanded = expandedApplicationId === application.id;
+                    
                     return (
-                      <ModernCard key={application.id} variant="elevated" padding="md" style={styles.applicationCard}>
-                        {/* Hospital Image - Right side for all screens */}
-                        {hospitalPicture && (
+                      <TouchableOpacity
+                        key={application.id}
+                        activeOpacity={0.9}
+                        onPress={() => setExpandedApplicationId(isExpanded ? null : application.id)}
+                      >
+                        <ModernCard variant="elevated" padding="md" style={styles.applicationCard}>
+                        {/* Hospital Image - Right side, hidden when expanded */}
+                        {hospitalPicture && !isExpanded && (
                           <View style={styles.applicationImageBackground}>
                             <Image
                               source={{ uri: getFullImageUrl(hospitalPicture) }}
@@ -1318,9 +1326,9 @@ export default function DoctorHome() {
                           </View>
                         )}
                         
-                        {/* Content Container */}
-                        <View style={hospitalPicture ? styles.applicationContentWrapper : styles.applicationContentWrapperFull}>
-                          {/* Header with Hospital Name and Status */}
+                        {/* Content Container - Full width when expanded */}
+                        <View style={isExpanded ? styles.applicationContentWrapperFull : (hospitalPicture ? styles.applicationContentWrapper : styles.applicationContentWrapperFull)}>
+                          {/* Header with Hospital Name */}
                           <View style={styles.applicationCardHeader}>
                             <View style={styles.applicationHeaderLeft}>
                               {requirement.hospital?.logo_url ? (
@@ -1345,13 +1353,16 @@ export default function DoctorHome() {
                                 </Text>
                               </View>
                             </View>
-                            {/* Main Status Badge - Integrated in Header */}
+                          </View>
+                          
+                          {/* Status Badge - Below Header */}
+                          <View style={styles.applicationStatusBadgeContainer}>
                             <View style={[styles.applicationMainStatusBadge, { 
                               backgroundColor: statusColor + '15',
                               borderColor: statusColor,
                             }]}>
                               <View style={[styles.statusBadgeDot, { backgroundColor: statusColor }]} />
-                              <Text style={[styles.applicationMainStatusText, { color: statusColor }]}>
+                              <Text style={[styles.applicationMainStatusText, { color: statusColor }]} numberOfLines={1}>
                                 {statusMessage}
                               </Text>
                             </View>
@@ -1360,25 +1371,30 @@ export default function DoctorHome() {
                         {/* Application Details - Compact */}
                         <View style={styles.applicationDetailsContainer}>
                           <View style={styles.applicationDetailRow}>
-                            <MapPin size={12} color={ModernColors.text.secondary} />
-                            <Text style={styles.applicationDetailText} numberOfLines={1}>{location}</Text>
-                          </View>
-                          
-                          <View style={styles.applicationDetailRow}>
                             <Calendar size={12} color={ModernColors.text.secondary} />
-                            <Text style={styles.applicationDetailText}>{workDate}</Text>
+                            <Text style={styles.applicationDetailText} numberOfLines={1}>{workDate}</Text>
                           </View>
                           
-                          <View style={styles.applicationDetailRow}>
-                            <Clock size={12} color={ModernColors.text.secondary} />
-                            <Text style={styles.applicationDetailText}>
-                              {startTime}{endTime ? ` - ${endTime}` : ''}
-                            </Text>
-                          </View>
+                          {isExpanded && (
+                            <>
+                              <View style={styles.applicationDetailRow}>
+                                <MapPin size={12} color={ModernColors.text.secondary} />
+                                <Text style={styles.applicationDetailText} numberOfLines={2}>{location}</Text>
+                              </View>
+                              
+                              <View style={styles.applicationDetailRow}>
+                                <Clock size={12} color={ModernColors.text.secondary} />
+                                <Text style={styles.applicationDetailText} numberOfLines={1}>
+                                  {startTime}{endTime ? ` - ${endTime}` : ''}
+                                </Text>
+                              </View>
+                            </>
+                          )}
                         </View>
 
-                        {/* Status Stages - Enhanced with Checkmarks */}
-                        <View style={styles.applicationStatusStages}>
+                        {/* Status Stages - Only show when expanded */}
+                        {isExpanded && (
+                          <View style={styles.applicationStatusStages}>
                           {/* Applied Stage - Always completed */}
                           <View style={styles.statusStage}>
                             <View style={[styles.statusStageIcon, { backgroundColor: '#3B82F6' }]}>
@@ -1412,7 +1428,7 @@ export default function DoctorHome() {
                               currentStage === 'pending' && { color: '#F59E0B', fontWeight: '700' },
                               currentStage === 'rejected' && { color: '#EF4444', fontWeight: '700' },
                               (currentStage !== 'pending' && currentStage !== 'rejected') && { color: ModernColors.success.main, fontWeight: '700' }
-                            ]}>
+                            ]} numberOfLines={1}>
                               {applicationStatus === 'rejected' ? 'Rejected' : 'Waiting'}
                             </Text>
                           </View>
@@ -1435,7 +1451,7 @@ export default function DoctorHome() {
                                 <Text style={[
                                   styles.statusStageText,
                                   checkInTime && { color: ModernColors.success.main, fontWeight: '700' }
-                                ]}>
+                                ]} numberOfLines={1}>
                                   {checkInTime ? 'Checked In' : 'Check-in'}
                                 </Text>
                               </View>
@@ -1447,7 +1463,7 @@ export default function DoctorHome() {
                                     <View style={[styles.statusStageIcon, { backgroundColor: ModernColors.success.main }]}>
                                       <Check size={10} color="#FFFFFF" />
                                     </View>
-                                    <Text style={[styles.statusStageText, { color: ModernColors.success.main, fontWeight: '700' }]}>
+                                    <Text style={[styles.statusStageText, { color: ModernColors.success.main, fontWeight: '700' }]} numberOfLines={1}>
                                       {sessionStatus === 'completed' ? 'Completed' : 'In Progress'}
                                     </Text>
                                   </View>
@@ -1456,18 +1472,22 @@ export default function DoctorHome() {
                             </>
                           )}
                         </View>
+                        )}
                         
-                        {/* View Details Button */}
-                        <TouchableOpacity
-                          style={styles.applicationViewButton}
-                          onPress={() => router.push(`/(tabs)/job-detail/${application.id}`)}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={styles.applicationViewButtonText}>View Details</Text>
-                          <ArrowRight size={14} color={ModernColors.primary.main} />
-                        </TouchableOpacity>
+                        {/* Expand/Collapse Indicator */}
+                        <View style={styles.applicationExpandIndicator}>
+                          <Text style={styles.applicationExpandText}>
+                            {isExpanded ? 'Tap to collapse' : 'Tap for details'}
+                          </Text>
+                          <ArrowRight 
+                            size={14} 
+                            color={ModernColors.primary.main} 
+                            style={[styles.expandIcon, isExpanded && styles.expandIconRotated]}
+                          />
+                        </View>
                         </View>
                       </ModernCard>
+                      </TouchableOpacity>
                     );
                   })}
               </ScrollView>
@@ -2613,6 +2633,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     flexShrink: 0,
+    minWidth: 0,
   },
   statusStageLine: {
     width: 12,
@@ -2630,6 +2651,8 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
     color: ModernColors.text.secondary,
+    flexShrink: 1,
+    minWidth: 0,
   },
   activeSessionBadge: {
     flexDirection: 'row',
@@ -3210,20 +3233,24 @@ const styles = StyleSheet.create({
   },
   applicationCardHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: Spacing.sm,
+    marginBottom: 8,
     gap: Spacing.sm,
+  },
+  applicationStatusBadgeContainer: {
+    marginBottom: 12,
+    alignSelf: 'flex-start',
   },
   applicationMainStatusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 6,
     borderRadius: 12,
     gap: 6,
     borderWidth: 1,
     flexShrink: 0,
+    maxWidth: '100%',
   },
   statusBadgeDot: {
     width: 6,
@@ -3235,6 +3262,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'capitalize',
     letterSpacing: 0.2,
+    flexShrink: 1,
   },
   applicationHeaderLeft: {
     flexDirection: 'row',
@@ -3302,7 +3330,7 @@ const styles = StyleSheet.create({
   applicationStatusStages: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     marginTop: Spacing.sm,
     marginBottom: Spacing.sm,
     paddingTop: Spacing.sm,
@@ -3310,7 +3338,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: 4,
   },
   statusStageIcon: {
     width: 20,
@@ -3325,18 +3353,26 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: '#FFFFFF',
   },
-  applicationViewButton: {
+  applicationExpandIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.xs,
-    alignSelf: 'flex-start',
-    marginTop: 4,
-    position: 'relative',
-    zIndex: 1,
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
   },
-  applicationViewButtonText: {
-    ...Typography.captionBold,
+  applicationExpandText: {
+    ...Typography.caption,
     color: ModernColors.primary.main,
-    fontSize: 12,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  expandIcon: {
+    transform: [{ rotate: '90deg' }],
+  },
+  expandIconRotated: {
+    transform: [{ rotate: '-90deg' }],
   },
 });

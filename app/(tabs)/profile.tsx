@@ -39,6 +39,7 @@ import {
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
+import API from '../api';
 import { API_BASE_URL } from '@/config/api';
 import { router, useFocusEffect } from 'expo-router';
 import { calculateProfileCompletion } from '@/utils/profileCompletion';

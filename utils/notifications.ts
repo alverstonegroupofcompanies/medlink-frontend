@@ -65,7 +65,7 @@ if (Notifications) {
   if (Platform.OS === 'android') {
     // Default channel
     Notifications.setNotificationChannelAsync('default', {
-      name: 'Default',
+      name: 'Alverconnect',
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#FF231F7C',
@@ -75,7 +75,7 @@ if (Notifications) {
 
     // Job alerts channel for high-priority notifications
     Notifications.setNotificationChannelAsync('job-alerts', {
-      name: 'Job Alerts',
+      name: 'Alverconnect',
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#2563eb',
@@ -484,7 +484,8 @@ export async function scheduleLocalNotification(
   title: string,
   body: string,
   data?: any,
-  notificationId?: number
+  notificationId?: number,
+  imageUrl?: string
 ): Promise<boolean> {
   // Skip on web - notifications not supported
   if (Platform.OS === 'web') {
@@ -514,23 +515,39 @@ export async function scheduleLocalNotification(
       return false;
     }
 
+    const notificationContent: any = {
+      title,
+      body,
+      data: data || {},
+      sound: true,
+      badge: 1,
+      priority: Notifications.AndroidNotificationPriority.HIGH,
+    };
+
+    // Add image/icon for Android notifications
+    if (Platform.OS === 'android' && imageUrl) {
+      notificationContent.android = {
+        largeIcon: imageUrl,
+        channelId: data?.type === 'job_approved' ||
+          data?.type === 'attention_needed' ||
+          data?.type === 'missed_checkin' ||
+          data?.type === 'upcoming_session'
+          ? 'job-alerts'
+          : 'default',
+      };
+    } else if (Platform.OS === 'android') {
+      notificationContent.android = {
+        channelId: data?.type === 'job_approved' ||
+          data?.type === 'attention_needed' ||
+          data?.type === 'missed_checkin' ||
+          data?.type === 'upcoming_session'
+          ? 'job-alerts'
+          : 'default',
+      };
+    }
+
     await Notifications.scheduleNotificationAsync({
-      content: {
-        title,
-        body,
-        data: data || {},
-        sound: true,
-        badge: 1,
-        priority: Notifications.AndroidNotificationPriority.HIGH,
-        ...(Platform.OS === 'android' && {
-          channelId: data?.type === 'job_approved' ||
-            data?.type === 'attention_needed' ||
-            data?.type === 'missed_checkin' ||
-            data?.type === 'upcoming_session'
-            ? 'job-alerts'
-            : 'default',
-        }),
-      },
+      content: notificationContent,
       trigger: null, // Show immediately
     });
 
@@ -556,8 +573,32 @@ export async function showNotificationFromData(notification: {
   type?: string;
   user_type?: 'doctor' | 'hospital';
   data?: any;
+  sender?: any;
+  sender_type?: 'doctor' | 'hospital';
 }): Promise<void> {
   try {
+    // Extract image URL from sender data
+    let imageUrl: string | undefined;
+    if (notification.sender) {
+      // If sender is a doctor, use profile_photo
+      if (notification.sender_type === 'doctor' || notification.sender?.profile_photo) {
+        imageUrl = notification.sender.profile_photo;
+      }
+      // If sender is a hospital, use logo_url
+      else if (notification.sender_type === 'hospital' || notification.sender?.logo_url) {
+        imageUrl = notification.sender.logo_url;
+      }
+    }
+    // Also check in data object
+    else if (notification.data?.sender) {
+      const sender = notification.data.sender;
+      if (sender.profile_photo) {
+        imageUrl = sender.profile_photo;
+      } else if (sender.logo_url) {
+        imageUrl = sender.logo_url;
+      }
+    }
+
     await scheduleLocalNotification(
       notification.title,
       notification.message,
@@ -565,7 +606,9 @@ export async function showNotificationFromData(notification: {
         type: notification.type,
         user_type: notification.user_type || 'doctor',
         ...notification.data,
-      }
+      },
+      undefined,
+      imageUrl
     );
   } catch (error) {
     console.error('❌ Error showing notification:', error);

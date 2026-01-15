@@ -6,6 +6,7 @@ import {
   ScrollView,
   Alert,
   Platform,
+  StatusBar,
 } from 'react-native';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import {
@@ -28,7 +29,6 @@ import { ScreenSafeArea } from '@/components/screen-safe-area';
 import { formatISTDateTime, formatISTDateWithWeekday } from '@/utils/timezone';
 import { getFullImageUrl } from '@/utils/url-helper';
 import { Card, Text, Button, Surface, Avatar, Chip, ActivityIndicator } from 'react-native-paper';
-import { StatusBar } from 'expo-status-bar';
 
 export default function HospitalJobSessionScreen() {
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
@@ -36,6 +36,19 @@ export default function HospitalJobSessionScreen() {
   const [loading, setLoading] = useState(true);
   const [timeElapsed, setTimeElapsed] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Ensure status bar stays blue always
+  useFocusEffect(
+    React.useCallback(() => {
+      if (Platform.OS === 'android') {
+        StatusBar.setBackgroundColor('#2563EB', true);
+        StatusBar.setTranslucent(false);
+        StatusBar.setBarStyle('light-content', true);
+      }
+      StatusBar.setBarStyle('light-content', true);
+      return () => {};
+    }, [])
+  );
 
   useFocusEffect(
     React.useCallback(() => {
@@ -179,19 +192,19 @@ export default function HospitalJobSessionScreen() {
   };
 
   return (
-    <ScreenSafeArea style={styles.container}>
-      <StatusBar style="light" backgroundColor="#0066FF" />
+    <ScreenSafeArea backgroundColor={PrimaryColors.dark} statusBarStyle="light-content" style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#2563EB" translucent={false} />
       
       {/* Header */}
-      <Surface style={styles.headerSurface} elevation={0}>
+      <View style={styles.headerContainer}>
         <View style={styles.headerContent}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <ArrowLeft size={24} color={NeutralColors.textPrimary} />
+            <ArrowLeft size={24} color="#FFFFFF" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Job Session</Text>
           <View style={{ width: 40 }} />
         </View>
-      </Surface>
+      </View>
 
       <ScrollView contentContainerStyle={styles.content}>
         
@@ -206,21 +219,23 @@ export default function HospitalJobSessionScreen() {
             {/* Session Title & Status */}
             <View style={styles.sessionHeader}>
               <View style={{flex: 1}}>
-                <View style={{flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4}}>
+                <View style={styles.sessionTypeRow}>
                   <Text style={styles.sessionType}>
                     {isCompleted ? 'COMPLETED SHIFT' : isInProgress ? 'ONGOING SHIFT' : 'SCHEDULED SHIFT'}
                   </Text>
-                  {paymentHeld && (
-                    <View style={styles.paymentHeldBadge}>
-                      <CheckCircle size={12} color="#16A34A" />
-                      <Text style={styles.paymentHeldText}>Payment Held</Text>
-                    </View>
-                  )}
-                  {isLate && (
-                    <View style={styles.lateBadge}>
-                      <Text style={styles.lateText}>LATE ({minutesLate}m)</Text>
-                    </View>
-                  )}
+                  <View style={styles.badgeContainer}>
+                    {paymentHeld && (
+                      <View style={styles.paymentHeldBadge}>
+                        <CheckCircle size={12} color="#16A34A" />
+                        <Text style={styles.paymentHeldText}>Payment Held</Text>
+                      </View>
+                    )}
+                    {isLate && (
+                      <View style={styles.lateBadge}>
+                        <Text style={styles.lateText}>LATE ({minutesLate}m)</Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
                 <Text style={styles.shiftTitle}>{requirement?.department || 'General'} Shift</Text>
                 <Text style={styles.shiftDate}>{formatISTDateWithWeekday(session.session_date)}</Text>
@@ -243,9 +258,9 @@ export default function HospitalJobSessionScreen() {
                     style={{ backgroundColor: '#EFF6FF' }} 
                   />
                 )}
-                <View style={{marginLeft: 12, flex: 1}}>
-                  <Text style={styles.doctorName}>Dr. {doctor?.name || 'Doctor'}</Text>
-                  <Text style={styles.doctorSpecialty}>{requirement?.department || 'Department'} • {doctor?.experience || '0'} Yrs Exp</Text>
+                <View style={styles.doctorInfo}>
+                  <Text style={styles.doctorName} numberOfLines={1}>Dr. {doctor?.name || 'Doctor'}</Text>
+                  <Text style={styles.doctorSpecialty} numberOfLines={1}>{requirement?.department || 'Department'} • {doctor?.experience || '0'} Yrs Exp</Text>
                 </View>
               </View>
             </View>
@@ -253,7 +268,7 @@ export default function HospitalJobSessionScreen() {
             {/* Time Log Section */}
             {(session.check_in_time || isInProgress) && (
               <View style={styles.timeSection}>
-                <Text style={styles.timeLabel}>How was your experience?</Text>
+                <Text style={styles.timeLabel}>Time Tracking</Text>
                 <View style={styles.timeGrid}>
                   <View style={styles.timeItem}>
                     <Text style={styles.timeItemLabel}>Check In</Text>
@@ -444,13 +459,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  headerSurface: {
-    backgroundColor: '#fff',
-    paddingTop: Platform.OS === 'ios' ? 0 : 20, 
-    paddingBottom: 20,
+  headerContainer: {
+    backgroundColor: PrimaryColors.dark,
+    paddingTop: Platform.OS === 'ios' ? 50 : 20, 
+    paddingBottom: 16,
     paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
   },
   headerContent: {
     flexDirection: 'row',
@@ -460,19 +473,20 @@ const styles = StyleSheet.create({
   backButton: {
     padding: 8,
     marginLeft: -8,
+    borderRadius: 8,
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: NeutralColors.textPrimary,
+    color: '#FFFFFF',
   },
   content: {
-    padding: 20,
+    padding: 16,
     paddingBottom: 50,
     gap: 16,
   },
   statusBadgeContainer: {
-    marginBottom: -8,
+    marginBottom: 4,
   },
   sectionLabel: {
     fontSize: 11,
@@ -483,22 +497,46 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: '#fff',
     borderRadius: 16,
+    overflow: 'hidden',
   },
   mainCard: {
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
   sessionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 20,
+    marginBottom: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  sessionTypeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 8,
   },
   sessionType: {
     fontSize: 11,
     fontWeight: '700',
     color: '#3B82F6',
     letterSpacing: 0.5,
+    flexShrink: 0,
+  },
+  badgeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
   },
   paymentHeldBadge: {
     flexDirection: 'row',
@@ -526,35 +564,42 @@ const styles = StyleSheet.create({
   },
   doctorSection: {
     paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    marginBottom: 16,
+    marginBottom: 20,
   },
   doctorRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
+  doctorInfo: {
+    marginLeft: 12,
+    flex: 1,
+    minWidth: 0,
+  },
   doctorName: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     color: '#0F172A',
-    marginBottom: 2,
+    marginBottom: 4,
   },
   doctorSpecialty: {
     fontSize: 13,
     color: '#64748B',
+    lineHeight: 18,
   },
   timeSection: {
     backgroundColor: '#F8FAFC',
     padding: 16,
     borderRadius: 12,
-    marginBottom: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   timeLabel: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#0F172A',
-    marginBottom: 12,
+    marginBottom: 14,
+    letterSpacing: 0.3,
   },
   timeGrid: {
     flexDirection: 'row',
@@ -570,9 +615,10 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   timeItemValue: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '800',
     color: '#0F172A',
+    letterSpacing: -0.3,
   },
   timeDivider: {
     width: 1,
@@ -582,7 +628,12 @@ const styles = StyleSheet.create({
   trackButton: {
     backgroundColor: '#3B82F6',
     borderRadius: 12,
-    marginTop: 4,
+    marginTop: 8,
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   trackButtonLabel: {
     fontSize: 15,
@@ -591,7 +642,12 @@ const styles = StyleSheet.create({
   actionButton: {
     backgroundColor: '#3B82F6',
     borderRadius: 12,
-    marginTop: 4,
+    marginTop: 8,
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   actionButtonPaid: {
     backgroundColor: '#16A34A',
@@ -603,12 +659,21 @@ const styles = StyleSheet.create({
   paymentCard: {
     borderColor: '#FDE68A',
     backgroundColor: '#FFFBEB',
+    borderWidth: 1.5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
   paymentHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#FDE68A',
   },
   paymentTitle: {
     fontSize: 15,
@@ -616,15 +681,19 @@ const styles = StyleSheet.create({
     color: '#92400E',
   },
   paymentAmount: {
-    fontSize: 42,
+    fontSize: 40,
     fontWeight: '800',
     color: '#92400E',
-    marginBottom: 12,
+    marginBottom: 16,
+    letterSpacing: -1,
   },
   paymentFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#FDE68A',
   },
   paymentNote: {
     fontSize: 12,
@@ -718,6 +787,11 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   reviewHeader: {
     flexDirection: 'row',

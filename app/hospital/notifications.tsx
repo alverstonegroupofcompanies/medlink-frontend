@@ -8,6 +8,7 @@ import {
   StatusBar,
   RefreshControl,
   Alert,
+  Image,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Bell, Check, Clock, Building2, User } from 'lucide-react-native';
@@ -23,12 +24,19 @@ interface Notification {
   is_read: boolean;
   created_at: string;
   data?: any;
+  sender?: {
+    profile_photo?: string;
+    logo_url?: string;
+    name?: string;
+  };
+  sender_type?: 'doctor' | 'hospital';
 }
 
 export default function HospitalNotificationsScreen() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [imageErrors, setImageErrors] = useState<Set<number>>(new Set());
 
   const fetchNotifications = async () => {
     try {
@@ -101,6 +109,24 @@ export default function HospitalNotificationsScreen() {
     }
   };
 
+  const getNotificationImage = (notification: Notification) => {
+    // Check if sender has profile photo (doctor) or logo (hospital)
+    if (notification.sender?.profile_photo) {
+      return notification.sender.profile_photo;
+    }
+    if (notification.sender?.logo_url) {
+      return notification.sender.logo_url;
+    }
+    // Also check in data object
+    if (notification.data?.sender?.profile_photo) {
+      return notification.data.sender.profile_photo;
+    }
+    if (notification.data?.sender?.logo_url) {
+      return notification.data.sender.logo_url;
+    }
+    return null;
+  };
+
   return (
     <ScreenSafeArea backgroundColor={PrimaryColors.main}>
     <View style={styles.container}>
@@ -140,7 +166,17 @@ export default function HospitalNotificationsScreen() {
               activeOpacity={0.8}
             >
               <View style={styles.notificationIconContainer}>
-                {getNotificationIcon(notification.type)}
+                {getNotificationImage(notification) && !imageErrors.has(notification.id) ? (
+                  <Image
+                    source={{ uri: getNotificationImage(notification)! }}
+                    style={styles.notificationImage}
+                    onError={() => {
+                      setImageErrors(prev => new Set(prev).add(notification.id));
+                    }}
+                  />
+                ) : (
+                  getNotificationIcon(notification.type)
+                )}
               </View>
               <View style={styles.notificationContent}>
                 <Text style={styles.notificationTitle}>{notification.title}</Text>
@@ -246,6 +282,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
+    overflow: 'hidden',
+  },
+  notificationImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
   },
   notificationContent: {
     flex: 1,

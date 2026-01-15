@@ -271,7 +271,8 @@ const styles = StyleSheet.create({
     height: 120,
     borderRadius: 60,
     marginBottom: 16,
-    backgroundColor: PrimaryColors.dark, // Dark blue background like in image
+    backgroundColor: 'transparent',
+    overflow: 'hidden',
     borderWidth: 4,
     borderColor: '#fff',
     shadowColor: '#000',

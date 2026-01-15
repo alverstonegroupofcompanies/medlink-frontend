@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   StatusBar,
   TextInput,
+  Platform,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import {
@@ -20,11 +21,176 @@ import {
   Calendar,
   Building2,
   Menu,
+  MapPin,
 } from 'lucide-react-native';
 import HospitalSidebar from '@/components/HospitalSidebar';
 import { ScreenSafeArea } from '@/components/screen-safe-area';
 import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors, HospitalStatusColors as StatusColors } from '@/constants/hospital-theme';
 import API from '../api';
+import { formatISTDateOnly } from '@/utils/timezone';
+
+// Memoized Session Item Component
+const SessionItem = React.memo(({ session, onRate, onPay, onReview, ratingSessionId, setRatingSessionId, rating, setRating, review, setReview, processingId }: any) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  
+  const statusBadge = (() => {
+    if (session.status === 'completed' && session.hospital_confirmed) {
+      return { text: 'Approved', color: StatusColors.success };
+    } else if (session.status === 'completed') {
+      return { text: 'Completed', color: PrimaryColors.main };
+    } else if (session.status === 'in_progress') {
+      return { text: 'In Progress', color: StatusColors.warning };
+    }
+    return { text: 'Scheduled', color: NeutralColors.textSecondary };
+  })();
+
+  const doctor = session.doctor;
+  const requirement = session.job_requirement;
+  const isCompleted = session.status === 'completed';
+  const isApproved = session.hospital_confirmed;
+  const hasRating = session.ratings && session.ratings.length > 0;
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1.02,
+      useNativeDriver: true,
+      tension: 300,
+      friction: 10,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 300,
+      friction: 10,
+    }).start();
+  };
+
+  const handlePress = () => {
+    Animated.sequence([
+      Animated.spring(scaleAnim, {
+        toValue: 1.02,
+        useNativeDriver: true,
+        tension: 300,
+        friction: 10,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 300,
+        friction: 10,
+      }),
+    ]).start(() => {
+      router.push(`/hospital/job-session/${session.id}`);
+    });
+  };
+
+  return (
+    <TouchableOpacity
+      activeOpacity={1}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      onPress={handlePress}
+    >
+      <Animated.View
+        style={[
+          styles.sessionCard,
+          {
+            transform: [{ scale: scaleAnim }]
+          }
+        ]}
+      >
+        {/* Header Section */}
+        <View style={styles.cardHeader}>
+          <View style={styles.headerLeft}>
+            <View style={styles.deptBadge}>
+              <Building2 size={14} color={PrimaryColors.main} />
+              <Text style={styles.deptText}>{requirement?.department || 'Department'}</Text>
+            </View>
+            <View style={[styles.statusBadge, { backgroundColor: `${statusBadge.color}15`, borderColor: statusBadge.color }]}>
+              <View style={[styles.statusDot, { backgroundColor: statusBadge.color }]} />
+              <Text style={[styles.statusText, { color: statusBadge.color }]}>
+                {statusBadge.text}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Compact Info Row */}
+        <View style={styles.compactInfoRow}>
+          <View style={styles.compactInfoItem}>
+            <User size={14} color={NeutralColors.textSecondary} />
+            <Text style={styles.compactInfoText}>Dr. {doctor?.name || 'Doctor'}</Text>
+          </View>
+          {session.check_in_time && (
+            <View style={styles.compactInfoItem}>
+              <Clock size={14} color={NeutralColors.textSecondary} />
+              <Text style={styles.compactInfoText}>
+                {new Date(session.check_in_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Date - Inline */}
+        <View style={styles.compactDateRow}>
+          <Calendar size={13} color={NeutralColors.textSecondary} />
+          <Text style={styles.compactDateText}>
+            {new Date(session.session_date).toLocaleDateString('en-IN', { 
+              day: 'numeric', 
+              month: 'short',
+              year: 'numeric'
+            })}
+            {session.end_time && ` • Completed: ${new Date(session.end_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}`}
+          </Text>
+        </View>
+
+
+        {/* Session Status - Compact */}
+        <View style={styles.compactStatusBar}>
+          <View style={styles.compactStatusStats}>
+            {isCompleted && !isApproved && (
+              <View style={styles.compactStatItem}>
+                <View style={[styles.compactStatDot, { backgroundColor: StatusColors.warning }]} />
+                <Text style={styles.compactStatText}>Review</Text>
+              </View>
+            )}
+            {isApproved && !hasRating && (
+              <View style={styles.compactStatItem}>
+                <View style={[styles.compactStatDot, { backgroundColor: StatusColors.success }]} />
+                <Text style={styles.compactStatText}>Approved</Text>
+              </View>
+            )}
+            {hasRating && (
+              <View style={styles.compactRatingDisplay}>
+                <Star size={12} color="#FFB800" fill="#FFB800" />
+                <Text style={styles.compactRatingValue}>{session.ratings[0]?.rating || 0}/5</Text>
+              </View>
+            )}
+            {session.payment_amount && (
+              <View style={styles.compactPaymentBadge}>
+                <DollarSign size={12} color={PrimaryColors.accent} />
+                <Text style={styles.compactPaymentBadgeText}>
+                  ₹{typeof session.payment_amount === 'number' ? session.payment_amount.toFixed(0) : parseFloat(session.payment_amount || '0').toFixed(0)}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </Animated.View>
+    </TouchableOpacity>
+  );
+}, (prev, next) => {
+  return (
+    prev.session.id === next.session.id &&
+    prev.session.status === next.session.status &&
+    prev.session.hospital_confirmed === next.session.hospital_confirmed &&
+    prev.ratingSessionId === next.ratingSessionId &&
+    prev.processingId === next.processingId
+  );
+});
 
 export default function HospitalSessionsScreen() {
   const [sessions, setSessions] = useState<any[]>([]);
@@ -34,6 +200,19 @@ export default function HospitalSessionsScreen() {
   const [rating, setRating] = useState(0);
   const [review, setReview] = useState('');
   const [showSidebar, setShowSidebar] = useState(false);
+
+  // Ensure status bar stays blue always
+  useFocusEffect(
+    React.useCallback(() => {
+      if (Platform.OS === 'android') {
+        StatusBar.setBackgroundColor('#2563EB', true);
+        StatusBar.setTranslucent(false);
+        StatusBar.setBarStyle('light-content', true);
+      }
+      StatusBar.setBarStyle('light-content', true);
+      return () => {};
+    }, [])
+  );
 
   useFocusEffect(
     React.useCallback(() => {
@@ -114,17 +293,6 @@ export default function HospitalSessionsScreen() {
     );
   };
 
-  const getStatusBadge = (session: any) => {
-    if (session.status === 'completed' && session.hospital_confirmed) {
-      return { text: 'Approved', color: StatusColors.success };
-    } else if (session.status === 'completed') {
-      return { text: 'Completed', color: PrimaryColors.main };
-    } else if (session.status === 'in_progress') {
-      return { text: 'In Progress', color: StatusColors.warning };
-    }
-    return { text: 'Scheduled', color: NeutralColors.textSecondary };
-  };
-
   if (loading) {
     return (
       <ScreenSafeArea backgroundColor={PrimaryColors.dark}>
@@ -141,7 +309,7 @@ export default function HospitalSessionsScreen() {
   return (
     <ScreenSafeArea backgroundColor={PrimaryColors.dark} statusBarStyle="light-content">
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
+      <StatusBar barStyle="light-content" backgroundColor="#2563EB" translucent={false} />
       
       {/* Header */}
       <View style={styles.header}>
@@ -163,181 +331,22 @@ export default function HospitalSessionsScreen() {
             <Text style={styles.emptySubtext}>Sessions will appear here when doctors are assigned</Text>
           </View>
         ) : (
-          sessions.map((session) => {
-            const statusBadge = getStatusBadge(session);
-            const doctor = session.doctor;
-            const requirement = session.job_requirement;
-            const isCompleted = session.status === 'completed';
-            const isApproved = session.hospital_confirmed;
-            const hasRating = session.ratings && session.ratings.length > 0;
-
-            return (
-              <TouchableOpacity
-                key={session.id}
-                style={styles.sessionCard}
-                onPress={() => {
-                  router.push(`/hospital/job-session/${session.id}`);
-                }}
-                activeOpacity={0.7}
-              >
-                {/* Doctor Info */}
-                <View style={styles.sessionHeader}>
-                  <View style={styles.doctorInfo}>
-                    <User size={24} color={PrimaryColors.main} />
-                    <View style={styles.doctorDetails}>
-                      <Text style={styles.doctorName}>{doctor?.name || 'Doctor'}</Text>
-                      <Text style={styles.department}>{requirement?.department || 'Department'}</Text>
-                    </View>
-                  </View>
-                  <View style={[styles.statusBadge, { backgroundColor: `${statusBadge.color}15` }]}>
-                    <Text style={[styles.statusText, { color: statusBadge.color }]}>
-                      {statusBadge.text}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Session Details */}
-                <View style={styles.sessionDetails}>
-                  <View style={styles.detailRow}>
-                    <Calendar size={16} color={NeutralColors.textSecondary} />
-                    <Text style={styles.detailText}>
-                      {new Date(session.session_date).toLocaleDateString()}
-                    </Text>
-                  </View>
-                  {session.check_in_time && (
-                    <View style={styles.detailRow}>
-                      <Clock size={16} color={NeutralColors.textSecondary} />
-                      <Text style={styles.detailText}>
-                        Check-in: {new Date(session.check_in_time).toLocaleTimeString()}
-                      </Text>
-                    </View>
-                  )}
-                  {session.end_time && (
-                    <View style={styles.detailRow}>
-                      <CheckCircle size={16} color={StatusColors.success} />
-                      <Text style={styles.detailText}>
-                        Completed: {new Date(session.end_time).toLocaleTimeString()}
-                      </Text>
-                    </View>
-                  )}
-                  <View style={styles.detailRow}>
-                    <DollarSign size={16} color={PrimaryColors.accent} />
-                    <Text style={styles.paymentText}>
-                      ₹{typeof session.payment_amount === 'number' ? session.payment_amount.toFixed(2) : parseFloat(session.payment_amount || '0').toFixed(2)}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Actions - Review & Pay */}
-                {isCompleted && !isApproved && (
-                  <View style={styles.actionsContainer}>
-                    <TouchableOpacity
-                      style={[styles.actionButton, styles.approveButton]}
-                      onPress={() => router.push(`/hospital/review-session/${session.id}`)}
-                    >
-                        <CheckCircle size={18} color="#fff" />
-                        <Text style={styles.actionButtonText}>Review & Pay</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-
-                {/* Rating Section */}
-                {isApproved && !hasRating && (
-                  <View style={styles.ratingContainer}>
-                    {ratingSessionId === session.id ? (
-                      <View style={styles.ratingForm}>
-                        <Text style={styles.ratingLabel}>Rate Doctor</Text>
-                        <View style={styles.starsRow}>
-                          {[1, 2, 3, 4, 5].map((star) => (
-                            <TouchableOpacity
-                              key={star}
-                              onPress={() => setRating(star)}
-                              style={styles.starButton}
-                            >
-                              <Star
-                                size={32}
-                                color={star <= rating ? '#FFB800' : NeutralColors.border}
-                                fill={star <= rating ? '#FFB800' : 'transparent'}
-                              />
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                        <TextInput
-                          style={styles.reviewInput}
-                          placeholder="Write a review (optional)"
-                          value={review}
-                          onChangeText={setReview}
-                          multiline
-                          numberOfLines={3}
-                        />
-                        <View style={styles.ratingActions}>
-                          <TouchableOpacity
-                            style={styles.cancelButton}
-                            onPress={() => {
-                              setRatingSessionId(null);
-                              setRating(0);
-                              setReview('');
-                            }}
-                          >
-                            <Text style={styles.cancelButtonText}>Cancel</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={styles.submitRatingButton}
-                            onPress={() => handleRateDoctor(session.id)}
-                            disabled={processingId === session.id}
-                          >
-                            {processingId === session.id ? (
-                              <ActivityIndicator size="small" color="#fff" />
-                            ) : (
-                              <Text style={styles.submitRatingButtonText}>Submit Rating</Text>
-                            )}
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    ) : (
-                      <TouchableOpacity
-                        style={styles.rateButton}
-                        onPress={() => setRatingSessionId(session.id)}
-                      >
-                        <Star size={18} color={PrimaryColors.main} />
-                        <Text style={styles.rateButtonText}>Rate Doctor</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                )}
-
-                {/* Payment Button */}
-                {isApproved && (
-                  <TouchableOpacity
-                    style={styles.payButton}
-                    onPress={() => handlePay(session.id)}
-                  >
-                    <DollarSign size={18} color="#fff" />
-                    <Text style={styles.payButtonText}>Pay Now</Text>
-                  </TouchableOpacity>
-                )}
-
-                {/* Show Rating if exists */}
-                {hasRating && (
-                  <View style={styles.ratingDisplay}>
-                    <View style={styles.starsRow}>
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <Star
-                          key={star}
-                          size={16}
-                          color={star <= (session.ratings[0]?.rating || 0) ? '#FFB800' : NeutralColors.border}
-                          fill={star <= (session.ratings[0]?.rating || 0) ? '#FFB800' : 'transparent'}
-                        />
-                      ))}
-                    </View>
-                    {session.ratings[0]?.review && (
-                      <Text style={styles.reviewText}>{session.ratings[0].review}</Text>
-                    )}
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-          })
+          sessions.map((session) => (
+            <SessionItem
+              key={session.id}
+              session={session}
+              onRate={handleRateDoctor}
+              onPay={handlePay}
+              onReview={() => router.push(`/hospital/review-session/${session.id}`)}
+              ratingSessionId={ratingSessionId}
+              setRatingSessionId={setRatingSessionId}
+              rating={rating}
+              setRating={setRating}
+              review={review}
+              setReview={setReview}
+              processingId={processingId}
+            />
+          ))
         )}
       </ScrollView>
       
@@ -420,185 +429,292 @@ const styles = StyleSheet.create({
   sessionCard: {
     backgroundColor: NeutralColors.cardBackground,
     borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
+    padding: 14,
+    marginBottom: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: NeutralColors.border,
+    minHeight: 140,
   },
-  sessionHeader: {
+  cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 12,
+    marginBottom: 10,
   },
-  doctorInfo: {
+  headerLeft: {
+    flex: 1,
+    gap: 6,
+  },
+  deptBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
-    gap: 12,
+    gap: 5,
+    backgroundColor: `${PrimaryColors.main}15`,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
   },
-  doctorDetails: {
-    flex: 1,
-  },
-  doctorName: {
-    fontSize: 18,
+  deptText: {
+    fontSize: 13,
     fontWeight: '700',
-    color: NeutralColors.textPrimary,
-  },
-  department: {
-    fontSize: 14,
-    color: NeutralColors.textSecondary,
-    marginTop: 2,
+    color: PrimaryColors.main,
   },
   statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 8,
+    borderWidth: 1,
+    alignSelf: 'flex-start',
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  sessionDetails: {
-    gap: 8,
-    marginBottom: 16,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  detailText: {
-    fontSize: 14,
-    color: NeutralColors.textSecondary,
-  },
-  paymentText: {
-    fontSize: 14,
-    color: PrimaryColors.accent,
-    fontWeight: '600',
-  },
-  actionsContainer: {
-    marginTop: 12,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 12,
-    borderRadius: 12,
-    gap: 8,
-  },
-  approveButton: {
-    backgroundColor: StatusColors.success,
-  },
-  actionButtonText: {
-    color: '#fff',
-    fontSize: 16,
+    fontSize: 11,
     fontWeight: '700',
   },
-  ratingContainer: {
-    marginTop: 12,
+  compactInfoRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 8,
   },
-  rateButton: {
+  compactInfoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  compactInfoText: {
+    fontSize: 12,
+    color: NeutralColors.textSecondary,
+    fontWeight: '500',
+  },
+  compactDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  compactDateText: {
+    fontSize: 12,
+    color: NeutralColors.textSecondary,
+    fontWeight: '500',
+  },
+  compactLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
+  },
+  compactLocationText: {
+    fontSize: 12,
+    color: PrimaryColors.accent,
+    fontWeight: '600',
+    flex: 1,
+  },
+  compactStatusBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: NeutralColors.border,
+  },
+  compactStatusStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  compactStatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  compactStatDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  compactStatText: {
+    fontSize: 11,
+    color: NeutralColors.textPrimary,
+    fontWeight: '600',
+  },
+  compactRatingDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginLeft: 'auto',
+  },
+  compactRatingValue: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: NeutralColors.textPrimary,
+  },
+  viewButton: {
+    marginTop: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: PrimaryColors.main,
+    alignItems: 'center',
+  },
+  viewButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  primaryButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: `${PrimaryColors.main}15`,
-    gap: 8,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 14,
+    backgroundColor: StatusColors.success,
+    gap: 10,
+    shadowColor: StatusColors.success,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  rateButtonText: {
+  primaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  secondaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    gap: 10,
+    borderWidth: 2,
+    borderColor: PrimaryColors.main,
+  },
+  secondaryButtonText: {
     color: PrimaryColors.main,
     fontSize: 16,
     fontWeight: '700',
+    letterSpacing: 0.3,
   },
   ratingForm: {
-    padding: 16,
+    padding: 20,
     backgroundColor: NeutralColors.background,
-    borderRadius: 12,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: PrimaryColors.main,
+    borderStyle: 'dashed',
   },
-  ratingLabel: {
-    fontSize: 16,
-    fontWeight: '600',
+  ratingFormTitle: {
+    fontSize: 18,
+    fontWeight: '700',
     color: NeutralColors.textPrimary,
-    marginBottom: 12,
+    marginBottom: 20,
+    textAlign: 'center',
   },
-  starsRow: {
+  starsContainer: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 12,
+    justifyContent: 'center',
+    gap: 12,
+    marginBottom: 20,
   },
   starButton: {
     padding: 4,
   },
   reviewInput: {
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: NeutralColors.border,
-    borderRadius: 8,
-    padding: 12,
+    borderRadius: 12,
+    padding: 16,
     fontSize: 14,
     color: NeutralColors.textPrimary,
-    minHeight: 80,
+    minHeight: 100,
     textAlignVertical: 'top',
-    marginBottom: 12,
+    marginBottom: 16,
+    backgroundColor: '#FFFFFF',
+    fontFamily: 'System',
   },
-  ratingActions: {
+  ratingButtons: {
     flexDirection: 'row',
     gap: 12,
   },
-  cancelButton: {
+  cancelBtn: {
     flex: 1,
-    padding: 12,
-    borderRadius: 8,
-    backgroundColor: NeutralColors.border,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    backgroundColor: NeutralColors.background,
     alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: NeutralColors.border,
   },
-  cancelButtonText: {
+  cancelBtnText: {
     color: NeutralColors.textPrimary,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
   },
-  submitRatingButton: {
+  submitBtn: {
     flex: 1,
-    padding: 12,
-    borderRadius: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
     backgroundColor: PrimaryColors.main,
     alignItems: 'center',
+    shadowColor: PrimaryColors.main,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  submitRatingButtonText: {
-    color: '#fff',
-    fontSize: 14,
+  submitBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
     fontWeight: '700',
   },
-  payButton: {
+  ratingDisplayCard: {
+    padding: 18,
+    backgroundColor: `${PrimaryColors.main}08`,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: `${PrimaryColors.main}20`,
+  },
+  ratingDisplayHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: PrimaryColors.accent,
     gap: 8,
-    marginTop: 12,
+    marginBottom: 12,
   },
-  payButtonText: {
-    color: '#fff',
+  ratingDisplayTitle: {
     fontSize: 16,
     fontWeight: '700',
+    color: NeutralColors.textPrimary,
   },
-  ratingDisplay: {
-    marginTop: 12,
-    padding: 12,
-    backgroundColor: NeutralColors.background,
-    borderRadius: 8,
+  ratingStars: {
+    flexDirection: 'row',
+    gap: 4,
+    marginBottom: 12,
   },
-  reviewText: {
+  reviewDisplayText: {
     fontSize: 14,
     color: NeutralColors.textSecondary,
-    marginTop: 8,
+    lineHeight: 20,
+    fontStyle: 'italic',
   },
 });
 

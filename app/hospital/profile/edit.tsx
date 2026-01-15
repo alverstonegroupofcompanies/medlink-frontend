@@ -741,11 +741,19 @@ export default function HospitalProfileEditScreen() {
                     <Building2 size={40} color={PrimaryColors.main} />
                   </View>
                 )}
-                <TouchableOpacity style={styles.imageEditButton} onPress={handlePickLogo}>
-                  <Camera size={16} color="#fff" />
+                <TouchableOpacity 
+                  style={styles.imageEditButton} 
+                  onPress={handlePickLogo}
+                  activeOpacity={0.8}
+                >
+                  <Camera size={18} color="#fff" />
                 </TouchableOpacity>
               </View>
-              <TouchableOpacity style={styles.imageButton} onPress={handlePickLogo}>
+              <TouchableOpacity 
+                style={styles.imageButton} 
+                onPress={handlePickLogo}
+                activeOpacity={0.7}
+              >
                 <Camera size={18} color={PrimaryColors.main} />
                 <Text style={styles.imageButtonText}>Change Logo</Text>
               </TouchableOpacity>
@@ -755,7 +763,7 @@ export default function HospitalProfileEditScreen() {
             <View style={styles.imageUploadSection}>
               <Text style={styles.imageLabel}>Hospital Picture</Text>
               <Text style={styles.imageHint}>This picture will appear in job opportunity cards for doctors</Text>
-              <View style={styles.imageContainer}>
+              <View style={styles.hospitalPictureContainer}>
                 {hospitalPictureUri ? (
                   <Image 
                     source={{ uri: hospitalPictureUri }} 
@@ -768,11 +776,19 @@ export default function HospitalProfileEditScreen() {
                     <Text style={styles.placeholderText}>No Picture</Text>
                   </View>
                 )}
-                <TouchableOpacity style={styles.imageEditButton} onPress={handlePickHospitalPicture}>
-                  <Camera size={16} color="#fff" />
+                <TouchableOpacity 
+                  style={styles.hospitalPictureEditButton} 
+                  onPress={handlePickHospitalPicture}
+                  activeOpacity={0.8}
+                >
+                  <Camera size={18} color="#fff" />
                 </TouchableOpacity>
               </View>
-              <TouchableOpacity style={styles.imageButton} onPress={handlePickHospitalPicture}>
+              <TouchableOpacity 
+                style={styles.imageButton} 
+                onPress={handlePickHospitalPicture}
+                activeOpacity={0.7}
+              >
                 <Camera size={18} color={PrimaryColors.main} />
                 <Text style={styles.imageButtonText}>
                   {hospitalPictureUri ? 'Change Picture' : 'Upload Hospital Picture'}
@@ -1025,37 +1041,45 @@ const styles = StyleSheet.create({
     color: NeutralColors.textPrimary,
   },
   imageUploadSection: {
-    marginBottom: 20,
+    marginBottom: 24,
+    alignItems: 'center',
   },
   imageLabel: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
     color: NeutralColors.textPrimary,
-    marginBottom: 8,
+    marginBottom: 12,
+    alignSelf: 'flex-start',
+    width: '100%',
   },
   imageHint: {
     fontSize: 12,
     color: NeutralColors.textSecondary,
-    marginBottom: 12,
+    marginBottom: 16,
     lineHeight: 18,
+    alignSelf: 'flex-start',
+    width: '100%',
   },
   imageContainer: {
     position: 'relative',
-    marginBottom: 12,
+    marginBottom: 16,
     alignItems: 'center',
+    justifyContent: 'center',
+    width: 140,
+    height: 140,
   },
   logo: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
     borderWidth: 4,
     borderColor: PrimaryColors.main,
     backgroundColor: NeutralColors.background,
   },
   logoPlaceholder: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
     backgroundColor: `${PrimaryColors.main}15`,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1065,41 +1089,51 @@ const styles = StyleSheet.create({
   },
   imageEditButton: {
     position: 'absolute',
-    bottom: 0,
-    right: '40%',
+    bottom: 4,
+    right: 4,
     backgroundColor: PrimaryColors.main,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
-    borderColor: '#fff',
+    borderColor: '#FFFFFF',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 6,
   },
   imageButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
     backgroundColor: `${PrimaryColors.main}10`,
-    borderRadius: 10,
+    borderRadius: 12,
     gap: 8,
+    width: '100%',
+    borderWidth: 1,
+    borderColor: `${PrimaryColors.main}30`,
   },
   imageButtonText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
     color: PrimaryColors.main,
+  },
+  hospitalPictureContainer: {
+    position: 'relative',
+    width: '100%',
+    marginBottom: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   hospitalPicture: {
     width: '100%',
     height: 200,
-    borderRadius: 12,
+    borderRadius: 16,
     backgroundColor: NeutralColors.background,
     borderWidth: 2,
     borderColor: PrimaryColors.main,
@@ -1107,7 +1141,7 @@ const styles = StyleSheet.create({
   hospitalPicturePlaceholder: {
     width: '100%',
     height: 200,
-    borderRadius: 12,
+    borderRadius: 16,
     backgroundColor: `${PrimaryColors.main}10`,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1115,8 +1149,26 @@ const styles = StyleSheet.create({
     borderColor: PrimaryColors.main,
     borderStyle: 'dashed',
   },
+  hospitalPictureEditButton: {
+    position: 'absolute',
+    bottom: 12,
+    right: 12,
+    backgroundColor: PrimaryColors.main,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 6,
+  },
   placeholderText: {
-    marginTop: 8,
+    marginTop: 12,
     fontSize: 14,
     color: NeutralColors.textSecondary,
     fontWeight: '500',

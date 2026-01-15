@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import {
   ActivityIndicator,
   StatusBar,
   DeviceEventEmitter,
+  Animated,
 } from 'react-native';
 import { Card, Surface, Button, useTheme, Chip, Avatar, FAB } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -22,7 +23,7 @@ import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as Neutra
 import API from '../api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect } from 'expo-router';
-import { Plus, MapPin, Building2, Clock, X, Navigation, Bell, LogOut, CreditCard, Users, CheckCircle2, FileText } from 'lucide-react-native';
+import { Plus, MapPin, Building2, Clock, X, Navigation, Bell, LogOut, CreditCard, Users, CheckCircle2, FileText, XCircle, Calendar, User, DollarSign } from 'lucide-react-native';
 import { ScreenSafeArea, useSafeBottomPadding } from '@/components/screen-safe-area';
 import { StatusBarHandler } from '@/components/StatusBarHandler';
 import * as Location from 'expo-location';
@@ -39,143 +40,209 @@ import { LocationPickerMap } from '@/components/LocationPickerMap';
 // --- Memoized Components to Prevent Flickering ---
 
 const RequirementItem = React.memo(({ req, onDelete }: { req: any, onDelete: (id: number) => void }) => {
+  // Animation for press effect
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  // Calculate status based on applications
+  const applications = req.applications || [];
+  const selectedCount = applications.filter((app: any) => app.status === 'selected').length;
+  const pendingCount = applications.filter((app: any) => app.status === 'pending' || !app.status).length;
+  const rejectedCount = applications.filter((app: any) => app.status === 'rejected').length;
+  const totalApplications = applications.length;
+
+  // Determine overall status
+  const getRequirementStatus = () => {
+    if (req.is_expired) {
+      return { text: 'Expired', color: StatusColors.error, icon: XCircle };
+    }
+    if (selectedCount > 0) {
+      return { text: `${selectedCount} Selected`, color: StatusColors.success, icon: CheckCircle2 };
+    }
+    if (pendingCount > 0) {
+      return { text: `${pendingCount} Pending`, color: StatusColors.warning, icon: Clock };
+    }
+    if (totalApplications === 0) {
+      return { text: 'No Applications', color: NeutralColors.textTertiary, icon: Users };
+    }
+    return { text: 'Active', color: PrimaryColors.main, icon: Building2 };
+  };
+
+  const status = getRequirementStatus();
+  const StatusIcon = status.icon;
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1.02,
+      useNativeDriver: true,
+      tension: 300,
+      friction: 10,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 300,
+      friction: 10,
+    }).start();
+  };
+
+  const handlePress = () => {
+    Animated.sequence([
+      Animated.spring(scaleAnim, {
+        toValue: 1.02,
+        useNativeDriver: true,
+        tension: 300,
+        friction: 10,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 300,
+        friction: 10,
+      }),
+    ]).start(() => {
+      router.push({
+        pathname: '/hospital/applications/[requirementId]',
+        params: { requirementId: req.id.toString() }
+      });
+    });
+  };
+
   return (
-    <Card style={styles.requirementCard} mode="outlined">
-        <Card.Content>
-            <View style={styles.cardHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                <Chip 
-                style={[styles.deptChip, { backgroundColor: '#EFF6FF' }]}
-                textStyle={{ color: '#2563EB', fontSize: 13, fontWeight: '500' }}
-                >
+    <TouchableOpacity
+      activeOpacity={1}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      onPress={handlePress}
+    >
+      <Animated.View 
+        style={[
+          styles.requirementCard,
+          selectedCount > 0 ? styles.requirementCardGreen :
+          pendingCount > 0 ? styles.requirementCardYellow :
+          req.is_expired ? styles.requirementCardRed :
+          styles.requirementCardBlue,
+          {
+            transform: [{ scale: scaleAnim }]
+          }
+        ]}
+      >
+        {/* Header Section */}
+        <View style={styles.cardHeader}>
+          <View style={styles.headerLeft}>
+            <View style={styles.deptBadge}>
+              <Building2 size={14} color={PrimaryColors.main} />
+              <Text style={styles.deptText}>
                 {req.department}
-                </Chip>
-                {req.is_expired && (
-                <Chip 
-                    style={[styles.expiredChip, { backgroundColor: '#FEE2E2' }]}
-                    textStyle={{ color: '#DC2626', fontSize: 11, fontWeight: '700' }}
-                >
-                    EXPIRED
-                </Chip>
-                )}
+              </Text>
             </View>
-            <TouchableOpacity 
-                onPress={() => onDelete(req.id)}
-                style={styles.deleteIcon}
-            >
-                <X size={16} color="#9CA3AF" />
-            </TouchableOpacity>
+            <View style={[styles.statusBadge, { backgroundColor: `${status.color}15`, borderColor: status.color }]}>
+              <StatusIcon size={12} color={status.color} />
+              <Text style={[styles.statusText, { color: status.color }]}>
+                {status.text}
+              </Text>
             </View>
-            
-            <View style={styles.cardMeta}>
-            <Chip 
-                style={styles.metaChip}
-                textStyle={styles.metaChipText}
-                mode="outlined"
-            >
-                {req.work_type.replace('-', ' ')}
-            </Chip>
-            <Chip 
-                style={styles.metaChip}
-                textStyle={styles.metaChipText}
-                mode="outlined"
-            >
-                {req.required_sessions} session{req.required_sessions !== 1 ? 's' : ''}
-            </Chip>
-            </View>
-            
-            {req.description && (
-            <Text style={styles.cardDescription} numberOfLines={2}>
-                {req.description}
+          </View>
+          <TouchableOpacity 
+            onPress={(e) => {
+              e.stopPropagation();
+              onDelete(req.id);
+            }}
+            style={styles.deleteButton}
+          >
+            <X size={16} color={NeutralColors.textSecondary} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Compact Info Row */}
+        <View style={styles.compactInfoRow}>
+          <View style={styles.compactInfoItem}>
+            <Clock size={14} color={NeutralColors.textSecondary} />
+            <Text style={styles.compactInfoText} numberOfLines={1}>
+              {req.work_type?.replace('-', ' ') || 'N/A'}
             </Text>
-            )}
-            
-            {req.address && (
-            <View style={styles.cardInfoRow}>
-                <MapPin size={14} color="#6B7280" />
-                <Text style={styles.cardInfoText} numberOfLines={1}>
-                {req.address}
-                </Text>
-            </View>
-            )}
+          </View>
+          <View style={styles.compactInfoItem}>
+            <Calendar size={14} color={NeutralColors.textSecondary} />
+            <Text style={styles.compactInfoText} numberOfLines={1}>
+              {req.required_sessions || 0} sessions
+            </Text>
+          </View>
+        </View>
 
-            {req.created_at && (
-            <View style={styles.cardInfoRow}>
-                <Clock size={14} color="#6B7280" />
-                <Text style={styles.cardInfoText}>
-                Posted: {formatISTDateTime(req.created_at)}
-                </Text>
-            </View>
-            )}
+        {/* Work Date - Inline */}
+        {req.work_required_date && (
+          <View style={styles.compactDateRow}>
+            <Calendar size={13} color={NeutralColors.textSecondary} />
+            <Text style={styles.compactDateText} numberOfLines={1}>
+              {formatISTDateOnly(req.work_required_date)}
+              {req.start_time && ` • ${new Date(`2000-01-01 ${req.start_time}`).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}`}
+            </Text>
+          </View>
+        )}
 
-            {req.work_required_date && (
-            <View style={styles.cardInfoRow}>
-                <Clock size={14} color="#6B7280" />
-                <Text style={styles.cardInfoText}>
-                Work Date: {formatISTDateOnly(req.work_required_date)}
-                {req.start_time && ` at ${new Date(`2000-01-01 ${req.start_time}`).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}`}
-                </Text>
-            </View>
-            )}
+        {/* Location - Inline */}
+        {req.address && (
+          <View style={styles.compactLocationRow}>
+            <MapPin size={13} color={NeutralColors.textSecondary} />
+            <Text style={styles.compactLocationText} numberOfLines={1} ellipsizeMode="tail">
+              {req.address}
+            </Text>
+          </View>
+        )}
 
-            {/* Applicants Preview */}
-            <View style={styles.applicantsRow}>
-            {req.applications && req.applications.length > 0 ? (
-                <>
-                <View style={styles.avatarsContainer}>
-                    {req.applications.slice(0, 5).map((application: any, index: number) => {
+        {/* Applications Status - Compact */}
+        <View style={styles.compactStatusBar}>
+          <View style={styles.compactStatusStats}>
+            {selectedCount > 0 && (
+              <View style={styles.compactStatItem}>
+                <View style={[styles.compactStatDot, { backgroundColor: StatusColors.success }]} />
+                <Text style={styles.compactStatText}>{selectedCount}</Text>
+              </View>
+            )}
+            {pendingCount > 0 && (
+              <View style={styles.compactStatItem}>
+                <View style={[styles.compactStatDot, { backgroundColor: StatusColors.warning }]} />
+                <Text style={styles.compactStatText}>{pendingCount}</Text>
+              </View>
+            )}
+            {totalApplications > 0 && (
+              <View style={styles.compactApplicants}>
+                <View style={styles.compactAvatarsContainer}>
+                  {applications.slice(0, 3).map((application: any, index: number) => {
                     const doctor = application.doctor;
                     const profilePhoto = doctor?.profile_photo_url || doctor?.profile_photo;
                     return profilePhoto ? (
-                        <Avatar.Image
+                      <Avatar.Image
                         key={`avatar-${application.id}-${index}`}
-                        size={32}
+                        size={24}
                         source={{ uri: getFullImageUrl(profilePhoto) }}
-                        style={[styles.avatar, { marginLeft: index > 0 ? -8 : 0 }]}
-                        />
+                        style={[styles.compactAvatar, { marginLeft: index > 0 ? -4 : 0 }]}
+                      />
                     ) : (
-                        <Avatar.Text
+                      <Avatar.Text
                         key={`avatar-text-${application.id}-${index}`}
-                        size={32}
+                        size={24}
                         label={doctor?.name?.charAt(0)?.toUpperCase() || '?'}
-                        style={[styles.avatar, { marginLeft: index > 0 ? -8 : 0 }]}
-                        />
+                        style={[styles.compactAvatar, { marginLeft: index > 0 ? -4 : 0 }]}
+                      />
                     );
-                    })}
-                    {req.applications.length > 5 && (
-                    <Avatar.Text
-                        key={`avatar-more-${req.id}`}
-                        size={32}
-                        label={`+${req.applications.length - 5}`}
-                        style={[styles.avatar, { marginLeft: -8, backgroundColor: '#E5E7EB' }]}
-                        labelStyle={{ color: '#6B7280', fontSize: 11, fontWeight: '500' }}
-                    />
-                    )}
+                  })}
+                  {totalApplications > 3 && (
+                    <View style={[styles.compactMoreAvatar, { marginLeft: -4 }]}>
+                      <Text style={styles.compactMoreAvatarText}>+{totalApplications - 3}</Text>
+                    </View>
+                  )}
                 </View>
-                <Text style={styles.applicantsCount}>
-                    {req.applications.length} {req.applications.length === 1 ? 'applicant' : 'applicants'}
-                </Text>
-                </>
-            ) : (
-                <Text style={[styles.applicantsCount, { color: '#9CA3AF' }]}>No applicants yet</Text>
+                <Text style={styles.compactApplicantsText}>{totalApplications} {totalApplications === 1 ? 'applicant' : 'applicants'}</Text>
+              </View>
             )}
-            </View>
-
-            <Button
-            mode="text"
-            onPress={() => router.push({
-                pathname: '/hospital/applications/[requirementId]',
-                params: { requirementId: req.id.toString() }
-            })}
-            style={styles.viewButton}
-            labelStyle={styles.viewButtonLabel}
-            textColor="#2563EB"
-            icon={() => <Text style={styles.viewButtonIcon}>→</Text>}
-            >
-            View Applications
-            </Button>
-        </Card.Content>
-    </Card>
+          </View>
+        </View>
+      </Animated.View>
+    </TouchableOpacity>
   );
 }, (prev, next) => {
     // Custom comparison to prevent re-renders
@@ -183,52 +250,32 @@ const RequirementItem = React.memo(({ req, onDelete }: { req: any, onDelete: (id
         prev.req.id === next.req.id &&
         prev.req.updated_at === next.req.updated_at &&
         prev.req.applications?.length === next.req.applications?.length &&
-        prev.req.status === next.req.status
+        prev.req.status === next.req.status &&
+        prev.req.is_expired === next.req.is_expired
     );
 });
 
 const SessionItem = React.memo(({ session }: { session: any }) => {
-    const getStatusColor = () => {
-        if (session.status === 'completed') {
-            return session.hospital_confirmed ? '#16A34A' : '#F59E0B';
+    // Animation for press effect
+    const scaleAnim = useRef(new Animated.Value(1)).current;
+
+    // Determine status
+    const getSessionStatus = () => {
+        if (session.status === 'completed' && session.hospital_confirmed) {
+            return { text: 'Approved', color: StatusColors.success, icon: CheckCircle2 };
+        } else if (session.status === 'completed') {
+            return { text: 'Review Needed', color: StatusColors.warning, icon: Clock };
+        } else if (session.status === 'in_progress') {
+            return { text: 'In Progress', color: PrimaryColors.main, icon: Clock };
         }
-        if (session.status === 'in_progress') return '#2563EB';
-        if (session.status === 'scheduled') return '#64748B';
-        return '#9CA3AF';
+        return { text: 'Scheduled', color: NeutralColors.textTertiary, icon: Calendar };
     };
 
-    const getStatusBg = () => {
-        if (session.status === 'completed') {
-            return session.hospital_confirmed ? '#DCFCE7' : '#FEF3C7';
-        }
-        if (session.status === 'in_progress') return '#DBEAFE';
-        if (session.status === 'scheduled') return '#F3F4F6';
-        return '#F9FAFB';
-    };
+    const status = getSessionStatus();
+    const StatusIcon = status.icon;
+    const doctor = session.doctor;
+    const requirement = session.job_requirement;
 
-    const getStatusText = () => {
-        if (session.status === 'completed') {
-            return session.hospital_confirmed ? 'Approved' : 'Review Needed';
-        }
-        if (session.status === 'in_progress') return 'In Progress';
-        if (session.status === 'scheduled') return 'Scheduled';
-        return session.status?.replace('_', ' ') || 'Unknown';
-    };
-
-    const getPaymentStatus = () => {
-        const payment = session.payments?.[0] || session.payment;
-        if (!payment) return null;
-        
-        if (payment.payment_status === 'released' || payment.payment_status === 'paid') {
-            return { text: 'Paid', color: '#16A34A', bg: '#DCFCE7' };
-        }
-        if (payment.payment_status === 'held' || payment.payment_status === 'in_escrow') {
-            return { text: 'Held', color: '#F59E0B', bg: '#FEF3C7' };
-        }
-        return { text: payment.payment_status || 'Pending', color: '#64748B', bg: '#F3F4F6' };
-    };
-
-    const paymentStatus = getPaymentStatus();
     const formatTime = (time: string) => {
         if (!time) return '';
         try {
@@ -242,90 +289,201 @@ const SessionItem = React.memo(({ session }: { session: any }) => {
         }
     };
 
+    const handlePressIn = () => {
+        Animated.spring(scaleAnim, {
+            toValue: 1.02,
+            useNativeDriver: true,
+            tension: 300,
+            friction: 10,
+        }).start();
+    };
+
+    const handlePressOut = () => {
+        Animated.spring(scaleAnim, {
+            toValue: 1,
+            useNativeDriver: true,
+            tension: 300,
+            friction: 10,
+        }).start();
+    };
+
+    const handlePress = () => {
+        Animated.sequence([
+            Animated.spring(scaleAnim, {
+                toValue: 1.02,
+                useNativeDriver: true,
+                tension: 300,
+                friction: 10,
+            }),
+            Animated.spring(scaleAnim, {
+                toValue: 1,
+                useNativeDriver: true,
+                tension: 300,
+                friction: 10,
+            }),
+        ]).start(() => {
+            if (session.status === 'completed' && !session.hospital_confirmed) {
+                router.push(`/hospital/review-session/${session.id}` as any);
+            } else {
+                router.push(`/hospital/job-session/${session.id}` as any);
+            }
+        });
+    };
+
     return (
-        <TouchableOpacity 
-            style={styles.workCard}
-            onPress={() => {
-                if (session.status === 'completed' && !session.hospital_confirmed) {
-                    router.push(`/hospital/review-session/${session.id}` as any);
-                } else {
-                    router.push(`/hospital/job-session/${session.id}` as any);
-                }
-            }}
+        <TouchableOpacity
+            activeOpacity={1}
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
+            onPress={handlePress}
         >
-            {/* Header with Doctor Info */}
-            <View style={styles.workHeader}>
-                {session.doctor?.profile_photo ? (
-                    <Avatar.Image 
-                        size={48} 
-                        source={{ uri: getFullImageUrl(session.doctor.profile_photo) }}
-                        style={styles.workAvatar}
-                    />
-                ) : (
-                    <Avatar.Icon 
-                        size={48} 
-                        icon="account" 
-                        style={[styles.workAvatar, {backgroundColor: '#F1F5F9'}]} 
-                        color="#64748B" 
-                    />
-                )}
-                <View style={styles.workDoctorInfo}>
-                    <Text style={styles.workDoctorName} numberOfLines={1}>
-                        Dr. {session.doctor?.name || 'Unknown Doctor'}
-                    </Text>
-                    <View style={styles.workMetaRow}>
-                        <Building2 size={12} color="#64748B" />
-                        <Text style={styles.workDept} numberOfLines={1}>
-                            {session.job_requirement?.department || 'N/A'}
-                        </Text>
+            <Animated.View
+                style={[
+                    styles.requirementCard,
+                    session.status === 'completed' && session.hospital_confirmed ? styles.sessionCardGreen :
+                    session.status === 'completed' && !session.hospital_confirmed ? styles.sessionCardOrange :
+                    session.status === 'in_progress' ? styles.sessionCardBlue :
+                    styles.sessionCardPurple,
+                    {
+                        transform: [{ scale: scaleAnim }]
+                    }
+                ]}
+            >
+                {/* Header Section */}
+                <View style={styles.cardHeader}>
+                    <View style={styles.headerLeft}>
+                        <View style={[styles.deptBadge, 
+                              session.status === 'completed' && session.hospital_confirmed ? { backgroundColor: 'rgba(255, 255, 255, 0.25)' } :
+                              session.status === 'completed' && !session.hospital_confirmed ? { backgroundColor: 'rgba(255, 255, 255, 0.25)' } :
+                              session.status === 'in_progress' ? { backgroundColor: 'rgba(255, 255, 255, 0.25)' } : {}]}>
+                            <Building2 size={14} color={session.status === 'completed' && session.hospital_confirmed ? '#FFFFFF' : 
+                                  session.status === 'completed' && !session.hospital_confirmed ? '#FFFFFF' :
+                                  session.status === 'in_progress' ? '#FFFFFF' : PrimaryColors.main} />
+                            <Text style={[styles.deptText,
+                                  session.status === 'completed' && session.hospital_confirmed ? { color: '#FFFFFF' } :
+                                  session.status === 'completed' && !session.hospital_confirmed ? { color: '#FFFFFF' } :
+                                  session.status === 'in_progress' ? { color: '#FFFFFF' } : {}]}>
+                                {requirement?.department || 'Department'}
+                            </Text>
+                        </View>
+                        <View style={[styles.statusBadge, 
+                              session.status === 'completed' && session.hospital_confirmed ? { backgroundColor: 'rgba(255, 255, 255, 0.25)', borderColor: '#FFFFFF' } :
+                              session.status === 'completed' && !session.hospital_confirmed ? { backgroundColor: 'rgba(255, 255, 255, 0.25)', borderColor: '#FFFFFF' } :
+                              session.status === 'in_progress' ? { backgroundColor: 'rgba(255, 255, 255, 0.25)', borderColor: '#FFFFFF' } :
+                              { backgroundColor: `${status.color}15`, borderColor: status.color }]}>
+                            <StatusIcon size={12} color={session.status === 'completed' && session.hospital_confirmed ? '#FFFFFF' : 
+                                  session.status === 'completed' && !session.hospital_confirmed ? '#FFFFFF' :
+                                  session.status === 'in_progress' ? '#FFFFFF' : status.color} />
+                            <Text style={[styles.statusText, { color: session.status === 'completed' && session.hospital_confirmed ? '#FFFFFF' : 
+                                  session.status === 'completed' && !session.hospital_confirmed ? '#FFFFFF' :
+                                  session.status === 'in_progress' ? '#FFFFFF' : status.color }]}>
+                                {status.text}
+                            </Text>
+                        </View>
                     </View>
                 </View>
-            </View>
 
-            {/* Status Badge */}
-            <View style={styles.workStatusRow}>
-                <View style={[styles.workStatusBadge, { backgroundColor: getStatusBg() }]}>
-                    <View style={[styles.statusDot, { backgroundColor: getStatusColor() }]} />
-                    <Text style={[styles.workStatusText, { color: getStatusColor() }]}>
-                        {getStatusText()}
-                    </Text>
-                </View>
-                {paymentStatus && (
-                    <View style={[styles.paymentBadge, { backgroundColor: paymentStatus.bg }]}>
-                        <Text style={[styles.paymentBadgeText, { color: paymentStatus.color }]}>
-                            {paymentStatus.text}
+                {/* Compact Info Row */}
+                <View style={styles.compactInfoRow}>
+                    <View style={styles.compactInfoItem}>
+                        <User size={14} color={session.status === 'completed' && session.hospital_confirmed ? 'rgba(255, 255, 255, 0.9)' : 
+                              session.status === 'completed' && !session.hospital_confirmed ? 'rgba(255, 255, 255, 0.9)' :
+                              session.status === 'in_progress' ? 'rgba(255, 255, 255, 0.9)' : NeutralColors.textSecondary} />
+                        <Text style={[styles.compactInfoText, 
+                              session.status === 'completed' && session.hospital_confirmed ? { color: 'rgba(255, 255, 255, 0.9)' } :
+                              session.status === 'completed' && !session.hospital_confirmed ? { color: 'rgba(255, 255, 255, 0.9)' } :
+                              session.status === 'in_progress' ? { color: 'rgba(255, 255, 255, 0.9)' } : {}]}>
+                            Dr. {doctor?.name || 'Doctor'}
                         </Text>
                     </View>
-                )}
-            </View>
+                    {session.check_in_time && (
+                        <View style={styles.compactInfoItem}>
+                            <Clock size={14} color={session.status === 'completed' && session.hospital_confirmed ? 'rgba(255, 255, 255, 0.9)' : 
+                                  session.status === 'completed' && !session.hospital_confirmed ? 'rgba(255, 255, 255, 0.9)' :
+                                  session.status === 'in_progress' ? 'rgba(255, 255, 255, 0.9)' : NeutralColors.textSecondary} />
+                            <Text style={[styles.compactInfoText,
+                                  session.status === 'completed' && session.hospital_confirmed ? { color: 'rgba(255, 255, 255, 0.9)' } :
+                                  session.status === 'completed' && !session.hospital_confirmed ? { color: 'rgba(255, 255, 255, 0.9)' } :
+                                  session.status === 'in_progress' ? { color: 'rgba(255, 255, 255, 0.9)' } : {}]}>
+                                Check-in: {formatTime(session.check_in_time)}
+                            </Text>
+                        </View>
+                    )}
+                </View>
 
-            {/* Date and Time */}
-            <View style={styles.workDetails}>
-                <View style={styles.workDetailRow}>
-                    <Clock size={14} color="#64748B" />
-                    <Text style={styles.workDetailText}>
+                {/* Date - Inline */}
+                <View style={styles.compactDateRow}>
+                    <Calendar size={13} color={session.status === 'completed' && session.hospital_confirmed ? 'rgba(255, 255, 255, 0.85)' : 
+                          session.status === 'completed' && !session.hospital_confirmed ? 'rgba(255, 255, 255, 0.85)' :
+                          session.status === 'in_progress' ? 'rgba(255, 255, 255, 0.85)' : NeutralColors.textSecondary} />
+                    <Text style={[styles.compactDateText,
+                          session.status === 'completed' && session.hospital_confirmed ? { color: 'rgba(255, 255, 255, 0.85)' } :
+                          session.status === 'completed' && !session.hospital_confirmed ? { color: 'rgba(255, 255, 255, 0.85)' } :
+                          session.status === 'in_progress' ? { color: 'rgba(255, 255, 255, 0.85)' } : {}]}>
                         {formatISTDateOnly(session.session_date)}
+                        {session.start_time && ` • ${formatTime(session.start_time)}`}
+                        {session.end_time && ` - ${formatTime(session.end_time)}`}
                     </Text>
                 </View>
-                {(session.start_time || session.end_time) && (
-                    <View style={styles.workDetailRow}>
-                        <Clock size={14} color="#64748B" />
-                        <Text style={styles.workDetailText}>
-                            {session.start_time ? formatTime(session.start_time) : ''}
-                            {session.start_time && session.end_time ? ' - ' : ''}
-                            {session.end_time ? formatTime(session.end_time) : ''}
-                        </Text>
-                    </View>
-                )}
+
+                {/* Payment - Inline */}
                 {session.payment_amount && (
-                    <View style={styles.workDetailRow}>
-                        <CreditCard size={14} color="#64748B" />
-                        <Text style={styles.workDetailText}>
+                    <View style={styles.compactLocationRow}>
+                        <DollarSign size={13} color={session.status === 'completed' && session.hospital_confirmed ? 'rgba(255, 255, 255, 0.9)' : 
+                              session.status === 'completed' && !session.hospital_confirmed ? 'rgba(255, 255, 255, 0.9)' :
+                              session.status === 'in_progress' ? 'rgba(255, 255, 255, 0.9)' : NeutralColors.textSecondary} />
+                        <Text style={[styles.compactLocationText,
+                              session.status === 'completed' && session.hospital_confirmed ? { color: 'rgba(255, 255, 255, 0.9)' } :
+                              session.status === 'completed' && !session.hospital_confirmed ? { color: 'rgba(255, 255, 255, 0.9)' } :
+                              session.status === 'in_progress' ? { color: 'rgba(255, 255, 255, 0.9)' } : {}]}>
                             ₹{parseFloat(session.payment_amount || 0).toFixed(2)}
                         </Text>
                     </View>
                 )}
-            </View>
+
+                {/* Session Status - Compact */}
+                <View style={[styles.compactStatusBar,
+                      session.status === 'completed' && session.hospital_confirmed ? { borderTopColor: 'rgba(255, 255, 255, 0.3)' } :
+                      session.status === 'completed' && !session.hospital_confirmed ? { borderTopColor: 'rgba(255, 255, 255, 0.3)' } :
+                      session.status === 'in_progress' ? { borderTopColor: 'rgba(255, 255, 255, 0.3)' } : {}]}>
+                    <View style={styles.compactStatusStats}>
+                        {session.status === 'completed' && !session.hospital_confirmed && (
+                            <View style={styles.compactStatItem}>
+                                <View style={[styles.compactStatDot, { backgroundColor: '#FFFFFF' }]} />
+                                <Text style={[styles.compactStatText, { color: '#FFFFFF' }]}>Review</Text>
+                            </View>
+                        )}
+                        {session.status === 'completed' && session.hospital_confirmed && (
+                            <View style={styles.compactStatItem}>
+                                <View style={[styles.compactStatDot, { backgroundColor: '#FFFFFF' }]} />
+                                <Text style={[styles.compactStatText, { color: '#FFFFFF' }]}>Approved</Text>
+                            </View>
+                        )}
+                        {session.status === 'in_progress' && (
+                            <View style={styles.compactStatItem}>
+                                <View style={[styles.compactStatDot, { backgroundColor: '#FFFFFF' }]} />
+                                <Text style={[styles.compactStatText, { color: '#FFFFFF' }]}>In Progress</Text>
+                            </View>
+                        )}
+                        {session.payment_amount && (
+                            <View style={[styles.compactPaymentBadge, 
+                                  session.status === 'completed' && session.hospital_confirmed ? { backgroundColor: 'rgba(255, 255, 255, 0.25)' } :
+                                  session.status === 'completed' && !session.hospital_confirmed ? { backgroundColor: 'rgba(255, 255, 255, 0.25)' } :
+                                  session.status === 'in_progress' ? { backgroundColor: 'rgba(255, 255, 255, 0.25)' } : {}]}>
+                                <DollarSign size={12} color={session.status === 'completed' && session.hospital_confirmed ? '#FFFFFF' : 
+                                      session.status === 'completed' && !session.hospital_confirmed ? '#FFFFFF' :
+                                      session.status === 'in_progress' ? '#FFFFFF' : PrimaryColors.accent} />
+                                <Text style={[styles.compactPaymentBadgeText,
+                                      session.status === 'completed' && session.hospital_confirmed ? { color: '#FFFFFF' } :
+                                      session.status === 'completed' && !session.hospital_confirmed ? { color: '#FFFFFF' } :
+                                      session.status === 'in_progress' ? { color: '#FFFFFF' } : {}]}>
+                                    ₹{parseFloat(session.payment_amount || 0).toFixed(0)}
+                                </Text>
+                            </View>
+                        )}
+                    </View>
+                </View>
+            </Animated.View>
         </TouchableOpacity>
     );
 }, (prev, next) => {
@@ -452,6 +610,25 @@ export default function HospitalDashboard() {
       StatusBar.setBarStyle('light-content', true);
     }
   }, [showForm]);
+
+  // Reset status bar to blue when screen comes into focus (important!)
+  useFocusEffect(
+    useCallback(() => {
+      // Set status bar to blue immediately when screen is focused
+      if (Platform.OS === 'android') {
+        StatusBar.setBackgroundColor('#2563EB', true);
+        StatusBar.setTranslucent(false);
+        StatusBar.setBarStyle('light-content', true);
+      }
+      
+      // Also set for iOS
+      StatusBar.setBarStyle('light-content', true);
+      
+      return () => {
+        // Optional: cleanup if needed
+      };
+    }, [])
+  );
 
   useEffect(() => {
     // Check authentication first
@@ -993,6 +1170,12 @@ export default function HospitalDashboard() {
 
   return (
     <ScreenSafeArea backgroundColor="#2563EB" statusBarStyle="light-content" edges={['top', 'left', 'right']}>
+      {/* Status bar - always blue with light content */}
+      <StatusBar 
+        barStyle="light-content" 
+        backgroundColor="#2563EB" 
+        translucent={false}
+      />
       {/* Status bar handler */}
       <StatusBarHandler 
         backgroundColor="#2563EB" 
@@ -1116,170 +1299,196 @@ export default function HospitalDashboard() {
           </View>
         </LinearGradient>
 
-        {/* Enhanced Statistics Cards - 3x2 Grid */}
+        {/* Statistics Cards - Compact Grid */}
         <View style={styles.statsGrid}>
-          <Card 
+          <TouchableOpacity 
             style={[styles.statCard, styles.statCard1]} 
-            mode="elevated" 
-            elevation={3}
-            onPress={() => {}}
+            activeOpacity={0.7}
           >
-            <Card.Content style={styles.statContent}>
-              <View style={[styles.statIcon, styles.statIcon1]}>
-                <Building2 size={26} color="#2563EB" />
-              </View>
-              <View style={styles.statText}>
-                <Text style={styles.statValue}>
-                  {sessions.filter((s: any) => s.status === 'in_progress').length}
-                </Text>
-                <Text style={styles.statLabel}>Active Jobs</Text>
-              </View>
-            </Card.Content>
-          </Card>
-          <Card 
-            style={[styles.statCard, styles.statCard3]} 
-            mode="elevated" 
-            elevation={3}
-            onPress={() => {}}
+            <View style={[styles.statIcon, styles.statIcon1]}>
+              <Building2 size={20} color="#2563EB" />
+            </View>
+            <View style={styles.statTextContainer}>
+              <Text style={styles.statValue} numberOfLines={1}>
+                {sessions.filter((s: any) => s.status === 'in_progress').length}
+              </Text>
+              <Text style={styles.statLabel} numberOfLines={1}>Active Jobs</Text>
+            </View>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.statCard, styles.statCard2]} 
+            activeOpacity={0.7}
           >
-            <Card.Content style={styles.statContent}>
-              <View style={[styles.statIcon, styles.statIcon3]}>
-                <CheckCircle2 size={26} color="#F59E0B" />
-              </View>
-              <View style={styles.statText}>
-                <Text style={styles.statValue}>
-                  {sessions.filter((s: any) => s.status === 'completed').length}
-                </Text>
-                <Text style={styles.statLabel}>Completed</Text>
-              </View>
-            </Card.Content>
-          </Card>
-          <Card 
+            <View style={[styles.statIcon, styles.statIcon2]}>
+              <CheckCircle2 size={18} color="#10B981" />
+            </View>
+            <View style={styles.statTextContainer}>
+              <Text style={styles.statValue} numberOfLines={1}>
+                {sessions.filter((s: any) => s.status === 'completed' && s.hospital_confirmed).length}
+              </Text>
+              <Text style={styles.statLabel} numberOfLines={1}>Completed</Text>
+            </View>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
             style={[styles.statCard, styles.statCard4]} 
-            mode="elevated" 
-            elevation={3}
-            onPress={() => {}}
+            activeOpacity={0.7}
           >
-            <Card.Content style={styles.statContent}>
-              <View style={[styles.statIcon, styles.statIcon4]}>
-                <Clock size={26} color="#DC2626" />
-              </View>
-              <View style={styles.statText}>
-                <Text style={styles.statValue}>
-                  {sessions.filter((s: any) => s.status === 'completed' && !s.hospital_confirmed).length}
-                </Text>
-                <Text style={styles.statLabel}>Pending Review</Text>
-              </View>
-            </Card.Content>
-          </Card>
-          <Card 
-            style={[styles.statCard, styles.statCard5]} 
-            mode="elevated" 
-            elevation={3}
-            onPress={() => {
-              if (hospital?.verification_status !== 'approved') {
-                Alert.alert(
-                  'Verification Required',
-                  'Your hospital account needs to be verified before you can post job requirements. Please wait for admin approval.',
-                  [{ text: 'OK' }]
-                );
-              } else {
-                setShowForm(true);
-              }
-            }}
+            <View style={[styles.statIcon, styles.statIcon4]}>
+              <Clock size={20} color="#F59E0B" />
+            </View>
+            <View style={styles.statTextContainer}>
+              <Text style={styles.statValue} numberOfLines={1}>
+                {sessions.filter((s: any) => s.status === 'completed' && !s.hospital_confirmed).length}
+              </Text>
+              <Text style={styles.statLabel} numberOfLines={1}>Review</Text>
+            </View>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.statCard, styles.statCard3]} 
+            activeOpacity={0.7}
           >
-            <Card.Content style={styles.statContent}>
-              <View style={[styles.statIcon, styles.statIcon5]}>
-                <Plus size={26} color="#10B981" />
-              </View>
-              <View style={styles.statText}>
-                <Text style={styles.statLabel}>Post Job</Text>
-              </View>
-            </Card.Content>
-          </Card>
-          <Card 
-            style={[styles.statCard, styles.statCard6]} 
-            mode="elevated" 
-            elevation={3}
-            onPress={() => router.push('/hospital/live-tracking')}
-          >
-            <Card.Content style={styles.statContent}>
-              <View style={[styles.statIcon, styles.statIcon6]}>
-                <Navigation size={26} color="#8B5CF6" />
-              </View>
-              <View style={styles.statText}>
-                <Text style={styles.statLabel}>Live Tracking</Text>
-              </View>
-            </Card.Content>
-          </Card>
+            <View style={[styles.statIcon, styles.statIcon3]}>
+              <FileText size={18} color="#8B5CF6" />
+            </View>
+            <View style={styles.statTextContainer}>
+              <Text style={styles.statValue} numberOfLines={1}>
+                {requirements.length}
+              </Text>
+              <Text style={styles.statLabel} numberOfLines={1}>Posted Jobs</Text>
+            </View>
+          </TouchableOpacity>
         </View>
 
         {!showForm ? (
           <>
-            {/* Quick Actions */}
-            <View style={styles.actionsRow}>
-              <Button
-                mode="contained"
-                onPress={() => {
-                  // Check if hospital is verified
-                  if (hospital?.verification_status !== 'approved') {
-                    // Show notification only if not verified
-                    Alert.alert(
-                      'Verification Required',
-                      'Your hospital account needs to be verified before you can post job requirements. Please wait for admin approval.',
-                      [{ text: 'OK' }]
-                    );
-                  } else {
-                    // If verified, open form directly without notification
-                    setShowForm(true);
-                  }
-                }}
-                style={styles.actionButton}
-                contentStyle={styles.actionButtonContent}
-                labelStyle={styles.actionButtonLabel}
-                buttonColor="#2563EB"
-                textColor="#fff"
-                icon={() => <Plus size={18} color="#fff" />}
-              >
-                Post Job
-              </Button>
-              <Button
-                mode="contained"
-                onPress={() => router.push('/hospital/live-tracking')}
-                style={styles.actionButton}
-                contentStyle={styles.actionButtonContent}
-                labelStyle={styles.actionButtonLabel}
-                buttonColor="#10B981"
-                textColor="#fff"
-                icon={() => <Navigation size={18} color="#fff" />}
-              >
-                Live Tracking
-              </Button>
+            {/* Quick Actions - Card Design */}
+            <View style={styles.actionsSection}>
+              <View style={styles.actionsRow}>
+                <TouchableOpacity
+                  style={styles.actionCard}
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    if (hospital?.verification_status !== 'approved') {
+                      Alert.alert(
+                        'Verification Required',
+                        'Your hospital account needs to be verified before you can post job requirements. Please wait for admin approval.',
+                        [{ text: 'OK' }]
+                      );
+                    } else {
+                      setShowForm(true);
+                    }
+                  }}
+                >
+                  <View style={[styles.actionCardContent, styles.actionCardBlue]}>
+                    {/* Header Section */}
+                    <View style={styles.cardHeader}>
+                      <View style={styles.headerLeft}>
+                        <View style={[styles.deptBadge, styles.deptBadgeLight]}>
+                          <Plus size={14} color="#FFFFFF" />
+                          <Text style={[styles.deptText, { color: '#FFFFFF' }]}>New Job</Text>
+                        </View>
+                        <View style={[styles.statusBadge, { backgroundColor: 'rgba(255, 255, 255, 0.25)', borderColor: '#FFFFFF' }]}>
+                          <Plus size={12} color="#FFFFFF" />
+                          <Text style={[styles.statusText, { color: '#FFFFFF' }]}>
+                            Post
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Info Row */}
+                    <View style={styles.compactInfoRow}>
+                      <View style={styles.compactInfoItem}>
+                        <FileText size={14} color="rgba(255, 255, 255, 0.9)" />
+                        <Text style={[styles.compactInfoText, { color: 'rgba(255, 255, 255, 0.9)' }]}>Create Requirement</Text>
+                      </View>
+                    </View>
+
+                    {/* Description */}
+                    <View style={styles.compactDateRow}>
+                      <Text style={[styles.actionCardDescription, { color: 'rgba(255, 255, 255, 0.8)' }]}>
+                        Post a new job requirement for doctors
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.actionCard}
+                  activeOpacity={0.7}
+                  onPress={() => router.push('/hospital/live-tracking')}
+                >
+                  <View style={[styles.actionCardContent, styles.actionCardGreen]}>
+                    {/* Header Section */}
+                    <View style={styles.cardHeader}>
+                      <View style={styles.headerLeft}>
+                        <View style={[styles.deptBadge, styles.deptBadgeLight]}>
+                          <Navigation size={14} color="#FFFFFF" />
+                          <Text style={[styles.deptText, { color: '#FFFFFF' }]}>Tracking</Text>
+                        </View>
+                        <View style={[styles.statusBadge, { backgroundColor: 'rgba(255, 255, 255, 0.25)', borderColor: '#FFFFFF' }]}>
+                          <Navigation size={12} color="#FFFFFF" />
+                          <Text style={[styles.statusText, { color: '#FFFFFF' }]}>
+                            Live
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Info Row */}
+                    <View style={styles.compactInfoRow}>
+                      <View style={styles.compactInfoItem}>
+                        <Clock size={14} color="rgba(255, 255, 255, 0.9)" />
+                        <Text style={[styles.compactInfoText, { color: 'rgba(255, 255, 255, 0.9)' }]}>Real-time Location</Text>
+                      </View>
+                    </View>
+
+                    {/* Description */}
+                    <View style={styles.compactDateRow}>
+                      <Text style={[styles.actionCardDescription, { color: 'rgba(255, 255, 255, 0.8)' }]}>
+                        Track doctors in real-time
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              </View>
             </View>
 
-            {/* Job Sessions Section - Moved here after Quick Actions */}
+            {/* Job Sessions Section - Enhanced Design */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                 <Text style={styles.sectionTitle}>Job Sessions</Text>
-                 <TouchableOpacity onPress={() => router.push('/hospital/sessions' as any)}>
-                    <Text style={{color: '#2563EB', fontWeight: '600', fontSize: 14}}>View All</Text>
+                 <View style={styles.sectionTitleContainer}>
+                   <Building2 size={20} color={PrimaryColors.main} />
+                   <Text style={styles.sectionTitle}>Job Sessions</Text>
+                 </View>
+                 <TouchableOpacity 
+                   onPress={() => router.push('/hospital/sessions' as any)}
+                   style={styles.viewAllButton}
+                 >
+                    <Text style={styles.viewAllText}>View All</Text>
+                    <Navigation size={14} color={PrimaryColors.main} />
                  </TouchableOpacity>
               </View>
               
               {(!sessions || sessions.length === 0) ? (
-                  <Card style={styles.emptyCard} mode="outlined">
-                    <Card.Content style={styles.emptyContent}>
-                       <Clock size={40} color="#9CA3AF" />
-                       <Text style={styles.emptyTitle}>No Active Work</Text>
-                       <Text style={styles.emptySubtitle}>Approved job sessions will appear here</Text>
-                    </Card.Content>
-                  </Card>
+                  <View style={styles.emptySessionsContainer}>
+                    <View style={styles.emptySessionsCard}>
+                      <View style={styles.emptyIconContainer}>
+                        <Clock size={48} color={NeutralColors.textTertiary} />
+                      </View>
+                      <Text style={styles.emptySessionsTitle}>No Active Sessions</Text>
+                      <Text style={styles.emptySessionsSubtitle}>Job sessions will appear here when doctors are assigned to your requirements</Text>
+                    </View>
+                  </View>
               ) : (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{paddingRight: 16}}>
-                      {sessions.slice(0, 5).map((session: any) => (
-                          <SessionItem key={session.id} session={session} />
-                      ))}
-                  </ScrollView>
+                  <View style={styles.sessionsContainer}>
+                    {sessions.slice(0, 5).map((session: any) => (
+                        <SessionItem key={session.id} session={session} />
+                    ))}
+                  </View>
               )}
             </View>
 
@@ -1669,31 +1878,33 @@ const styles = StyleSheet.create({
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
-    paddingHorizontal: 20,
-    marginTop: 20,
-    marginBottom: 24,
-    justifyContent: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 16,
   },
   statCard: {
-    width: '31%',
-    borderRadius: 16,
-    borderWidth: 0,
+    flex: 1,
+    minWidth: '22%',
+    maxWidth: '48%',
+    borderRadius: 12,
     backgroundColor: '#FFFFFF',
-    minWidth: 100,
-  },
-  statContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    padding: 16,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: NeutralColors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
   statIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 6,
   },
   statIcon1: {
     backgroundColor: '#DBEAFE',
@@ -1702,7 +1913,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ECFDF5',
   },
   statIcon3: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: '#F3E8FF',
   },
   statIcon4: {
     backgroundColor: '#FEE2E2',
@@ -1714,76 +1925,133 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3E8FF',
   },
   statCard1: {
-    backgroundColor: '#FFFFFF',
-    borderLeftWidth: 4,
+    borderLeftWidth: 3,
     borderLeftColor: '#2563EB',
   },
   statCard2: {
-    backgroundColor: '#FFFFFF',
-    borderLeftWidth: 4,
+    borderLeftWidth: 3,
     borderLeftColor: '#10B981',
   },
   statCard3: {
-    backgroundColor: '#FFFFFF',
-    borderLeftWidth: 4,
-    borderLeftColor: '#F59E0B',
+    borderLeftWidth: 3,
+    borderLeftColor: '#8B5CF6',
   },
   statCard4: {
-    backgroundColor: '#FFFFFF',
-    borderLeftWidth: 4,
+    borderLeftWidth: 3,
     borderLeftColor: '#DC2626',
   },
   statCard5: {
-    backgroundColor: '#FFFFFF',
-    borderLeftWidth: 4,
+    borderLeftWidth: 3,
     borderLeftColor: '#10B981',
   },
   statCard6: {
-    backgroundColor: '#FFFFFF',
-    borderLeftWidth: 4,
+    borderLeftWidth: 3,
     borderLeftColor: '#8B5CF6',
   },
-  statText: {
+  statTextContainer: {
     flex: 1,
+    minWidth: 0,
   },
   statValue: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#111827',
+    fontSize: 20,
+    fontWeight: '800',
+    color: NeutralColors.textPrimary,
     marginBottom: 2,
-    letterSpacing: -0.5,
+    letterSpacing: -0.3,
   },
   statLabel: {
-    fontSize: 12,
-    color: '#6B7280',
+    fontSize: 10,
+    color: NeutralColors.textSecondary,
     fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.2,
+  },
+  actionsSection: {
+    paddingHorizontal: 20,
+    marginTop: 8,
+    marginBottom: 20,
+  },
+  actionsSection: {
+    paddingHorizontal: 20,
+    marginTop: 8,
+    marginBottom: 20,
   },
   actionsRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 12,
-    paddingHorizontal: 20,
-    marginBottom: 24,
-    justifyContent: 'center',
   },
-  actionButton: {
-    width: '47%',
-    borderRadius: 12,
-    minHeight: 48,
+  actionCard: {
+    flex: 1,
   },
-  actionButtonContent: {
-    paddingVertical: 8,
+  actionCardContent: {
+    backgroundColor: NeutralColors.cardBackground,
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: NeutralColors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+    minHeight: 140,
   },
-  actionButtonLabel: {
-    fontSize: 14,
-    fontWeight: '500',
+  actionCardDescription: {
+    fontSize: 12,
+    color: NeutralColors.textSecondary,
+    fontWeight: '400',
+    lineHeight: 16,
+  },
+  actionCardBlue: {
+    backgroundColor: '#2563EB',
+    borderColor: '#1E40AF',
+  },
+  actionCardGreen: {
+    backgroundColor: '#10B981',
+    borderColor: '#059669',
+  },
+  sessionCardBlue: {
+    backgroundColor: '#3B82F6',
+    borderColor: '#2563EB',
+  },
+  sessionCardGreen: {
+    backgroundColor: '#6366F1',
+    borderColor: '#4F46E5',
+  },
+  sessionCardOrange: {
+    backgroundColor: '#F59E0B',
+    borderColor: '#D97706',
+  },
+  sessionCardPurple: {
+    backgroundColor: '#8B5CF6',
+    borderColor: '#7C3AED',
+  },
+  requirementCardBlue: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#93C5FD',
+    borderLeftWidth: 4,
+  },
+  requirementCardGreen: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#10B981',
+    borderLeftWidth: 4,
+  },
+  requirementCardYellow: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#F59E0B',
+    borderLeftWidth: 4,
+  },
+  requirementCardRed: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#EF4444',
+    borderLeftWidth: 4,
+  },
+  deptBadgeLight: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
   section: {
     paddingHorizontal: 20,
-
-    marginBottom: 32, // Increased spacing from 24 to 32
+    marginTop: 24,
+    marginBottom: 24,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -1791,10 +2059,66 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 16,
   },
+  sectionTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#111827',
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: `${PrimaryColors.main}10`,
+  },
+  viewAllText: {
+    color: PrimaryColors.main,
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  sessionsContainer: {
+    marginTop: 8,
+    gap: 12,
+  },
+  emptySessionsContainer: {
+    marginTop: 8,
+  },
+  emptySessionsCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: NeutralColors.border,
+    borderStyle: 'dashed',
+  },
+  emptyIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: `${NeutralColors.textTertiary}10`,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  emptySessionsTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: NeutralColors.textPrimary,
+    marginBottom: 8,
+  },
+  emptySessionsSubtitle: {
+    fontSize: 14,
+    color: NeutralColors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
   },
   countChip: {
     backgroundColor: '#EFF6FF',
@@ -1836,98 +2160,194 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   requirementCard: {
-    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
     marginBottom: 12,
-    minHeight: 180,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: NeutralColors.border,
+    minHeight: 140,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center', // Changed from flex-start to center for better alignment
+    alignItems: 'flex-start',
     marginBottom: 12,
-  },
-  deptChip: {
-    // height: 28, // Removed fixed height
-  },
-  expiredChip: {
-    // height: 26, // Removed fixed height
-    marginLeft: 8,
-  },
-  deleteIcon: {
-    padding: 4,
-  },
-  cardMeta: {
-    flexDirection: 'row',
     gap: 8,
-    marginBottom: 12,
+  },
+  headerLeft: {
+    flex: 1,
+    gap: 6,
+    minWidth: 0,
+  },
+  deptBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: `${PrimaryColors.main}15`,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+    flexShrink: 0,
+  },
+  deptText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: PrimaryColors.main,
+    flexShrink: 1,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignSelf: 'flex-start',
+    flexShrink: 0,
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '700',
+    flexShrink: 1,
+  },
+  deleteButton: {
+    padding: 6,
+    borderRadius: 6,
+    flexShrink: 0,
+    marginLeft: 4,
+  },
+  compactInfoRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 10,
     flexWrap: 'wrap',
   },
-  metaChip: {
-    // height: 26, // Removed fixed height
+  compactInfoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    flex: 1,
+    minWidth: 0,
   },
-  metaChipText: {
+  compactInfoText: {
     fontSize: 12,
-    fontWeight: '400',
-    color: '#6B7280',
+    color: NeutralColors.textSecondary,
+    fontWeight: '500',
+    flexShrink: 1,
   },
-  cardDescription: {
-    fontSize: 14,
-    color: '#374151',
-    lineHeight: 20,
-    marginBottom: 12,
-    fontWeight: '400',
-  },
-  cardInfoRow: {
+  compactDateRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     marginBottom: 8,
+    minWidth: 0,
   },
-  cardInfoText: {
-    fontSize: 13,
-    color: '#6B7280',
+  compactDateText: {
+    fontSize: 12,
+    color: NeutralColors.textSecondary,
+    fontWeight: '500',
     flex: 1,
-    fontWeight: '400',
+    flexShrink: 1,
   },
-  applicantsRow: {
+  compactLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 12,
+    minWidth: 0,
+  },
+  compactLocationText: {
+    fontSize: 12,
+    color: NeutralColors.textSecondary,
+    flex: 1,
+    flexShrink: 1,
+  },
+  compactStatusBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: NeutralColors.border,
+  },
+  compactStatusStats: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginTop: 8,
-    marginBottom: 12,
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    minHeight: 48,
+    flex: 1,
   },
-  avatarsContainer: {
+  compactStatItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 32,
-    width: 'auto',
+    gap: 4,
   },
-  avatar: {
-    borderWidth: 2,
-    borderColor: '#fff',
-    width: 32,
-    height: 32,
+  compactStatDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
-  applicantsCount: {
-    fontSize: 13,
-    color: '#6B7280',
-    fontWeight: '400',
+  compactStatText: {
+    fontSize: 11,
+    color: NeutralColors.textPrimary,
+    fontWeight: '600',
   },
-  viewButton: {
-    marginTop: 12,
-    alignSelf: 'flex-end',
+  compactApplicants: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginLeft: 'auto',
   },
-  viewButtonLabel: {
-    fontSize: 14,
+  compactAvatarsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  compactAvatar: {
+    borderWidth: 0,
+    width: 24,
+    height: 24,
+    overflow: 'hidden',
+  },
+  compactMoreAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: NeutralColors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  compactMoreAvatarText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: NeutralColors.textSecondary,
+  },
+  compactApplicantsText: {
+    fontSize: 11,
+    color: NeutralColors.textSecondary,
     fontWeight: '500',
-  },
-  viewButtonIcon: {
-    fontSize: 16,
-    color: '#2563EB',
+    flexShrink: 1,
     marginLeft: 4,
+  },
+  compactPaymentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginLeft: 'auto',
+    backgroundColor: `${PrimaryColors.accent}15`,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  compactPaymentBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: PrimaryColors.accent,
   },
   formCard: {
     margin: 20,
@@ -2208,8 +2628,8 @@ const styles = StyleSheet.create({
       gap: 12,
   },
   workAvatar: {
-      borderWidth: 2,
-      borderColor: '#E5E7EB',
+      borderWidth: 0,
+      overflow: 'hidden',
   },
   workDoctorInfo: {
       flex: 1,
