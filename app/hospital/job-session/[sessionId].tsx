@@ -280,16 +280,17 @@ export default function HospitalJobSessionScreen() {
                   <View style={styles.timeItem}>
                     <Text style={styles.timeItemLabel}>Check Out</Text>
                     <Text style={styles.timeItemValue}>
-                      {session.end_time ? new Date(session.end_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }) : '--:--'}
+                      {session.check_out_time || session.attendance?.check_out_time ? new Date(session.check_out_time || session.attendance?.check_out_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }) : '--:--'}
                     </Text>
                   </View>
                   <View style={styles.timeDivider} />
                   <View style={styles.timeItem}>
                     <Text style={styles.timeItemLabel}>Duration</Text>
                     <Text style={styles.timeItemValue}>
-                      {isInProgress ? formatTime(timeElapsed).substring(0, 5) : session.end_time && session.check_in_time ? 
+                      {isInProgress ? formatTime(timeElapsed).substring(0, 5) : (session.check_out_time || session.attendance?.check_out_time) && session.check_in_time ? 
                         (() => {
-                          const duration = new Date(session.end_time).getTime() - new Date(session.check_in_time).getTime();
+                          const checkOutTime = session.check_out_time || session.attendance?.check_out_time;
+                          const duration = new Date(checkOutTime).getTime() - new Date(session.check_in_time).getTime();
                           return formatTime(duration).substring(0, 5);
                         })() : '0h 0m'}
                     </Text>

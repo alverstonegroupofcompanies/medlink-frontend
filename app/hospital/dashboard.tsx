@@ -355,14 +355,17 @@ const SessionItem = React.memo(({ session }: { session: any }) => {
                         <View style={[styles.deptBadge, 
                               session.status === 'completed' && session.hospital_confirmed ? { backgroundColor: 'rgba(255, 255, 255, 0.25)' } :
                               session.status === 'completed' && !session.hospital_confirmed ? { backgroundColor: 'rgba(255, 255, 255, 0.25)' } :
-                              session.status === 'in_progress' ? { backgroundColor: 'rgba(255, 255, 255, 0.25)' } : {}]}>
+                              session.status === 'in_progress' ? { backgroundColor: 'rgba(255, 255, 255, 0.25)' } :
+                              session.status === 'scheduled' ? { backgroundColor: 'rgba(255, 255, 255, 0.25)' } : {}]}>
                             <Building2 size={14} color={session.status === 'completed' && session.hospital_confirmed ? '#FFFFFF' : 
                                   session.status === 'completed' && !session.hospital_confirmed ? '#FFFFFF' :
-                                  session.status === 'in_progress' ? '#FFFFFF' : PrimaryColors.main} />
+                                  session.status === 'in_progress' ? '#FFFFFF' :
+                                  session.status === 'scheduled' ? '#FFFFFF' : PrimaryColors.main} />
                             <Text style={[styles.deptText,
                                   session.status === 'completed' && session.hospital_confirmed ? { color: '#FFFFFF' } :
                                   session.status === 'completed' && !session.hospital_confirmed ? { color: '#FFFFFF' } :
-                                  session.status === 'in_progress' ? { color: '#FFFFFF' } : {}]}>
+                                  session.status === 'in_progress' ? { color: '#FFFFFF' } :
+                                  session.status === 'scheduled' ? { color: '#FFFFFF' } : {}]}>
                                 {requirement?.department || 'Department'}
                             </Text>
                         </View>
@@ -370,13 +373,16 @@ const SessionItem = React.memo(({ session }: { session: any }) => {
                               session.status === 'completed' && session.hospital_confirmed ? { backgroundColor: 'rgba(255, 255, 255, 0.25)', borderColor: '#FFFFFF' } :
                               session.status === 'completed' && !session.hospital_confirmed ? { backgroundColor: 'rgba(255, 255, 255, 0.25)', borderColor: '#FFFFFF' } :
                               session.status === 'in_progress' ? { backgroundColor: 'rgba(255, 255, 255, 0.25)', borderColor: '#FFFFFF' } :
+                              session.status === 'scheduled' ? { backgroundColor: 'rgba(255, 255, 255, 0.25)', borderColor: '#FFFFFF' } :
                               { backgroundColor: `${status.color}15`, borderColor: status.color }]}>
                             <StatusIcon size={12} color={session.status === 'completed' && session.hospital_confirmed ? '#FFFFFF' : 
                                   session.status === 'completed' && !session.hospital_confirmed ? '#FFFFFF' :
-                                  session.status === 'in_progress' ? '#FFFFFF' : status.color} />
+                                  session.status === 'in_progress' ? '#FFFFFF' :
+                                  session.status === 'scheduled' ? '#FFFFFF' : status.color} />
                             <Text style={[styles.statusText, { color: session.status === 'completed' && session.hospital_confirmed ? '#FFFFFF' : 
                                   session.status === 'completed' && !session.hospital_confirmed ? '#FFFFFF' :
-                                  session.status === 'in_progress' ? '#FFFFFF' : status.color }]}>
+                                  session.status === 'in_progress' ? '#FFFFFF' :
+                                  session.status === 'scheduled' ? '#FFFFFF' : status.color }]}>
                                 {status.text}
                             </Text>
                         </View>
@@ -388,11 +394,13 @@ const SessionItem = React.memo(({ session }: { session: any }) => {
                     <View style={styles.compactInfoItem}>
                         <User size={14} color={session.status === 'completed' && session.hospital_confirmed ? 'rgba(255, 255, 255, 0.9)' : 
                               session.status === 'completed' && !session.hospital_confirmed ? 'rgba(255, 255, 255, 0.9)' :
-                              session.status === 'in_progress' ? 'rgba(255, 255, 255, 0.9)' : NeutralColors.textSecondary} />
+                              session.status === 'in_progress' ? 'rgba(255, 255, 255, 0.9)' :
+                              session.status === 'scheduled' ? 'rgba(255, 255, 255, 0.9)' : NeutralColors.textSecondary} />
                         <Text style={[styles.compactInfoText, 
                               session.status === 'completed' && session.hospital_confirmed ? { color: 'rgba(255, 255, 255, 0.9)' } :
                               session.status === 'completed' && !session.hospital_confirmed ? { color: 'rgba(255, 255, 255, 0.9)' } :
-                              session.status === 'in_progress' ? { color: 'rgba(255, 255, 255, 0.9)' } : {}]}>
+                              session.status === 'in_progress' ? { color: 'rgba(255, 255, 255, 0.9)' } :
+                              session.status === 'scheduled' ? { color: 'rgba(255, 255, 255, 0.9)' } : {}]}>
                             Dr. {doctor?.name || 'Doctor'}
                         </Text>
                     </View>
@@ -400,11 +408,13 @@ const SessionItem = React.memo(({ session }: { session: any }) => {
                         <View style={styles.compactInfoItem}>
                             <Clock size={14} color={session.status === 'completed' && session.hospital_confirmed ? 'rgba(255, 255, 255, 0.9)' : 
                                   session.status === 'completed' && !session.hospital_confirmed ? 'rgba(255, 255, 255, 0.9)' :
-                                  session.status === 'in_progress' ? 'rgba(255, 255, 255, 0.9)' : NeutralColors.textSecondary} />
+                                  session.status === 'in_progress' ? 'rgba(255, 255, 255, 0.9)' :
+                                  session.status === 'scheduled' ? 'rgba(255, 255, 255, 0.9)' : NeutralColors.textSecondary} />
                             <Text style={[styles.compactInfoText,
                                   session.status === 'completed' && session.hospital_confirmed ? { color: 'rgba(255, 255, 255, 0.9)' } :
                                   session.status === 'completed' && !session.hospital_confirmed ? { color: 'rgba(255, 255, 255, 0.9)' } :
-                                  session.status === 'in_progress' ? { color: 'rgba(255, 255, 255, 0.9)' } : {}]}>
+                                  session.status === 'in_progress' ? { color: 'rgba(255, 255, 255, 0.9)' } :
+                                  session.status === 'scheduled' ? { color: 'rgba(255, 255, 255, 0.9)' } : {}]}>
                                 Check-in: {formatTime(session.check_in_time)}
                             </Text>
                         </View>
@@ -415,11 +425,13 @@ const SessionItem = React.memo(({ session }: { session: any }) => {
                 <View style={styles.compactDateRow}>
                     <Calendar size={13} color={session.status === 'completed' && session.hospital_confirmed ? 'rgba(255, 255, 255, 0.85)' : 
                           session.status === 'completed' && !session.hospital_confirmed ? 'rgba(255, 255, 255, 0.85)' :
-                          session.status === 'in_progress' ? 'rgba(255, 255, 255, 0.85)' : NeutralColors.textSecondary} />
+                          session.status === 'in_progress' ? 'rgba(255, 255, 255, 0.85)' :
+                          session.status === 'scheduled' ? 'rgba(255, 255, 255, 0.85)' : NeutralColors.textSecondary} />
                     <Text style={[styles.compactDateText,
                           session.status === 'completed' && session.hospital_confirmed ? { color: 'rgba(255, 255, 255, 0.85)' } :
                           session.status === 'completed' && !session.hospital_confirmed ? { color: 'rgba(255, 255, 255, 0.85)' } :
-                          session.status === 'in_progress' ? { color: 'rgba(255, 255, 255, 0.85)' } : {}]}>
+                          session.status === 'in_progress' ? { color: 'rgba(255, 255, 255, 0.85)' } :
+                          session.status === 'scheduled' ? { color: 'rgba(255, 255, 255, 0.85)' } : {}]}>
                         {formatISTDateOnly(session.session_date)}
                         {session.start_time && ` • ${formatTime(session.start_time)}`}
                         {session.end_time && ` - ${formatTime(session.end_time)}`}
@@ -431,11 +443,13 @@ const SessionItem = React.memo(({ session }: { session: any }) => {
                     <View style={styles.compactLocationRow}>
                         <DollarSign size={13} color={session.status === 'completed' && session.hospital_confirmed ? 'rgba(255, 255, 255, 0.9)' : 
                               session.status === 'completed' && !session.hospital_confirmed ? 'rgba(255, 255, 255, 0.9)' :
-                              session.status === 'in_progress' ? 'rgba(255, 255, 255, 0.9)' : NeutralColors.textSecondary} />
+                              session.status === 'in_progress' ? 'rgba(255, 255, 255, 0.9)' :
+                              session.status === 'scheduled' ? 'rgba(255, 255, 255, 0.9)' : NeutralColors.textSecondary} />
                         <Text style={[styles.compactLocationText,
                               session.status === 'completed' && session.hospital_confirmed ? { color: 'rgba(255, 255, 255, 0.9)' } :
                               session.status === 'completed' && !session.hospital_confirmed ? { color: 'rgba(255, 255, 255, 0.9)' } :
-                              session.status === 'in_progress' ? { color: 'rgba(255, 255, 255, 0.9)' } : {}]}>
+                              session.status === 'in_progress' ? { color: 'rgba(255, 255, 255, 0.9)' } :
+                              session.status === 'scheduled' ? { color: 'rgba(255, 255, 255, 0.9)' } : {}]}>
                             ₹{parseFloat(session.payment_amount || 0).toFixed(2)}
                         </Text>
                     </View>
@@ -445,7 +459,8 @@ const SessionItem = React.memo(({ session }: { session: any }) => {
                 <View style={[styles.compactStatusBar,
                       session.status === 'completed' && session.hospital_confirmed ? { borderTopColor: 'rgba(255, 255, 255, 0.3)' } :
                       session.status === 'completed' && !session.hospital_confirmed ? { borderTopColor: 'rgba(255, 255, 255, 0.3)' } :
-                      session.status === 'in_progress' ? { borderTopColor: 'rgba(255, 255, 255, 0.3)' } : {}]}>
+                      session.status === 'in_progress' ? { borderTopColor: 'rgba(255, 255, 255, 0.3)' } :
+                      session.status === 'scheduled' ? { borderTopColor: 'rgba(255, 255, 255, 0.3)' } : {}]}>
                     <View style={styles.compactStatusStats}>
                         {session.status === 'completed' && !session.hospital_confirmed && (
                             <View style={styles.compactStatItem}>
@@ -465,18 +480,27 @@ const SessionItem = React.memo(({ session }: { session: any }) => {
                                 <Text style={[styles.compactStatText, { color: '#FFFFFF' }]}>In Progress</Text>
                             </View>
                         )}
+                        {session.status === 'scheduled' && (
+                            <View style={styles.compactStatItem}>
+                                <View style={[styles.compactStatDot, { backgroundColor: '#FFFFFF' }]} />
+                                <Text style={[styles.compactStatText, { color: '#FFFFFF' }]}>Scheduled</Text>
+                            </View>
+                        )}
                         {session.payment_amount && (
                             <View style={[styles.compactPaymentBadge, 
                                   session.status === 'completed' && session.hospital_confirmed ? { backgroundColor: 'rgba(255, 255, 255, 0.25)' } :
                                   session.status === 'completed' && !session.hospital_confirmed ? { backgroundColor: 'rgba(255, 255, 255, 0.25)' } :
-                                  session.status === 'in_progress' ? { backgroundColor: 'rgba(255, 255, 255, 0.25)' } : {}]}>
+                                  session.status === 'in_progress' ? { backgroundColor: 'rgba(255, 255, 255, 0.25)' } :
+                                  session.status === 'scheduled' ? { backgroundColor: 'rgba(255, 255, 255, 0.25)' } : {}]}>
                                 <DollarSign size={12} color={session.status === 'completed' && session.hospital_confirmed ? '#FFFFFF' : 
                                       session.status === 'completed' && !session.hospital_confirmed ? '#FFFFFF' :
-                                      session.status === 'in_progress' ? '#FFFFFF' : PrimaryColors.accent} />
+                                      session.status === 'in_progress' ? '#FFFFFF' :
+                                      session.status === 'scheduled' ? '#FFFFFF' : PrimaryColors.accent} />
                                 <Text style={[styles.compactPaymentBadgeText,
                                       session.status === 'completed' && session.hospital_confirmed ? { color: '#FFFFFF' } :
                                       session.status === 'completed' && !session.hospital_confirmed ? { color: '#FFFFFF' } :
-                                      session.status === 'in_progress' ? { color: '#FFFFFF' } : {}]}>
+                                      session.status === 'in_progress' ? { color: '#FFFFFF' } :
+                                      session.status === 'scheduled' ? { color: '#FFFFFF' } : {}]}>
                                     ₹{parseFloat(session.payment_amount || 0).toFixed(0)}
                                 </Text>
                             </View>

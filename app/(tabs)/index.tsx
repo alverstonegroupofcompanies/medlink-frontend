@@ -14,7 +14,7 @@ import {
   DeviceEventEmitter,
   Modal,
 } from "react-native";
-import { Star, Bell, MapPin, Clock, TrendingUp, Award, Building2, CheckCircle, Check, ArrowRight, Calendar, AlertCircle, Phone, Navigation, LogOut, DollarSign } from "lucide-react-native";
+import { Star, Bell, MapPin, Clock, TrendingUp, Award, Building2, CheckCircle, Check, ArrowRight, Calendar, AlertCircle, Phone, Navigation, LogOut, DollarSign, Coins, Wallet } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
 import { ModernColors, Spacing, BorderRadius, Shadows, Typography } from "@/constants/modern-theme";
@@ -1015,7 +1015,7 @@ export default function DoctorHome() {
                           {/* Payment Details */}
                           <View style={styles.newOpportunityPaymentContainer}>
                             <View style={styles.newOpportunityPaymentRow}>
-                              <DollarSign size={16} color={ModernColors.primary.main} />
+                              <Coins size={16} color={ModernColors.primary.main} />
                               <Text style={styles.newOpportunityPaymentLabel}>Payment:</Text>
                               <Text style={styles.newOpportunityPaymentAmount}>
                                 ₹{Number(paymentAmount).toLocaleString('en-IN')}
@@ -1183,7 +1183,7 @@ export default function DoctorHome() {
                         {/* Payment Details */}
                         <View style={styles.newOpportunityPaymentContainer}>
                           <View style={styles.newOpportunityPaymentRow}>
-                            <DollarSign size={16} color={ModernColors.primary.main} />
+                            <Coins size={16} color={ModernColors.primary.main} />
                             <Text style={styles.newOpportunityPaymentLabel}>Payment:</Text>
                             <Text style={styles.newOpportunityPaymentAmount}>
                               ₹{Number(paymentAmount).toLocaleString('en-IN')}
@@ -1845,50 +1845,76 @@ export default function DoctorHome() {
 
                         return (
                             <View style={{gap: 12}}>
-                                {dateSessions.map((session: any, idx) => (
-                                    <TouchableOpacity 
-                                        key={idx}
-                                        style={{
-                                            padding: 12,
-                                            backgroundColor: ModernColors.background.secondary,
-                                            borderRadius: 12,
-                                            borderWidth: 1,
-                                            borderColor: ModernColors.border.light
-                                        }}
-                                        onPress={() => {
-                                            setScheduleModalVisible(false);
-                                            // Use application_id if available, otherwise find it from myApplications
-                                            if (session.application_id) {
-                                                router.push(`/job-detail/${session.application_id}`);
-                                            } else {
-                                                // Find application by job_requirement_id
-                                                const application = myApplications.find(
-                                                    (app: any) => app.job_requirement_id === session.job_requirement_id
-                                                );
-                                                if (application) {
-                                                    router.push(`/job-detail/${application.id}`);
+                                {dateSessions.map((session: any, idx) => {
+                                    // Calculate if session is late (check-in time passed but no check-in)
+                                    const now = new Date();
+                                    let sessionDateTime = new Date(session.session_date);
+                                    if (session.job_requirement?.start_time) {
+                                        const [hours, minutes] = session.job_requirement.start_time.split(':');
+                                        sessionDateTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+                                    }
+                                    
+                                    // Only show late if check-in time has passed AND no check-in yet
+                                    const isLate = sessionDateTime < now && !session.check_in_time;
+                                    const lateMinutes = isLate ? Math.floor((now.getTime() - sessionDateTime.getTime()) / (1000 * 60)) : 0;
+                                    
+                                    return (
+                                        <TouchableOpacity 
+                                            key={idx}
+                                            style={{
+                                                padding: 12,
+                                                backgroundColor: ModernColors.background.secondary,
+                                                borderRadius: 12,
+                                                borderWidth: 1,
+                                                borderColor: ModernColors.border.light
+                                            }}
+                                            onPress={() => {
+                                                setScheduleModalVisible(false);
+                                                // Use application_id if available, otherwise find it from myApplications
+                                                if (session.application_id) {
+                                                    router.push(`/job-detail/${session.application_id}`);
                                                 } else {
-                                                    Alert.alert('Error', 'Application not found for this session');
+                                                    // Find application by job_requirement_id
+                                                    const application = myApplications.find(
+                                                        (app: any) => app.job_requirement_id === session.job_requirement_id
+                                                    );
+                                                    if (application) {
+                                                        router.push(`/job-detail/${application.id}`);
+                                                    } else {
+                                                        Alert.alert('Error', 'Application not found for this session');
+                                                    }
                                                 }
-                                            }
-                                        }}
-                                    >
-                                        <Text style={{fontSize: 16, fontWeight: '700', color: ModernColors.text.primary, marginBottom: 4}}>
-                                            {session.job_requirement?.hospital?.name || 'Hospital'}
-                                        </Text>
-                                        <Text style={{fontSize: 13, color: ModernColors.text.secondary, marginBottom: 8}}>
-                                            {session.job_requirement?.department || 'Department'}
-                                        </Text>
-                                        <View style={{flexDirection: 'row', alignItems: 'center', gap: 6}}>
-                                            <Clock size={12} color={ModernColors.primary.main} />
-                                            <Text style={{fontSize: 12, fontWeight: '600', color: ModernColors.primary.main}}>
-                                                {new Date(`2000-01-01 ${session.job_requirement?.start_time || '00:00'}`).toLocaleTimeString('en-US', {hour: 'numeric', minute:'2-digit', hour12: true})}
-                                                 {' - '}
-                                                {new Date(`2000-01-01 ${session.job_requirement?.end_time || '00:00'}`).toLocaleTimeString('en-US', {hour: 'numeric', minute:'2-digit', hour12: true})}
+                                            }}
+                                        >
+                                            <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4}}>
+                                                <Text style={{fontSize: 16, fontWeight: '700', color: ModernColors.text.primary, flex: 1}}>
+                                                    {session.job_requirement?.hospital?.name || 'Hospital'}
+                                                </Text>
+                                                {isLate && (
+                                                    <View style={styles.lateBadge}>
+                                                        <Text style={styles.lateBadgeText}>
+                                                            Late {lateMinutes}m
+                                                        </Text>
+                                                    </View>
+                                                )}
+                                            </View>
+                                            <Text style={{fontSize: 12, color: '#FFFFFF', fontWeight: '600', marginBottom: 4, backgroundColor: ModernColors.primary.main, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, alignSelf: 'flex-start'}}>
+                                                Job Session
                                             </Text>
-                                        </View>
-                                    </TouchableOpacity>
-                                ))}
+                                            <Text style={{fontSize: 13, color: ModernColors.text.secondary, marginBottom: 8}}>
+                                                {session.job_requirement?.department || 'Department'}
+                                            </Text>
+                                            <View style={{flexDirection: 'row', alignItems: 'center', gap: 6}}>
+                                                <Clock size={12} color={ModernColors.primary.main} />
+                                                <Text style={{fontSize: 12, fontWeight: '600', color: ModernColors.primary.main}}>
+                                                    {new Date(`2000-01-01 ${session.job_requirement?.start_time || '00:00'}`).toLocaleTimeString('en-US', {hour: 'numeric', minute:'2-digit', hour12: true})}
+                                                     {' - '}
+                                                    {new Date(`2000-01-01 ${session.job_requirement?.end_time || '00:00'}`).toLocaleTimeString('en-US', {hour: 'numeric', minute:'2-digit', hour12: true})}
+                                                </Text>
+                                            </View>
+                                        </TouchableOpacity>
+                                    );
+                                })}
                             </View>
                         );
                     })()}
