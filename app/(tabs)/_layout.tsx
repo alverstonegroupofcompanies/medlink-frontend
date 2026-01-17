@@ -18,7 +18,9 @@ export default function TabLayout() {
       const checkAuth = async () => {
         const isLoggedIn = await isDoctorLoggedIn();
         if (!isLoggedIn) {
-          console.log('⚠️ Doctor not authenticated, redirecting to login...');
+          if (__DEV__) {
+            console.log('⚠️ Doctor not authenticated, redirecting to login...');
+          }
           router.replace('/login');
         }
       };
@@ -34,7 +36,9 @@ export default function TabLayout() {
     const setup = async () => {
       const isLoggedIn = await isDoctorLoggedIn();
       if (!isLoggedIn) {
-        console.log('⚠️ Doctor not authenticated on mount, redirecting to login...');
+        if (__DEV__) {
+          console.log('⚠️ Doctor not authenticated on mount, redirecting to login...');
+        }
         router.replace('/login');
         return;
       }
@@ -44,11 +48,15 @@ export default function TabLayout() {
       if (doctor?.id) {
           doctorId = doctor.id;
           channelName = `App.Models.User.${doctor.id}`;
-          console.log(`🔌 [Global] Subscribing to private channel: ${channelName}`);
+          if (__DEV__) {
+            console.log(`🔌 [Global] Subscribing to private channel: ${channelName}`);
+          }
           
           echo.private(channelName)
               .listen('.ApplicationStatusUpdated', (e: any) => {
-                  console.log('🔔 [Global] Real-time update received:', e);
+                  if (__DEV__) {
+                    console.log('🔔 [Global] Real-time update received:', e);
+                  }
                   
                   // Show system notification
                   showNotificationFromData({
@@ -62,7 +70,9 @@ export default function TabLayout() {
                   DeviceEventEmitter.emit('REFRESH_DOCTOR_DATA');
               })
               .listen('.NewJobPosted', (e: any) => {
-                  console.log('🔔 [Global] New Job Posting received:', e);
+                  if (__DEV__) {
+                    console.log('🔔 [Global] New Job Posting received:', e);
+                  }
                   
                   // Show system notification
                   showNotificationFromData({
@@ -82,7 +92,9 @@ export default function TabLayout() {
 
     return () => {
         if (channelName) {
-            console.log(`🔌 [Global] Unsubscribing from channel: ${channelName}`);
+            if (__DEV__) {
+              console.log(`🔌 [Global] Unsubscribing from channel: ${channelName}`);
+            }
             echo.leave(channelName);
         }
     };

@@ -23,12 +23,16 @@ export default function Index() {
 
   const checkLoginStatus = async () => {
     try {
-      console.log('🔍 Checking login status...');
+      if (__DEV__) {
+        console.log('🔍 Checking login status...');
+      }
       
       // Check Doctor Login
       const doctorLoggedIn = await isDoctorLoggedIn();
       if (doctorLoggedIn) {
-        console.log('✅ Doctor logged in, redirecting to dashboard...');
+        if (__DEV__) {
+          console.log('✅ Doctor logged in, redirecting to dashboard...');
+        }
         setTimeout(() => router.replace("/(tabs)"), 100);
         return;
       }
@@ -36,16 +40,22 @@ export default function Index() {
       // Check Hospital Login
       const hospitalLoggedIn = await isHospitalLoggedIn();
       if (hospitalLoggedIn) {
-        console.log('✅ Hospital logged in, redirecting to hospital dashboard...');
+        if (__DEV__) {
+          console.log('✅ Hospital logged in, redirecting to hospital dashboard...');
+        }
         setTimeout(() => router.replace("/hospital/dashboard"), 100);
         return;
       }
 
-      console.log('👤 No session found, redirecting to login...');
+      if (__DEV__) {
+        console.log('👤 No session found, redirecting to login...');
+      }
       router.replace("/login");
 
     } catch (error) {
-      console.error('❌ Error checking login status:', error);
+      if (__DEV__) {
+        console.error('❌ Error checking login status:', error);
+      }
       // Fallback to login on error
       router.replace("/login");
     }

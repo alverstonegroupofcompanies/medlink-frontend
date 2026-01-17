@@ -18,11 +18,15 @@ export default function HospitalTabLayout() {
         try {
           const token = await AsyncStorage.getItem(HOSPITAL_TOKEN_KEY);
           if (!token) {
-            console.log('⚠️ Hospital not authenticated, redirecting to login...');
+            if (__DEV__) {
+              console.log('⚠️ Hospital not authenticated, redirecting to login...');
+            }
             router.replace('/hospital/login');
           }
         } catch (error) {
-          console.error('Error checking auth:', error);
+          if (__DEV__) {
+            console.error('Error checking auth:', error);
+          }
           router.replace('/hospital/login');
         }
       };
