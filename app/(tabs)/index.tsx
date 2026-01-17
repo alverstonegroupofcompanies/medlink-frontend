@@ -219,6 +219,13 @@ export default function DoctorHome() {
 
   const handleApply = async (requirementId: number) => {
     try {
+      // Check if position is filled before applying
+      const requirement = jobRequirements.find((req: any) => req.id === requirementId);
+      if (requirement?.is_filled) {
+        Alert.alert('Position Filled', 'This position has already been filled. Please look for other opportunities.');
+        return;
+      }
+
       // Check if banking details exist before applying
       const bankingResponse = await API.get('/doctor/banking-details');
       const hasBankingDetails = bankingResponse.data.banking_details?.has_banking_details;
@@ -244,7 +251,14 @@ export default function DoctorHome() {
       loadMyApplications();
     } catch (error: any) {
       const message = error.response?.data?.message || 'Failed to submit application';
-      Alert.alert('Error', message);
+      // Check if error is about position being filled
+      if (message.toLowerCase().includes('filled') || message.toLowerCase().includes('already')) {
+        Alert.alert('Position Filled', 'This position has already been filled. Please look for other opportunities.');
+        // Reload requirements to update the UI
+        loadJobRequirements();
+      } else {
+        Alert.alert('Error', message);
+      }
     }
   };
 

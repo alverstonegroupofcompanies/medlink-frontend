@@ -15,13 +15,11 @@ import { getFullImageUrl } from '@/utils/url-helper';
 import { ArrowRight } from 'lucide-react-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-// Calculate width - doubled from previous size
 // Horizontal padding: 20px on each side = 40px total (matches Spacing.lg)
 const HORIZONTAL_PADDING = 20; // Spacing.lg equivalent
 const CARD_SPACING = 16;
-// Double the previous width: previous was (SCREEN_WIDTH - 40 - 32) / 3, now double that
-const BASE_CARD_WIDTH = (SCREEN_WIDTH - HORIZONTAL_PADDING * 2 - CARD_SPACING * 2) / 3;
-const PROMO_CARD_WIDTH = BASE_CARD_WIDTH * 2; // Double the width
+// Use 75% of screen width for promo cards
+const PROMO_CARD_WIDTH = SCREEN_WIDTH * 0.75;
 const CARD_HEIGHT = 200;
 const IS_SMALL_SCREEN = SCREEN_WIDTH < 400; // Hide short summary on small screens
 

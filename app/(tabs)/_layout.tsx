@@ -245,6 +245,13 @@ export default function TabLayout() {
           tabBarStyle: { display: 'flex' } // Explicitly ensure it shows
         }}
       />
+      <Tabs.Screen
+        name="dispute"
+        options={{
+          href: null,
+          tabBarStyle: { display: 'none' },
+        }}
+      />
     </Tabs>
   );
 }

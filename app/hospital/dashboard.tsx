@@ -23,7 +23,7 @@ import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as Neutra
 import API from '../api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect } from 'expo-router';
-import { Plus, MapPin, Building2, Clock, X, Navigation, Bell, LogOut, CreditCard, Users, CheckCircle2, FileText, XCircle, Calendar, User, DollarSign, Star, ArrowRight } from 'lucide-react-native';
+import { Plus, MapPin, Building2, Clock, X, Navigation, Bell, LogOut, CreditCard, Users, CheckCircle2, FileText, XCircle, Calendar, User, DollarSign, Star, ArrowRight, Heart, Stethoscope, Baby, Eye, Brain, Activity, Pill, Shield } from 'lucide-react-native';
 import { ScreenSafeArea, useSafeBottomPadding } from '@/components/screen-safe-area';
 import { StatusBarHandler } from '@/components/StatusBarHandler';
 import * as Location from 'expo-location';
@@ -575,6 +575,19 @@ const SessionItem = React.memo(({ session }: { session: any }) => {
 const HOSPITAL_TOKEN_KEY = 'hospitalToken';
 const HOSPITAL_INFO_KEY = 'hospitalInfo';
 
+// Helper function to get department-specific icon
+const getDepartmentIcon = (departmentName: string) => {
+  const dept = departmentName.toLowerCase();
+  if (dept.includes('cardio') || dept.includes('heart')) return Heart;
+  if (dept.includes('pediatric') || dept.includes('child')) return Baby;
+  if (dept.includes('eye') || dept.includes('ophthal')) return Eye;
+  if (dept.includes('neuro') || dept.includes('brain')) return Brain;
+  if (dept.includes('dental') || dept.includes('oral')) return Activity;
+  if (dept.includes('pharma') || dept.includes('medicine')) return Pill;
+  if (dept.includes('emergency') || dept.includes('trauma')) return Shield;
+  return Stethoscope; // Default medical icon
+};
+
 export default function HospitalDashboard() {
   const theme = useTheme();
   const safeBottomPadding = useSafeBottomPadding();
@@ -586,6 +599,9 @@ export default function HospitalDashboard() {
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [doctorsByDepartment, setDoctorsByDepartment] = useState<any[]>([]);
   const [loadingDoctors, setLoadingDoctors] = useState(false);
+  const [selectedDoctor, setSelectedDoctor] = useState<any>(null);
+  const [showDoctorModal, setShowDoctorModal] = useState(false);
+  const [expandedDepartments, setExpandedDepartments] = useState<Set<string>>(new Set());
 
   const loadSessions = async (silent = false) => {
       try {
@@ -1614,94 +1630,6 @@ export default function HospitalDashboard() {
               </View>
             )}
 
-            {/* Available Doctors by Department Section */}
-            {doctorsByDepartment.length > 0 && (
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <View style={styles.sectionTitleContainer}>
-                    <Users size={20} color={PrimaryColors.main} />
-                    <Text style={styles.sectionTitle}>Available Doctors</Text>
-                  </View>
-                </View>
-                
-                {loadingDoctors ? (
-                  <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="small" color={PrimaryColors.main} />
-                    <Text style={styles.loadingText}>Loading doctors...</Text>
-                  </View>
-                ) : (
-                  <View style={styles.doctorsContainer}>
-                    {doctorsByDepartment.map((dept) => (
-                      <View key={dept.department_id} style={styles.departmentSection}>
-                        <View style={styles.departmentHeader}>
-                          <Building2 size={16} color={PrimaryColors.main} />
-                          <Text style={styles.departmentTitle}>{dept.department_name}</Text>
-                          <Text style={styles.departmentCount}>({dept.doctors.length})</Text>
-                        </View>
-                        
-                        <ScrollView 
-                          horizontal 
-                          showsHorizontalScrollIndicator={false}
-                          style={styles.doctorsScroll}
-                          contentContainerStyle={styles.doctorsScrollContent}
-                        >
-                          {dept.doctors.map((doctor: any) => (
-                            <TouchableOpacity
-                              key={doctor.id}
-                              style={styles.doctorCard}
-                              onPress={() => router.push(`/hospital/doctor-profile/${doctor.id}`)}
-                              activeOpacity={0.7}
-                            >
-                              {doctor.profile_photo ? (
-                                <Avatar.Image
-                                  size={64}
-                                  source={{ uri: getFullImageUrl(doctor.profile_photo) }}
-                                  style={styles.doctorAvatar}
-                                />
-                              ) : (
-                                <Avatar.Text
-                                  size={64}
-                                  label={doctor.name?.charAt(0)?.toUpperCase() || 'D'}
-                                  style={[styles.doctorAvatar, { backgroundColor: PrimaryColors.light }]}
-                                  labelStyle={{ color: PrimaryColors.main, fontSize: 24, fontWeight: '700' }}
-                                />
-                              )}
-                              <Text style={styles.doctorName} numberOfLines={1}>
-                                Dr. {doctor.name}
-                              </Text>
-                              
-                              {/* Rating */}
-                              <View style={styles.doctorRating}>
-                                <Star size={14} color="#FFB800" fill="#FFB800" />
-                                <Text style={styles.doctorRatingText}>
-                                  {doctor.average_rating.toFixed(1)}
-                                </Text>
-                                {doctor.total_ratings > 0 && (
-                                  <Text style={styles.doctorRatingCount}>
-                                    ({doctor.total_ratings})
-                                  </Text>
-                                )}
-                              </View>
-                              
-                              {/* Hourly Rate */}
-                              {doctor.hourly_rate && (
-                                <View style={styles.doctorRate}>
-                                  <DollarSign size={12} color={PrimaryColors.main} />
-                                  <Text style={styles.doctorRateText}>
-                                    ₹{doctor.hourly_rate.toFixed(0)}/hr
-                                  </Text>
-                                </View>
-                              )}
-                            </TouchableOpacity>
-                          ))}
-                        </ScrollView>
-                      </View>
-                    ))}
-                  </View>
-                )}
-              </View>
-            )}
-
             {/* Requirements Section */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
@@ -1748,6 +1676,131 @@ export default function HospitalDashboard() {
                 ))
               )}
             </View>
+
+            {/* Available Doctors by Department Section - Moved to Bottom */}
+            {doctorsByDepartment.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <View style={styles.sectionTitleContainer}>
+                    <Users size={20} color={PrimaryColors.main} />
+                    <Text style={styles.sectionTitle}>Available Doctors</Text>
+                  </View>
+                </View>
+                
+                {loadingDoctors ? (
+                  <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="small" color={PrimaryColors.main} />
+                    <Text style={styles.loadingText}>Loading doctors...</Text>
+                  </View>
+                ) : (
+                  <View style={styles.doctorsContainer}>
+                    {doctorsByDepartment.map((dept) => {
+                      const isExpanded = expandedDepartments.has(dept.department_name);
+                      return (
+                        <View key={dept.department_name} style={styles.departmentSection}>
+                          <TouchableOpacity
+                            style={styles.departmentHeader}
+                            onPress={() => {
+                              const newExpanded = new Set(expandedDepartments);
+                              if (isExpanded) {
+                                newExpanded.delete(dept.department_name);
+                              } else {
+                                newExpanded.add(dept.department_name);
+                              }
+                              setExpandedDepartments(newExpanded);
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <View style={styles.departmentHeaderLeft}>
+                              {(() => {
+                                const DeptIcon = getDepartmentIcon(dept.department_name);
+                                return (
+                                  <View style={styles.departmentIconContainer}>
+                                    <DeptIcon size={20} color={PrimaryColors.main} />
+                                  </View>
+                                );
+                              })()}
+                              <View style={styles.departmentTitleContainer}>
+                                <Text style={styles.departmentTitle}>{dept.department_name}</Text>
+                                <View style={styles.departmentCountBadge}>
+                                  <Text style={styles.departmentCountText}>{dept.doctors.length}</Text>
+                                </View>
+                              </View>
+                            </View>
+                            <View style={[styles.expandIconContainer, isExpanded && styles.expandIconRotated]}>
+                              <ArrowRight size={20} color={PrimaryColors.main} />
+                            </View>
+                          </TouchableOpacity>
+                          
+                          {isExpanded && (
+                            <View style={styles.doctorsListContainer}>
+                              {dept.doctors.map((doctor: any) => (
+                                <TouchableOpacity
+                                  key={doctor.id}
+                                  style={styles.doctorListItem}
+                                  onPress={() => {
+                                    setSelectedDoctor(doctor);
+                                    setShowDoctorModal(true);
+                                  }}
+                                  activeOpacity={0.7}
+                                >
+                                  <View style={styles.doctorListItemLeft}>
+                                    {doctor.profile_photo ? (
+                                      <Avatar.Image
+                                        size={48}
+                                        source={{ uri: getFullImageUrl(doctor.profile_photo) }}
+                                        style={styles.doctorListAvatar}
+                                      />
+                                    ) : (
+                                      <Avatar.Text
+                                        size={48}
+                                        label={doctor.name?.charAt(0)?.toUpperCase() || 'D'}
+                                        style={[styles.doctorListAvatar, { backgroundColor: PrimaryColors.light }]}
+                                        labelStyle={{ color: PrimaryColors.main, fontSize: 18, fontWeight: '700' }}
+                                      />
+                                    )}
+                                    <View style={styles.doctorListInfo}>
+                                      <Text style={styles.doctorListName} numberOfLines={1}>
+                                        Dr. {doctor.name}
+                                      </Text>
+                                      <View style={styles.doctorListMeta}>
+                                        <View style={styles.doctorListRating}>
+                                          <Star size={11} color="#FFB800" fill="#FFB800" />
+                                          <Text style={styles.doctorListRatingText}>
+                                            {doctor.average_rating.toFixed(1)}
+                                          </Text>
+                                          {doctor.total_ratings > 0 && (
+                                            <Text style={styles.doctorListRatingCount}>
+                                              ({doctor.total_ratings})
+                                            </Text>
+                                          )}
+                                        </View>
+                                        {doctor.hourly_rate > 0 && (
+                                          <>
+                                            <Text style={styles.doctorListSeparator}>•</Text>
+                                            <View style={styles.doctorListRate}>
+                                              <DollarSign size={11} color={PrimaryColors.main} />
+                                              <Text style={styles.doctorListRateText}>
+                                                ₹{doctor.hourly_rate.toFixed(0)}/hr
+                                              </Text>
+                                            </View>
+                                          </>
+                                        )}
+                                      </View>
+                                    </View>
+                                  </View>
+                                  <ArrowRight size={18} color={NeutralColors.textTertiary} />
+                                </TouchableOpacity>
+                              ))}
+                            </View>
+                          )}
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+            )}
 
 
 
@@ -2006,6 +2059,116 @@ export default function HospitalDashboard() {
         />
       </ScrollView>
     </KeyboardAvoidingView>
+
+    {/* Doctor Details Modal */}
+    <Modal
+      visible={showDoctorModal}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={() => setShowDoctorModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          {selectedDoctor && (
+            <>
+              {/* Modal Header */}
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Doctor Profile</Text>
+                <TouchableOpacity
+                  onPress={() => setShowDoctorModal(false)}
+                  style={styles.modalCloseButton}
+                >
+                  <X size={24} color={NeutralColors.textPrimary} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView 
+                style={styles.modalScrollView} 
+                contentContainerStyle={styles.modalScrollContent}
+                showsVerticalScrollIndicator={false}
+              >
+                {/* Profile Section */}
+                <View style={styles.modalProfileSection}>
+                  {selectedDoctor.profile_photo ? (
+                    <Avatar.Image
+                      size={100}
+                      source={{ uri: getFullImageUrl(selectedDoctor.profile_photo) }}
+                      style={styles.modalAvatar}
+                    />
+                  ) : (
+                    <Avatar.Text
+                      size={100}
+                      label={selectedDoctor.name?.charAt(0)?.toUpperCase() || 'D'}
+                      style={[styles.modalAvatar, { backgroundColor: PrimaryColors.light }]}
+                      labelStyle={{ color: PrimaryColors.main, fontSize: 36, fontWeight: '700' }}
+                    />
+                  )}
+                  <Text style={styles.modalDoctorName}>Dr. {selectedDoctor.name}</Text>
+                  
+                  {/* Rating */}
+                  <View style={styles.modalRatingContainer}>
+                    <View style={styles.modalStarsRow}>
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <Star
+                          key={i}
+                          size={18}
+                          color={i < Math.floor(selectedDoctor.average_rating || 0) ? "#FFB800" : NeutralColors.border}
+                          fill={i < Math.floor(selectedDoctor.average_rating || 0) ? "#FFB800" : "transparent"}
+                        />
+                      ))}
+                    </View>
+                    <Text style={styles.modalRatingText}>
+                      {selectedDoctor.average_rating?.toFixed(1) || '0.0'} ({selectedDoctor.total_ratings || 0} ratings)
+                    </Text>
+                  </View>
+
+                  {/* Verified Badge */}
+                  <View style={styles.modalVerifiedBadge}>
+                    <CheckCircle2 size={16} color={StatusColors.success} />
+                    <Text style={styles.modalVerifiedText}>Verified Doctor</Text>
+                  </View>
+                </View>
+
+                {/* Stats Section */}
+                <View style={styles.modalStatsSection}>
+                  {selectedDoctor.hourly_rate > 0 && (
+                    <View style={styles.modalStatItem}>
+                      <View style={[styles.modalStatIcon, { backgroundColor: PrimaryColors.lightest }]}>
+                        <DollarSign size={20} color={PrimaryColors.main} />
+                      </View>
+                      <View style={styles.modalStatContent}>
+                        <Text style={styles.modalStatValue}>₹{selectedDoctor.hourly_rate.toFixed(0)}/hr</Text>
+                        <Text style={styles.modalStatLabel}>Hourly Rate</Text>
+                      </View>
+                    </View>
+                  )}
+                  
+                  <View style={styles.modalStatItem}>
+                    <View style={[styles.modalStatIcon, { backgroundColor: StatusColors.successBg }]}>
+                      <CheckCircle2 size={20} color={StatusColors.success} />
+                    </View>
+                    <View style={styles.modalStatContent}>
+                      <Text style={styles.modalStatValue}>{selectedDoctor.total_ratings || 0}</Text>
+                      <Text style={styles.modalStatLabel}>Total Ratings</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Security Notice */}
+                <View style={styles.modalSecurityNotice}>
+                  <View style={styles.modalSecurityIcon}>
+                    <User size={16} color={NeutralColors.textSecondary} />
+                  </View>
+                  <Text style={styles.modalSecurityText}>
+                    Contact information is protected for security reasons. You can contact doctors through the platform after assigning them to a job.
+                  </Text>
+                </View>
+              </ScrollView>
+            </>
+          )}
+        </View>
+      </View>
+    </Modal>
     
     </ScreenSafeArea>
   );
@@ -3057,80 +3220,299 @@ const styles = StyleSheet.create({
   },
   departmentSection: {
     marginBottom: 16,
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: PrimaryColors.light,
+    shadowColor: PrimaryColors.main,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 4,
   },
   departmentHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
-    gap: 8,
+    padding: 20,
+    backgroundColor: '#fff',
+    borderRadius: 0,
+    marginBottom: 0,
+    marginHorizontal: 0,
+    borderWidth: 0,
+    borderBottomWidth: 1.5,
+    borderColor: PrimaryColors.light,
+  },
+  departmentHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    flex: 1,
+  },
+  departmentIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: PrimaryColors.lightest,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: PrimaryColors.light,
+  },
+  departmentTitleContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   departmentTitle: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '700',
-    color: PrimaryColors.main,
+    color: NeutralColors.textPrimary,
+    letterSpacing: -0.3,
   },
   departmentCount: {
     fontSize: 14,
     color: NeutralColors.textSecondary,
     fontWeight: '600',
   },
-  doctorsScroll: {
-    marginHorizontal: -16,
+  departmentCountBadge: {
+    backgroundColor: PrimaryColors.main,
+    borderRadius: 12,
+    minWidth: 28,
+    height: 28,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  doctorsScrollContent: {
+  departmentCountText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+  expandIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: PrimaryColors.lightest,
+    alignItems: 'center',
+    justifyContent: 'center',
+    transform: [{ rotate: '0deg' }],
+  },
+  expandIconRotated: {
+    transform: [{ rotate: '90deg' }],
+  },
+  doctorsListContainer: {
+    marginTop: 12,
+    marginBottom: 8,
+    gap: 8,
     paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  doctorListItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 8,
+    borderWidth: 1.5,
+    borderColor: PrimaryColors.light,
+    shadowColor: PrimaryColors.main,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  doctorListItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
     gap: 12,
   },
-  doctorCard: {
-    width: 120,
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
-    marginRight: 12,
-    borderWidth: 1,
-    borderColor: NeutralColors.divider,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  doctorAvatar: {
-    marginBottom: 8,
+  doctorListAvatar: {
     backgroundColor: PrimaryColors.light,
+    borderWidth: 2,
+    borderColor: PrimaryColors.lightest,
   },
-  doctorName: {
-    fontSize: 13,
+  doctorListInfo: {
+    flex: 1,
+    gap: 6,
+  },
+  doctorListName: {
+    fontSize: 16,
     fontWeight: '700',
     color: NeutralColors.textPrimary,
-    textAlign: 'center',
-    marginBottom: 6,
+    letterSpacing: -0.2,
   },
-  doctorRating: {
+  doctorListMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  doctorListRating: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginBottom: 4,
   },
-  doctorRatingText: {
-    fontSize: 12,
+  doctorListRatingText: {
+    fontSize: 13,
     fontWeight: '600',
     color: NeutralColors.textPrimary,
   },
-  doctorRatingCount: {
-    fontSize: 11,
+  doctorListRatingCount: {
+    fontSize: 12,
     color: NeutralColors.textSecondary,
   },
-  doctorRate: {
+  doctorListSeparator: {
+    fontSize: 12,
+    color: NeutralColors.textTertiary,
+  },
+  doctorListRate: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 4,
   },
-  doctorRateText: {
-    fontSize: 12,
+  doctorListRateText: {
+    fontSize: 13,
     fontWeight: '600',
     color: PrimaryColors.main,
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    height: '85%',
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: NeutralColors.divider,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: NeutralColors.textPrimary,
+  },
+  modalCloseButton: {
+    padding: 8,
+  },
+  modalScrollView: {
+    flex: 1,
+  },
+  modalScrollContent: {
+    paddingBottom: 20,
+  },
+  modalProfileSection: {
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: PrimaryColors.dark,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+  modalAvatar: {
+    marginBottom: 16,
+    borderWidth: 4,
+    borderColor: '#fff',
+  },
+  modalDoctorName: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#fff',
+    marginBottom: 12,
+  },
+  modalRatingContainer: {
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  modalStarsRow: {
+    flexDirection: 'row',
+    gap: 4,
+    marginBottom: 8,
+  },
+  modalRatingText: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  modalVerifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
+  },
+  modalVerifiedText: {
+    fontSize: 13,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  modalStatsSection: {
+    padding: 20,
+    gap: 16,
+  },
+  modalStatItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    backgroundColor: NeutralColors.cardBackground,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: NeutralColors.divider,
+  },
+  modalStatIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalStatContent: {
+    flex: 1,
+  },
+  modalStatValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: NeutralColors.textPrimary,
+    marginBottom: 4,
+  },
+  modalStatLabel: {
+    fontSize: 13,
+    color: NeutralColors.textSecondary,
+  },
+  modalSecurityNotice: {
+    flexDirection: 'row',
+    backgroundColor: NeutralColors.lightest,
+    padding: 16,
+    margin: 20,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: PrimaryColors.light,
+    gap: 12,
+  },
+  modalSecurityIcon: {
+    marginTop: 2,
+  },
+  modalSecurityText: {
+    flex: 1,
+    fontSize: 13,
+    color: NeutralColors.textSecondary,
+    lineHeight: 18,
   },
 });

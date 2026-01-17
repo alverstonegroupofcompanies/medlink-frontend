@@ -206,6 +206,13 @@ export default function HospitalTabLayout() {
           href: null,
         }}
       />
+      <Tabs.Screen
+        name="dispute"
+        options={{
+          href: null,
+          tabBarStyle: { display: 'none' },
+        }}
+      />
     </Tabs>
   );
 }
