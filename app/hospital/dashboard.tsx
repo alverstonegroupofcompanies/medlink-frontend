@@ -23,7 +23,7 @@ import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as Neutra
 import API from '../api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect } from 'expo-router';
-import { Plus, MapPin, Building2, Clock, X, Navigation, Bell, LogOut, CreditCard, Users, CheckCircle2, FileText, XCircle, Calendar, User, DollarSign, Star, ArrowRight, Heart, Stethoscope, Baby, Eye, Brain, Activity, Pill, Shield } from 'lucide-react-native';
+import { Plus, MapPin, Building2, Clock, X, Navigation, Bell, LogOut, CreditCard, Users, CheckCircle2, FileText, XCircle, Calendar, User, DollarSign, Star, ArrowRight, Heart, Stethoscope, Baby, Eye, Brain, Activity, Pill, Shield, ChevronDown, Sparkles } from 'lucide-react-native';
 import { ScreenSafeArea, useSafeBottomPadding } from '@/components/screen-safe-area';
 import { StatusBarHandler } from '@/components/StatusBarHandler';
 import * as Location from 'expo-location';
@@ -598,10 +598,11 @@ export default function HospitalDashboard() {
   const [sessions, setSessions] = useState<any[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [doctorsByDepartment, setDoctorsByDepartment] = useState<any[]>([]);
+  const [allDoctors, setAllDoctors] = useState<any[]>([]); // Flattened list of all doctors
   const [loadingDoctors, setLoadingDoctors] = useState(false);
   const [selectedDoctor, setSelectedDoctor] = useState<any>(null);
   const [showDoctorModal, setShowDoctorModal] = useState(false);
-  const [expandedDepartments, setExpandedDepartments] = useState<Set<string>>(new Set());
+  const [showAllDoctors, setShowAllDoctors] = useState(false); // For expandable card
 
   const loadSessions = async (silent = false) => {
       try {
@@ -854,10 +855,41 @@ export default function HospitalDashboard() {
     try {
       if (!silent) setLoadingDoctors(true);
       const response = await API.get('/hospital/doctors-by-department');
-      setDoctorsByDepartment(response.data.doctors_by_department || []);
+      const departments = response.data.departments || response.data.doctors_by_department || [];
+      setDoctorsByDepartment(departments);
+      
+      // Use the unique doctors list from backend, or deduplicate on frontend
+      if (response.data.all_doctors && response.data.all_doctors.length > 0) {
+        // Use backend's unique list with all departments
+        setAllDoctors(response.data.all_doctors);
+      } else {
+        // Fallback: deduplicate on frontend by doctor ID
+        const doctorMap = new Map();
+        departments.forEach((dept: any) => {
+          (dept.doctors || []).forEach((doctor: any) => {
+            if (!doctorMap.has(doctor.id)) {
+              // First time seeing this doctor - add all departments
+              doctorMap.set(doctor.id, {
+                ...doctor,
+                departments: doctor.departments || [dept.department_name || 'General'],
+                department: doctor.departments?.[0] || dept.department_name || 'General',
+              });
+            } else {
+              // Doctor already exists - merge departments
+              const existingDoctor = doctorMap.get(doctor.id);
+              const deptName = dept.department_name || 'General';
+              if (!existingDoctor.departments.includes(deptName)) {
+                existingDoctor.departments.push(deptName);
+              }
+            }
+          });
+        });
+        setAllDoctors(Array.from(doctorMap.values()));
+      }
     } catch (error: any) {
       console.error('Error loading doctors by department:', error);
       setDoctorsByDepartment([]);
+      setAllDoctors([]);
     } finally {
       if (!silent) setLoadingDoctors(false);
     }
@@ -1677,133 +1709,6 @@ export default function HospitalDashboard() {
               )}
             </View>
 
-            {/* Available Doctors by Department Section - Moved to Bottom */}
-            {doctorsByDepartment.length > 0 && (
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <View style={styles.sectionTitleContainer}>
-                    <Users size={20} color={PrimaryColors.main} />
-                    <Text style={styles.sectionTitle}>Available Doctors</Text>
-                  </View>
-                </View>
-                
-                {loadingDoctors ? (
-                  <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="small" color={PrimaryColors.main} />
-                    <Text style={styles.loadingText}>Loading doctors...</Text>
-                  </View>
-                ) : (
-                  <View style={styles.doctorsContainer}>
-                    {doctorsByDepartment.map((dept) => {
-                      const isExpanded = expandedDepartments.has(dept.department_name);
-                      return (
-                        <View key={dept.department_name} style={styles.departmentSection}>
-                          <TouchableOpacity
-                            style={styles.departmentHeader}
-                            onPress={() => {
-                              const newExpanded = new Set(expandedDepartments);
-                              if (isExpanded) {
-                                newExpanded.delete(dept.department_name);
-                              } else {
-                                newExpanded.add(dept.department_name);
-                              }
-                              setExpandedDepartments(newExpanded);
-                            }}
-                            activeOpacity={0.7}
-                          >
-                            <View style={styles.departmentHeaderLeft}>
-                              {(() => {
-                                const DeptIcon = getDepartmentIcon(dept.department_name);
-                                return (
-                                  <View style={styles.departmentIconContainer}>
-                                    <DeptIcon size={20} color={PrimaryColors.main} />
-                                  </View>
-                                );
-                              })()}
-                              <View style={styles.departmentTitleContainer}>
-                                <Text style={styles.departmentTitle}>{dept.department_name}</Text>
-                                <View style={styles.departmentCountBadge}>
-                                  <Text style={styles.departmentCountText}>{dept.doctors.length}</Text>
-                                </View>
-                              </View>
-                            </View>
-                            <View style={[styles.expandIconContainer, isExpanded && styles.expandIconRotated]}>
-                              <ArrowRight size={20} color={PrimaryColors.main} />
-                            </View>
-                          </TouchableOpacity>
-                          
-                          {isExpanded && (
-                            <View style={styles.doctorsListContainer}>
-                              {dept.doctors.map((doctor: any) => (
-                                <TouchableOpacity
-                                  key={doctor.id}
-                                  style={styles.doctorListItem}
-                                  onPress={() => {
-                                    setSelectedDoctor(doctor);
-                                    setShowDoctorModal(true);
-                                  }}
-                                  activeOpacity={0.7}
-                                >
-                                  <View style={styles.doctorListItemLeft}>
-                                    {doctor.profile_photo ? (
-                                      <Avatar.Image
-                                        size={48}
-                                        source={{ uri: getFullImageUrl(doctor.profile_photo) }}
-                                        style={styles.doctorListAvatar}
-                                      />
-                                    ) : (
-                                      <Avatar.Text
-                                        size={48}
-                                        label={doctor.name?.charAt(0)?.toUpperCase() || 'D'}
-                                        style={[styles.doctorListAvatar, { backgroundColor: PrimaryColors.light }]}
-                                        labelStyle={{ color: PrimaryColors.main, fontSize: 18, fontWeight: '700' }}
-                                      />
-                                    )}
-                                    <View style={styles.doctorListInfo}>
-                                      <Text style={styles.doctorListName} numberOfLines={1}>
-                                        Dr. {doctor.name}
-                                      </Text>
-                                      <View style={styles.doctorListMeta}>
-                                        <View style={styles.doctorListRating}>
-                                          <Star size={11} color="#FFB800" fill="#FFB800" />
-                                          <Text style={styles.doctorListRatingText}>
-                                            {doctor.average_rating.toFixed(1)}
-                                          </Text>
-                                          {doctor.total_ratings > 0 && (
-                                            <Text style={styles.doctorListRatingCount}>
-                                              ({doctor.total_ratings})
-                                            </Text>
-                                          )}
-                                        </View>
-                                        {doctor.hourly_rate > 0 && (
-                                          <>
-                                            <Text style={styles.doctorListSeparator}>•</Text>
-                                            <View style={styles.doctorListRate}>
-                                              <DollarSign size={11} color={PrimaryColors.main} />
-                                              <Text style={styles.doctorListRateText}>
-                                                ₹{doctor.hourly_rate.toFixed(0)}/hr
-                                              </Text>
-                                            </View>
-                                          </>
-                                        )}
-                                      </View>
-                                    </View>
-                                  </View>
-                                  <ArrowRight size={18} color={NeutralColors.textTertiary} />
-                                </TouchableOpacity>
-                              ))}
-                            </View>
-                          )}
-                        </View>
-                      );
-                    })}
-                  </View>
-                )}
-              </View>
-            )}
-
-
-
             {/* Requirements Section */}
           </>
         ) : (
@@ -2057,6 +1962,116 @@ export default function HospitalDashboard() {
             });
           }}
         />
+
+        {/* Available Doctors Section - Premium Expandable Card */}
+        {allDoctors.length > 0 && (
+          <View style={styles.section}>
+            <Card style={styles.availableDoctorsCard} mode="outlined">
+              <TouchableOpacity
+                style={styles.availableDoctorsHeader}
+                onPress={() => setShowAllDoctors(!showAllDoctors)}
+                activeOpacity={0.8}
+              >
+                <View style={styles.availableDoctorsHeaderLeft}>
+                  <View style={styles.availableDoctorsIconContainer}>
+                    <Sparkles size={24} color={PrimaryColors.main} />
+                  </View>
+                  <View style={styles.availableDoctorsTitleContainer}>
+                    <Text style={styles.availableDoctorsTitle}>Available Doctors</Text>
+                    <Text style={styles.availableDoctorsDescription}>
+                      {allDoctors.length} verified doctors ready for assignments
+                    </Text>
+                  </View>
+                </View>
+                <View style={[styles.availableDoctorsChevron, showAllDoctors && styles.availableDoctorsChevronRotated]}>
+                  <ChevronDown size={24} color={PrimaryColors.main} />
+                </View>
+              </TouchableOpacity>
+              
+              {showAllDoctors && (
+                <Card.Content style={styles.availableDoctorsContent}>
+                  {loadingDoctors ? (
+                    <View style={styles.loadingContainer}>
+                      <ActivityIndicator size="small" color={PrimaryColors.main} />
+                      <Text style={styles.loadingText}>Loading doctors...</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.doctorsFlatList}>
+                      {allDoctors.map((doctor: any) => (
+                        <TouchableOpacity
+                          key={doctor.id}
+                          style={styles.doctorCard}
+                          onPress={() => {
+                            setSelectedDoctor(doctor);
+                            setShowDoctorModal(true);
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          {/* Profile Picture */}
+                          <View style={styles.doctorCardAvatarContainer}>
+                            {doctor.profile_photo ? (
+                              <Avatar.Image
+                                size={64}
+                                source={{ uri: getFullImageUrl(doctor.profile_photo) }}
+                                style={styles.doctorCardAvatar}
+                              />
+                            ) : (
+                              <Avatar.Text
+                                size={64}
+                                label={doctor.name?.charAt(0)?.toUpperCase() || 'D'}
+                                style={[styles.doctorCardAvatar, { backgroundColor: PrimaryColors.light }]}
+                                labelStyle={{ color: PrimaryColors.main, fontSize: 24, fontWeight: '700' }}
+                              />
+                            )}
+                          </View>
+                          
+                          {/* Doctor Info */}
+                          <View style={styles.doctorCardInfo}>
+                            <Text style={styles.doctorCardName} numberOfLines={1}>
+                              Dr. {doctor.name}
+                            </Text>
+                            <View style={styles.doctorCardDepartments}>
+                              {doctor.departments && doctor.departments.length > 0 ? (
+                                <Text style={styles.doctorCardDepartment} numberOfLines={1}>
+                                  {doctor.departments.join(', ')}
+                                </Text>
+                              ) : (
+                                <Text style={styles.doctorCardDepartment} numberOfLines={1}>
+                                  {doctor.department || 'General'}
+                                </Text>
+                              )}
+                            </View>
+                            <View style={styles.doctorCardFooter}>
+                              <View style={styles.doctorCardRating}>
+                                <Star size={14} color="#FFB800" fill="#FFB800" />
+                                <Text style={styles.doctorCardRatingText}>
+                                  {doctor.average_rating?.toFixed(1) || '0.0'}
+                                </Text>
+                              </View>
+                              {doctor.hourly_rate > 0 && (
+                                <>
+                                  <Text style={styles.doctorCardSeparator}>•</Text>
+                                  <Text style={styles.doctorCardRate}>
+                                    ₹{doctor.hourly_rate.toFixed(0)}/hr
+                                  </Text>
+                                </>
+                              )}
+                            </View>
+                          </View>
+                          
+                          {/* Arrow Icon */}
+                          <View style={styles.doctorCardArrow}>
+                            <ArrowRight size={20} color={NeutralColors.textTertiary} />
+                          </View>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                </Card.Content>
+              )}
+            </Card>
+          </View>
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
 
@@ -2129,12 +2144,44 @@ export default function HospitalDashboard() {
                   </View>
                 </View>
 
+                {/* Department Badge */}
+                {selectedDoctor.department && (
+                  <View style={styles.modalDepartmentBadge}>
+                    <Stethoscope size={16} color={PrimaryColors.main} />
+                    <Text style={styles.modalDepartmentText}>{selectedDoctor.department}</Text>
+                  </View>
+                )}
+
                 {/* Stats Section */}
                 <View style={styles.modalStatsSection}>
-                  {selectedDoctor.hourly_rate > 0 && (
+                  {selectedDoctor.completed_sessions !== undefined && (
                     <View style={styles.modalStatItem}>
                       <View style={[styles.modalStatIcon, { backgroundColor: PrimaryColors.lightest }]}>
-                        <DollarSign size={20} color={PrimaryColors.main} />
+                        <CheckCircle2 size={20} color={PrimaryColors.main} />
+                      </View>
+                      <View style={styles.modalStatContent}>
+                        <Text style={styles.modalStatValue}>{selectedDoctor.completed_sessions || 0}</Text>
+                        <Text style={styles.modalStatLabel}>Sessions Completed</Text>
+                      </View>
+                    </View>
+                  )}
+                  
+                  {selectedDoctor.total_working_hours !== undefined && (
+                    <View style={styles.modalStatItem}>
+                      <View style={[styles.modalStatIcon, { backgroundColor: StatusColors.successBg }]}>
+                        <Clock size={20} color={StatusColors.success} />
+                      </View>
+                      <View style={styles.modalStatContent}>
+                        <Text style={styles.modalStatValue}>{selectedDoctor.total_working_hours || 0} hrs</Text>
+                        <Text style={styles.modalStatLabel}>Total Working Hours</Text>
+                      </View>
+                    </View>
+                  )}
+                  
+                  {selectedDoctor.hourly_rate > 0 && (
+                    <View style={styles.modalStatItem}>
+                      <View style={[styles.modalStatIcon, { backgroundColor: '#FEF3C7' }]}>
+                        <DollarSign size={20} color="#D97706" />
                       </View>
                       <View style={styles.modalStatContent}>
                         <Text style={styles.modalStatValue}>₹{selectedDoctor.hourly_rate.toFixed(0)}/hr</Text>
@@ -2144,8 +2191,8 @@ export default function HospitalDashboard() {
                   )}
                   
                   <View style={styles.modalStatItem}>
-                    <View style={[styles.modalStatIcon, { backgroundColor: StatusColors.successBg }]}>
-                      <CheckCircle2 size={20} color={StatusColors.success} />
+                    <View style={[styles.modalStatIcon, { backgroundColor: '#DBEAFE' }]}>
+                      <Star size={20} color="#2563EB" />
                     </View>
                     <View style={styles.modalStatContent}>
                       <Text style={styles.modalStatValue}>{selectedDoctor.total_ratings || 0}</Text>
@@ -2153,6 +2200,17 @@ export default function HospitalDashboard() {
                     </View>
                   </View>
                 </View>
+
+                {/* Location Section */}
+                {selectedDoctor.location && (
+                  <View style={styles.modalLocationSection}>
+                    <View style={styles.modalLocationHeader}>
+                      <MapPin size={18} color={PrimaryColors.main} />
+                      <Text style={styles.modalLocationTitle}>Location</Text>
+                    </View>
+                    <Text style={styles.modalLocationText}>{selectedDoctor.location}</Text>
+                  </View>
+                )}
 
                 {/* Security Notice */}
                 <View style={styles.modalSecurityNotice}>
@@ -3214,7 +3272,146 @@ const styles = StyleSheet.create({
       fontSize: 14,
       fontWeight: '700',
   },
-  // Doctors by Department Styles
+  // Available Doctors - Flat List Styles
+  doctorsFlatList: {
+    gap: 12,
+    paddingHorizontal: 0,
+  },
+  doctorCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: NeutralColors.divider,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  doctorCardAvatarContainer: {
+    marginRight: 16,
+  },
+  doctorCardAvatar: {
+    backgroundColor: PrimaryColors.light,
+  },
+  doctorCardInfo: {
+    flex: 1,
+    gap: 6,
+  },
+  doctorCardName: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: NeutralColors.textPrimary,
+    letterSpacing: -0.3,
+    marginBottom: 2,
+  },
+  doctorCardDepartment: {
+    fontSize: 14,
+    color: NeutralColors.textSecondary,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  doctorCardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 2,
+  },
+  doctorCardRating: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  doctorCardRatingText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: NeutralColors.textPrimary,
+  },
+  doctorCardSeparator: {
+    fontSize: 14,
+    color: NeutralColors.textTertiary,
+  },
+  doctorCardRate: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: PrimaryColors.main,
+  },
+  doctorCardArrow: {
+    marginLeft: 8,
+  },
+  // Available Doctors Premium Card Styles
+  availableDoctorsCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: PrimaryColors.light,
+    shadowColor: PrimaryColors.main,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 6,
+    overflow: 'hidden',
+  },
+  availableDoctorsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: 'transparent',
+  },
+  availableDoctorsHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 16,
+  },
+  availableDoctorsIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: PrimaryColors.lightest,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: PrimaryColors.light,
+  },
+  availableDoctorsTitleContainer: {
+    flex: 1,
+    gap: 4,
+  },
+  availableDoctorsTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: NeutralColors.textPrimary,
+    letterSpacing: -0.5,
+  },
+  availableDoctorsDescription: {
+    fontSize: 14,
+    color: NeutralColors.textSecondary,
+    fontWeight: '500',
+    lineHeight: 20,
+  },
+  availableDoctorsChevron: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: PrimaryColors.lightest,
+    alignItems: 'center',
+    justifyContent: 'center',
+    transform: [{ rotate: '0deg' }],
+  },
+  availableDoctorsChevronRotated: {
+    transform: [{ rotate: '180deg' }],
+  },
+  availableDoctorsContent: {
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  // Legacy department styles (kept for compatibility)
   doctorsContainer: {
     gap: 20,
   },
@@ -3464,22 +3661,32 @@ const styles = StyleSheet.create({
   },
   modalStatsSection: {
     padding: 20,
-    gap: 16,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    justifyContent: 'space-between',
   },
   modalStatItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 12,
     backgroundColor: NeutralColors.cardBackground,
     padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
+    borderRadius: 14,
+    borderWidth: 1.5,
     borderColor: NeutralColors.divider,
+    width: '48%',
+    minWidth: 140,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   modalStatIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -3488,13 +3695,60 @@ const styles = StyleSheet.create({
   },
   modalStatValue: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '800',
     color: NeutralColors.textPrimary,
-    marginBottom: 4,
+    marginBottom: 2,
+    letterSpacing: -0.3,
   },
   modalStatLabel: {
-    fontSize: 13,
+    fontSize: 12,
     color: NeutralColors.textSecondary,
+    fontWeight: '500',
+  },
+  modalDepartmentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    backgroundColor: PrimaryColors.lightest,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: PrimaryColors.light,
+    gap: 8,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  modalDepartmentText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: PrimaryColors.main,
+  },
+  modalLocationSection: {
+    backgroundColor: NeutralColors.cardBackground,
+    borderRadius: 16,
+    padding: 20,
+    marginHorizontal: 20,
+    marginTop: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: NeutralColors.divider,
+  },
+  modalLocationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+  },
+  modalLocationTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: NeutralColors.textPrimary,
+  },
+  modalLocationText: {
+    fontSize: 14,
+    color: NeutralColors.textSecondary,
+    lineHeight: 20,
   },
   modalSecurityNotice: {
     flexDirection: 'row',
