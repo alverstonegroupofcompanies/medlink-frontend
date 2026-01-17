@@ -25,9 +25,11 @@ export function RazorpayPaymentModal({
   const [loading, setLoading] = useState(false);
   const [paymentStep, setPaymentStep] = useState<'summary' | 'processing' | 'verifying'>('summary');
 
-  const adminCommission = 20; // 20%
-  const adminAmount = amount * (adminCommission / 100);
-  const doctorAmount = amount - adminAmount;
+  // Input amount is the doctor's amount (what doctor will receive)
+  const doctorAmount = amount;
+  const serviceChargePercentage = 20; // 20%
+  const serviceCharge = (doctorAmount * serviceChargePercentage) / 100;
+  const totalAmount = doctorAmount + serviceCharge;
 
   const handlePayment = async () => {
     try {
@@ -35,8 +37,9 @@ export function RazorpayPaymentModal({
       setPaymentStep('processing');
 
       // Step 1: Create Razorpay order
+      // Send doctor amount, backend will calculate service charge and total
       const orderResponse = await API.post('/hospital/payments/create-razorpay-order', {
-        amount,
+        amount: doctorAmount, // Send doctor amount
         job_data: jobData,
       });
 
@@ -54,9 +57,11 @@ export function RazorpayPaymentModal({
       } = orderResponse.data;
 
       // Step 2: Open Razorpay checkout in browser
+      // Use total amount from backend response (doctor amount + service charge)
+      const totalAmountToPay = orderResponse.data.amount || totalAmount;
       const razorpayUrl = createRazorpayCheckoutUrl({
         key: razorpay_key_id,
-        amount: amount * 100, // Convert to paise
+        amount: totalAmountToPay * 100, // Convert to paise
         currency: 'INR',
         name,
         description,
@@ -170,25 +175,25 @@ export function RazorpayPaymentModal({
               
               <View style={styles.summarySection}>
                 <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Total Amount:</Text>
-                  <Text style={styles.summaryValue}>₹{amount.toFixed(2)}</Text>
+                  <Text style={styles.summaryLabel}>Doctor Amount:</Text>
+                  <Text style={styles.summaryValue}>₹{doctorAmount.toFixed(2)}</Text>
+                </View>
+
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabelSecondary}>Service Charge ({serviceChargePercentage}%):</Text>
+                  <Text style={styles.summaryValueSecondary}>₹{serviceCharge.toFixed(2)}</Text>
                 </View>
 
                 <View style={styles.divider} />
 
                 <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabelSecondary}>Admin Commission (20%):</Text>
-                  <Text style={styles.summaryValueSecondary}>₹{adminAmount.toFixed(2)}</Text>
-                </View>
-
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabelSecondary}>Doctor's Amount (80%):</Text>
-                  <Text style={styles.summaryValueSecondary}>₹{doctorAmount.toFixed(2)}</Text>
+                  <Text style={styles.summaryLabel}>Total Amount:</Text>
+                  <Text style={styles.summaryValue}>₹{totalAmount.toFixed(2)}</Text>
                 </View>
 
                 <View style={styles.infoBox}>
                   <Text style={styles.infoText}>
-                    💡 The doctor's amount will be held in escrow and released 30 minutes after job approval.
+                    💡 The doctor will receive the full amount (₹{doctorAmount.toFixed(2)}). Service charge is included in the total payment.
                   </Text>
                 </View>
               </View>

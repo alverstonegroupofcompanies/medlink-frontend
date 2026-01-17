@@ -23,6 +23,7 @@ import {
   Wallet,
   DollarSign,
   ArrowRight,
+  AlertCircle,
 } from 'lucide-react-native';
 import { Image } from 'react-native';
 import { DoctorPrimaryColors as PrimaryColors, DoctorNeutralColors as NeutralColors, DoctorStatusColors as StatusColors } from '@/constants/doctor-theme';
@@ -483,6 +484,17 @@ export default function HistoryScreen() {
                     <ArrowRight size={16} color={PrimaryColors.main} />
                   </TouchableOpacity>
                 </View>
+
+                {/* Raise Dispute Button - Show for completed sessions */}
+                {session.status === 'completed' && (
+                  <TouchableOpacity
+                    style={styles.disputeButton}
+                    onPress={() => router.push(`/dispute/${session.id}` as any)}
+                  >
+                    <AlertCircle size={16} color={StatusColors.error} />
+                    <Text style={styles.disputeButtonText}>Raise Dispute</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             );
           })

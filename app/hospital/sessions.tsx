@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   StatusBar,
   TextInput,
   Platform,
+  Animated,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import {

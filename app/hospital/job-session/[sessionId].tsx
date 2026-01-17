@@ -23,7 +23,7 @@ import {
   AlertCircle,
   Star
 } from 'lucide-react-native';
-import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors } from '@/constants/hospital-theme';
+import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors, HospitalStatusColors as StatusColors } from '@/constants/hospital-theme';
 import API from '../../api';
 import { ScreenSafeArea } from '@/components/screen-safe-area';
 import { formatISTDateTime, formatISTDateWithWeekday } from '@/utils/timezone';
@@ -62,12 +62,16 @@ export default function HospitalJobSessionScreen() {
   );
 
   useEffect(() => {
-    if (session?.check_in_time && !session?.end_time) {
-      const checkInTime = new Date(session.check_in_time);
+    // Use attendance check_in_time (source of truth) or fallback to session.check_in_time
+    const checkInTime = session?.attendance?.check_in_time || session?.check_in_time;
+    const checkOutTime = session?.attendance?.check_out_time || session?.check_out_time;
+    
+    if (checkInTime && !checkOutTime) {
+      const checkInDate = new Date(checkInTime);
       
       const updateElapsed = () => {
         const now = new Date();
-        const elapsed = now.getTime() - checkInTime.getTime();
+        const elapsed = now.getTime() - checkInDate.getTime();
         setTimeElapsed(Math.max(0, elapsed));
       };
       
@@ -93,7 +97,21 @@ export default function HospitalJobSessionScreen() {
         router.back();
         return;
       }
-      setSession(response.data.session);
+      const sessionData = response.data.session;
+      
+      // Debug logging for check-in/check-out times
+      console.log('=== Session Data Debug ===');
+      console.log('Session ID:', sessionData.id);
+      console.log('Attendance:', sessionData.attendance);
+      console.log('Attendance check_in_time:', sessionData.attendance?.check_in_time);
+      console.log('Attendance check_out_time:', sessionData.attendance?.check_out_time);
+      console.log('Session check_in_time:', sessionData.check_in_time);
+      console.log('Session check_out_time:', sessionData.check_out_time);
+      console.log('Session start_time:', sessionData.start_time);
+      console.log('Session end_time:', sessionData.end_time);
+      console.log('========================');
+      
+      setSession(sessionData);
     } catch (error: any) {
       console.error('Error loading session:', error);
       Alert.alert('Error', error.response?.data?.message || 'Failed to load session');
@@ -123,7 +141,9 @@ export default function HospitalJobSessionScreen() {
   const doctor = session.doctor;
   const requirement = session.job_requirement;
   const isCompleted = session.status === 'completed';
-  const isInProgress = session.status === 'in_progress' && session.check_in_time;
+  // Use attendance check_in_time (source of truth) or fallback to session.check_in_time
+  const hasCheckedIn = !!(session.attendance?.check_in_time || session.check_in_time);
+  const isInProgress = session.status === 'in_progress' && hasCheckedIn;
   const isPaid = session.payment_status === 'paid' || session.payment_status === 'released';
   const paymentHeld = session.payment_status === 'held' || session.payment_status === 'pending';
 
@@ -265,39 +285,84 @@ export default function HospitalJobSessionScreen() {
               </View>
             </View>
 
-            {/* Time Log Section */}
-            {(session.check_in_time || isInProgress) && (
-              <View style={styles.timeSection}>
-                <Text style={styles.timeLabel}>Time Tracking</Text>
-                <View style={styles.timeGrid}>
-                  <View style={styles.timeItem}>
-                    <Text style={styles.timeItemLabel}>Check In</Text>
-                    <Text style={styles.timeItemValue}>
-                      {session.check_in_time ? new Date(session.check_in_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }) : '--:--'}
-                    </Text>
-                  </View>
-                  <View style={styles.timeDivider} />
-                  <View style={styles.timeItem}>
-                    <Text style={styles.timeItemLabel}>Check Out</Text>
-                    <Text style={styles.timeItemValue}>
-                      {session.check_out_time || session.attendance?.check_out_time ? new Date(session.check_out_time || session.attendance?.check_out_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }) : '--:--'}
-                    </Text>
-                  </View>
-                  <View style={styles.timeDivider} />
-                  <View style={styles.timeItem}>
-                    <Text style={styles.timeItemLabel}>Duration</Text>
-                    <Text style={styles.timeItemValue}>
-                      {isInProgress ? formatTime(timeElapsed).substring(0, 5) : (session.check_out_time || session.attendance?.check_out_time) && session.check_in_time ? 
-                        (() => {
-                          const checkOutTime = session.check_out_time || session.attendance?.check_out_time;
-                          const duration = new Date(checkOutTime).getTime() - new Date(session.check_in_time).getTime();
-                          return formatTime(duration).substring(0, 5);
-                        })() : '0h 0m'}
-                    </Text>
-                  </View>
+            {/* Time Log Section - Always show */}
+            <View style={styles.timeSection}>
+              <Text style={styles.timeLabel}>Time Tracking</Text>
+              <View style={styles.timeGrid}>
+                <View style={styles.timeItem}>
+                  <Text style={styles.timeItemLabel}>Check In</Text>
+                  <Text style={styles.timeItemValue}>
+                    {(() => {
+                      // Priority: attendance.check_in_time > session.check_in_time > job_requirement.start_time (scheduled)
+                      const checkInTime = session.attendance?.check_in_time || session.check_in_time;
+                      if (checkInTime) {
+                        return new Date(checkInTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+                      }
+                      // Show scheduled start time from job requirement if no check-in yet
+                      const scheduledStartTime = session.job_requirement?.start_time;
+                      if (scheduledStartTime) {
+                        try {
+                          const [hours, minutes] = scheduledStartTime.split(':');
+                          const hour = parseInt(hours);
+                          const ampm = hour >= 12 ? 'PM' : 'AM';
+                          const displayHour = hour % 12 || 12;
+                          return `${displayHour}:${minutes} ${ampm}`;
+                        } catch {
+                          return scheduledStartTime;
+                        }
+                      }
+                      return '--:--';
+                    })()}
+                  </Text>
+                </View>
+                <View style={styles.timeDivider} />
+                <View style={styles.timeItem}>
+                  <Text style={styles.timeItemLabel}>Check Out</Text>
+                  <Text style={styles.timeItemValue}>
+                    {(() => {
+                      // Priority: attendance.check_out_time > session.check_out_time > job_requirement.end_time (scheduled)
+                      const checkOutTime = session.attendance?.check_out_time || session.check_out_time;
+                      if (checkOutTime) {
+                        return new Date(checkOutTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+                      }
+                      // Show scheduled end time from job requirement only if check-in hasn't happened yet
+                      const scheduledEndTime = session.job_requirement?.end_time;
+                      if (scheduledEndTime && !session.attendance?.check_in_time && !session.check_in_time) {
+                        try {
+                          const [hours, minutes] = scheduledEndTime.split(':');
+                          const hour = parseInt(hours);
+                          const ampm = hour >= 12 ? 'PM' : 'AM';
+                          const displayHour = hour % 12 || 12;
+                          return `${displayHour}:${minutes} ${ampm}`;
+                        } catch {
+                          return scheduledEndTime;
+                        }
+                      }
+                      return '--:--';
+                    })()}
+                  </Text>
+                </View>
+                <View style={styles.timeDivider} />
+                <View style={styles.timeItem}>
+                  <Text style={styles.timeItemLabel}>Duration</Text>
+                  <Text style={styles.timeItemValue}>
+                    {(() => {
+                      if (isInProgress) {
+                        return formatTime(timeElapsed).substring(0, 5);
+                      }
+                      // Use attendance times for duration calculation
+                      const checkInTime = session.attendance?.check_in_time || session.check_in_time;
+                      const checkOutTime = session.attendance?.check_out_time || session.check_out_time;
+                      if (checkOutTime && checkInTime) {
+                        const duration = new Date(checkOutTime).getTime() - new Date(checkInTime).getTime();
+                        return formatTime(duration).substring(0, 5);
+                      }
+                      return '0h 0m';
+                    })()}
+                  </Text>
                 </View>
               </View>
-            )}
+            </View>
 
             {/* Late Alert & Actions */}
             {isLate && (
@@ -347,6 +412,20 @@ export default function HospitalJobSessionScreen() {
               </Button>
             )}
 
+            {/* Raise Dispute Button - Show for completed or in-progress sessions with issues */}
+            {(isCompleted || isInProgress || isLate) && (
+              <Button 
+                mode="outlined"
+                onPress={() => router.push(`/hospital/dispute/${session.id}` as any)}
+                style={[styles.actionButton, styles.disputeButton]}
+                contentStyle={{height: 48}}
+                icon={() => <AlertCircle size={18} color={StatusColors.error} />}
+                labelStyle={[styles.actionButtonLabel, { color: StatusColors.error }]}
+              >
+                Raise Dispute
+              </Button>
+            )}
+
             {isCompleted && (
               <>
                 <Button 
@@ -381,18 +460,41 @@ export default function HospitalJobSessionScreen() {
           <Card.Content>
             <View style={styles.paymentHeader}>
               <View style={{flexDirection: 'row', alignItems: 'center', gap: 8}}>
-                <Building2 size={20} color="#92400E" />
-                <Text style={styles.paymentTitle}>Total Payment</Text>
+                <Building2 size={20} color={PrimaryColors.main} />
+                <Text style={styles.paymentTitle}>Payment Summary</Text>
               </View>
             </View>
             
-            <Text style={styles.paymentAmount}>₹{session.payment_amount || '0'}</Text>
+            {/* Payment Breakdown */}
+            {(() => {
+              const doctorAmount = parseFloat(session.payment_amount || session.payments?.[0]?.doctor_amount || '0');
+              const serviceCharge = parseFloat(session.payments?.[0]?.admin_amount || '0') || (doctorAmount * 0.20);
+              const totalAmount = parseFloat(session.payments?.[0]?.amount || '0') || (doctorAmount + serviceCharge);
+              
+              return (
+                <>
+                  <View style={styles.paymentBreakdownRow}>
+                    <Text style={styles.paymentBreakdownLabel}>Doctor Amount:</Text>
+                    <Text style={styles.paymentBreakdownValue}>₹{doctorAmount.toFixed(2)}</Text>
+                  </View>
+                  <View style={styles.paymentBreakdownRow}>
+                    <Text style={styles.paymentBreakdownLabel}>Service Charge (20%):</Text>
+                    <Text style={styles.paymentBreakdownValue}>₹{serviceCharge.toFixed(2)}</Text>
+                  </View>
+                  <View style={styles.paymentDivider} />
+                  <View style={styles.paymentTotalRow}>
+                    <Text style={styles.paymentTotalLabel}>Total Paid:</Text>
+                    <Text style={styles.paymentAmount}>₹{totalAmount.toFixed(2)}</Text>
+                  </View>
+                </>
+              );
+            })()}
             
             <View style={styles.paymentFooter}>
-              <Text style={styles.paymentNote}>Includes platform fees</Text>
+              <Text style={styles.paymentNote}>Doctor receives full amount. Service charge included.</Text>
               <Chip 
-                style={{backgroundColor: isPaid ? '#DCFCE7' : paymentHeld ? '#FEF3C7' : '#F1F5F9'}} 
-                textStyle={{color: isPaid ? '#166534' : paymentHeld ? '#B45309' : '#64748B', fontWeight: 'bold', fontSize: 11}}
+                style={{backgroundColor: isPaid ? StatusColors.successBg : paymentHeld ? PrimaryColors.lightest : NeutralColors.border}} 
+                textStyle={{color: isPaid ? StatusColors.successDark : paymentHeld ? PrimaryColors.dark : NeutralColors.textTertiary, fontWeight: 'bold', fontSize: 11}}
                 icon={isPaid ? 'check' : 'clock'}
               >
                 {isPaid ? 'PAID' : paymentHeld ? 'HELD' : 'PENDING'}
@@ -543,7 +645,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#DCFCE7',
+    backgroundColor: StatusColors.successBg,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 12,
@@ -551,7 +653,7 @@ const styles = StyleSheet.create({
   paymentHeldText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#16A34A',
+    color: StatusColors.success,
   },
   shiftTitle: {
     fontSize: 18,
@@ -657,9 +759,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
   },
+  disputeButton: {
+    borderColor: StatusColors.error,
+    borderWidth: 1.5,
+    marginTop: 8,
+  },
   paymentCard: {
-    borderColor: '#FDE68A',
-    backgroundColor: '#FFFBEB',
+    borderColor: PrimaryColors.light,
+    backgroundColor: PrimaryColors.lightest,
     borderWidth: 1.5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -674,18 +781,49 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#FDE68A',
+    borderBottomColor: PrimaryColors.light,
   },
   paymentTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#92400E',
+    color: PrimaryColors.dark,
+  },
+  paymentBreakdownRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  paymentBreakdownLabel: {
+    fontSize: 14,
+    color: NeutralColors.textSecondary,
+    fontWeight: '500',
+  },
+  paymentBreakdownValue: {
+    fontSize: 14,
+    color: NeutralColors.textPrimary,
+    fontWeight: '600',
+  },
+  paymentDivider: {
+    height: 1,
+    backgroundColor: PrimaryColors.light,
+    marginVertical: 12,
+  },
+  paymentTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  paymentTotalLabel: {
+    fontSize: 16,
+    color: PrimaryColors.dark,
+    fontWeight: '700',
   },
   paymentAmount: {
-    fontSize: 40,
+    fontSize: 32,
     fontWeight: '800',
-    color: '#92400E',
-    marginBottom: 16,
+    color: PrimaryColors.dark,
     letterSpacing: -1,
   },
   paymentFooter: {
@@ -694,18 +832,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#FDE68A',
+    borderTopColor: PrimaryColors.light,
   },
   paymentNote: {
     fontSize: 12,
-    color: '#B45309',
+    color: PrimaryColors.dark,
+    opacity: 0.7,
+    flex: 1,
+    marginRight: 8,
   },
   escrowBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#0F172A',
+    backgroundColor: PrimaryColors.dark,
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 24,
@@ -717,7 +858,7 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   lateBadge: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: StatusColors.errorBg,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 12,
@@ -725,12 +866,12 @@ const styles = StyleSheet.create({
   lateText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#DC2626',
+    color: StatusColors.error,
   },
   lateAlert: {
-    backgroundColor: '#FEF2F2',
+    backgroundColor: StatusColors.errorBg,
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: StatusColors.errorLight,
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
@@ -743,12 +884,12 @@ const styles = StyleSheet.create({
   lateAlertTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#DC2626',
+    color: StatusColors.error,
     marginBottom: 4,
   },
   lateAlertText: {
     fontSize: 12,
-    color: '#991B1B',
+    color: StatusColors.errorDark,
     lineHeight: 18,
   },
   lateActions: {
@@ -768,7 +909,7 @@ const styles = StyleSheet.create({
   },
   reassignButton: {
     flex: 1,
-    backgroundColor: '#DC2626',
+    backgroundColor: StatusColors.error,
     borderRadius: 8,
   },
   reassignButtonLabel: {

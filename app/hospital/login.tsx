@@ -1,15 +1,13 @@
-import { ThemedButton } from '@/components/themed-button';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedTextInput } from '@/components/themed-text-input';
-import { ThemedView } from '@/components/themed-view';
 import { Link, router } from 'expo-router';
 import { useState, useMemo } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TouchableOpacity, View, StatusBar, useWindowDimensions, Image, TextInput } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TouchableOpacity, View, StatusBar, useWindowDimensions, TextInput } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors } from '@/constants/hospital-theme';
 import API from '../api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Eye, EyeOff, Mail, Lock, ArrowLeft } from 'lucide-react-native';
+import { Eye, EyeOff, Mail, Lock, ArrowLeft, Building2, Users } from 'lucide-react-native';
 import { SuccessModal } from '@/components/SuccessModal';
 
 const HOSPITAL_TOKEN_KEY = 'hospitalToken';
@@ -25,27 +23,7 @@ export default function HospitalLoginScreen() {
   const { width } = useWindowDimensions();
   
   // Memoize tablet check to prevent unnecessary recalculations
-  const isTablet = useMemo(() => width >= 900, [width]);
-
-  // Memoize style arrays to prevent re-creation on every render
-  const safeAreaStyle = useMemo(() => [
-    styles.safeArea,
-    {
-      paddingTop: Math.max(insets.top, Platform.OS === 'android' ? 16 : 12),
-      paddingBottom: Math.max(insets.bottom, 16),
-      paddingHorizontal: isTablet ? 32 : 0,
-    },
-  ], [insets.top, insets.bottom, isTablet]);
-
-  const scrollContentStyle = useMemo(() => [
-    styles.scrollContent,
-    isTablet && styles.scrollContentTablet,
-  ], [isTablet]);
-
-  const formStyle = useMemo(() => [
-    styles.form,
-    isTablet && styles.formTablet,
-  ], [isTablet]);
+  const isTablet = useMemo(() => width >= 768, [width]);
 
   // No auto-login - user must always login manually
   // Removed auto-login check to ensure users always see login screen
@@ -108,8 +86,8 @@ export default function HospitalLoginScreen() {
   };
 
   return (
-    <View style={styles.mainContainer}>
-      <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
       <SuccessModal
         visible={showSuccessModal}
         title="Welcome Back"
@@ -117,312 +95,346 @@ export default function HospitalLoginScreen() {
         onClose={handleSuccessModalClose}
         buttonText="OK"
       />
-      <SafeAreaView style={safeAreaStyle} edges={['top', 'right', 'left', 'bottom']}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.keyboardView}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-        >
-          <ScrollView
-            contentContainerStyle={scrollContentStyle}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-            removeClippedSubviews={true}
-            scrollEventThrottle={16}
+      <LinearGradient
+        colors={['#1e40af', '#2563EB', '#3b82f6', '#60a5fa']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.gradient}
+      >
+        {/* Animated background circles */}
+        <View style={styles.bgCircle1} />
+        <View style={styles.bgCircle2} />
+        
+        <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.keyboardView}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
           >
-            {/* Back Button */}
-            <TouchableOpacity 
-              style={styles.backButton}
-              onPress={() => router.push('/login')}
+            <ScrollView 
+              contentContainerStyle={styles.scrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              bounces={false}
             >
-              <ArrowLeft size={24} color="#60A5FA" />
-            </TouchableOpacity>
+              <View style={[styles.card, isTablet && styles.cardTablet]}>
+                
+                {/* Back to Doctor Login Button */}
+                <TouchableOpacity 
+                  style={styles.backButton}
+                  onPress={() => router.push('/login')}
+                  activeOpacity={0.7}
+                >
+                  <ArrowLeft size={20} color="#64748B" />
+                  <ThemedText style={styles.backButtonText}>Doctor Login</ThemedText>
+                </TouchableOpacity>
 
-            {/* Hospital Image at Top */}
-            <View style={styles.imageContainer}>
-              <Image
-                source={{
-                  uri: 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=800&h=400&fit=crop'
-                }}
-                style={styles.hospitalImage}
-                resizeMode="cover"
-                fadeDuration={200}
-              />
-            </View>
-
-            {/* White Card Container */}
-            <View style={formStyle}>
-            {/* Welcome Text */}
-            <View style={styles.welcomeHeaderContainer}>
-              <ThemedText style={styles.welcomeHeading}>
-                Welcome Back
-              </ThemedText>
-              <ThemedText style={styles.appTagline}>
-                AlverConnect - The digital bridge for medical professionals
-              </ThemedText>
-            </View>
-            <ThemedText style={styles.welcomeSubtitle}>
-              Access verified shifts & manage staff.
-            </ThemedText>
-
-              {/* Email Input */}
-              <View style={styles.inputGroup}>
-                <ThemedText style={styles.inputLabel}>Work Email or Phone</ThemedText>
-                <View style={styles.inputContainer}>
-                  <Mail size={20} color="#94A3B8" style={styles.inputIcon} />
-                  <TextInput
-                    placeholder="admin@hospital.com"
-                    placeholderTextColor="#94A3B8"
-                    value={email}
-                    onChangeText={setEmail}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoComplete="email"
-                    style={styles.textInput}
-                  />
+                {/* Header Icon */}
+                <View style={styles.headerIconContainer}>
+                  <View style={styles.iconCircle}>
+                    <Building2 size={24} color="#2563EB" />
+                  </View>
+                  <View style={styles.headerTitleContainer}>
+                    <ThemedText style={styles.headerTitle}>AlverConnect</ThemedText>
+                    <ThemedText style={styles.headerTagline}>The digital bridge for medical professionals</ThemedText>
+                  </View>
                 </View>
-              </View>
 
-              {/* Password Input */}
-              <View style={styles.inputGroup}>
-                <View style={styles.passwordLabelRow}>
-                  <ThemedText style={styles.inputLabel}>Password</ThemedText>
-                  <TouchableOpacity onPress={() => Alert.alert('Forgot Password', 'Please contact support to reset your password.')}>
-                    <ThemedText style={styles.forgotPasswordText}>Forgot Password?</ThemedText>
-                  </TouchableOpacity>
-                </View>
-                <View style={styles.inputContainer}>
-                  <Lock size={20} color="#94A3B8" style={styles.inputIcon} />
-                  <TextInput
-                    placeholder="Enter your password"
-                    placeholderTextColor="#94A3B8"
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry={!showPassword}
-                    autoCapitalize="none"
-                    autoComplete="password"
-                    style={styles.textInput}
-                  />
-                  <TouchableOpacity
-                    onPress={() => setShowPassword(!showPassword)}
-                    style={styles.eyeIcon}
-                  >
-                    {showPassword ? (
-                      <EyeOff size={20} color="#94A3B8" />
-                    ) : (
-                      <Eye size={20} color="#94A3B8" />
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Login Button */}
-              <TouchableOpacity 
-                style={[styles.loginButton, loading && styles.loginButtonDisabled]}
-                onPress={handleLogin}
-                activeOpacity={0.8}
-                disabled={loading}
-              >
-                <ThemedText style={styles.loginButtonText}>
-                  {loading ? 'Logging in...' : 'Secure Login'}
-                </ThemedText>
-                {!loading && (
-                  <ThemedText style={styles.loginButtonArrow}>→</ThemedText>
-                )}
-              </TouchableOpacity>
-
-              {/* Register Link */}
-              <View style={styles.signupContainer}>
-                <ThemedText style={styles.signupText}>New Partner?{' '}</ThemedText>
-                <Link href="/register/hospital/step1-email" asChild>
-                  <ThemedText style={styles.signupLink}>
-                    Register Facility
+                {/* Welcome Text */}
+                <View style={styles.welcomeContainer}>
+                  <ThemedText style={styles.welcomeHeading}>Welcome Back, Hospital.</ThemedText>
+                  <ThemedText style={styles.welcomeSubheading}>
+                    Manage your team and verified medical shifts.
                   </ThemedText>
-                </Link>
+                </View>
+
+                {/* Inputs */}
+                <View style={styles.formContainer}>
+                  <ThemedText style={styles.inputLabel}>Work Email or Phone</ThemedText>
+                  <View style={styles.inputWrapper}>
+                    <Mail size={20} color="#64748B" style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="admin@hospital.com"
+                      placeholderTextColor="#94A3B8"
+                      value={email}
+                      onChangeText={setEmail}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                    />
+                  </View>
+
+                  <ThemedText style={styles.inputLabel}>Password</ThemedText>
+                  <View style={styles.inputWrapper}>
+                    <Lock size={20} color="#64748B" style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Enter your password"
+                      placeholderTextColor="#94A3B8"
+                      value={password}
+                      onChangeText={setPassword}
+                      secureTextEntry={!showPassword}
+                      autoCapitalize="none"
+                    />
+                    <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
+                      {showPassword ? (
+                        <EyeOff size={20} color="#64748B" />
+                      ) : (
+                        <Eye size={20} color="#64748B" />
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                  
+                  <TouchableOpacity onPress={() => Alert.alert('Forgot Password', 'Please contact support to reset your password.')} style={styles.forgotBtn}>
+                    <ThemedText style={styles.forgotText}>Forgot Password?</ThemedText>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Login Button */}
+                <TouchableOpacity 
+                  style={styles.loginBtn} 
+                  onPress={handleLogin}
+                  disabled={loading}
+                  activeOpacity={0.8}
+                >
+                  <LinearGradient
+                    colors={['#2563EB', '#3B82F6']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.loginBtnGradient}
+                  >
+                    <ThemedText style={styles.loginBtnText}>
+                      {loading ? 'Verifying...' : 'Log In Securely'}
+                    </ThemedText>
+                  </LinearGradient>
+                </TouchableOpacity>
+
+                {/* Sign Up Prompt */}
+                <View style={styles.signupPrompt}>
+                  <ThemedText style={styles.signupPromptText}>New Partner? </ThemedText>
+                  <Link href="/register/hospital/step1-email" asChild>
+                    <TouchableOpacity>
+                      <ThemedText style={styles.signupLink}>Register Facility</ThemedText>
+                    </TouchableOpacity>
+                  </Link>
+                </View>
               </View>
-            </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </LinearGradient>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  mainContainer: {
+  container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+  },
+  gradient: {
+    flex: 1,
+  },
+  bgCircle1: {
+    position: 'absolute',
+    width: 400,
+    height: 400,
+    borderRadius: 200,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    top: -200,
+    right: -100,
+  },
+  bgCircle2: {
+    position: 'absolute',
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    bottom: -150,
+    left: -100,
   },
   safeArea: {
     flex: 1,
   },
-  keyboardView: { 
-    flex: 1 
+  keyboardView: {
+    flex: 1,
+    width: '100%',
   },
-  scrollContent: { 
+  scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingBottom: 32,
-    paddingTop: 60,
-    paddingHorizontal: 20,
+    padding: 24,
+    paddingBottom: 40,
+    paddingTop: 40,
   },
-  scrollContentTablet: { 
-    paddingHorizontal: 48, 
-    paddingBottom: 32 
-  },
-  backButton: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 16 : 12,
-    left: 20,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#EFF6FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 10,
-  },
-  imageContainer: {
-    width: '100%',
-    height: 200,
-    marginBottom: -20,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    overflow: 'hidden',
-  },
-  hospitalImage: {
-    width: '100%',
-    height: '100%',
-  },
-  form: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
+  card: {
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderRadius: 32,
     padding: 28,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.25,
+    shadowRadius: 40,
+    elevation: 20,
     width: '100%',
     maxWidth: 420,
     alignSelf: 'center',
-    marginTop: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.8)',
   },
-  formTablet: {
-    alignSelf: 'center',
-    width: '70%',
+  cardTablet: {
     maxWidth: 500,
+    padding: 48,
   },
-  welcomeHeaderContainer: {
-    marginBottom: 8,
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginBottom: 24,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: 'rgba(100, 116, 139, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(100, 116, 139, 0.15)',
+    gap: 6,
+  },
+  backButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  headerIconContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    gap: 12,
+  },
+  iconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitleContainer: {
+    alignItems: 'flex-start',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1E3A8A',
+    letterSpacing: 0.5,
+  },
+  headerTagline: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '500',
+    letterSpacing: 0.3,
+  },
+  welcomeContainer: {
+    marginBottom: 20,
+    alignItems: 'center',
   },
   welcomeHeading: {
     fontSize: 28,
-    fontWeight: '700',
-    marginBottom: 4,
+    fontWeight: '800',
     color: '#1E293B',
-    textAlign: 'left',
-  },
-  appTagline: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: '#64748B',
     marginBottom: 8,
-    textAlign: 'left',
-    letterSpacing: 0.3,
-    fontStyle: 'italic',
+    textAlign: 'center',
+    letterSpacing: -0.5,
   },
-  welcomeSubtitle: {
-    fontSize: 15,
+  welcomeSubheading: {
+    fontSize: 16,
     color: '#64748B',
-    marginBottom: 32,
-    textAlign: 'left',
+    textAlign: 'center',
+    lineHeight: 24,
   },
-  inputGroup: {
-    marginBottom: 20,
+  formContainer: {
+    marginBottom: 28,
   },
   inputLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1E293B',
+    color: '#334155',
     marginBottom: 8,
+    marginLeft: 4,
   },
-  passwordLabelRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  inputContainer: {
+  inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderRadius: 16,
     paddingHorizontal: 16,
-    height: 56,
+    paddingVertical: 4,
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   inputIcon: {
     marginRight: 12,
   },
-  textInput: {
+  input: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 15,
     color: '#1E293B',
-    paddingVertical: 0,
+    paddingVertical: 14,
+    fontWeight: '500',
   },
   eyeIcon: {
-    padding: 4,
+    padding: 8,
   },
-  forgotPasswordText: {
+  forgotBtn: {
+    alignSelf: 'flex-end',
+    marginBottom: 16,
+  },
+  forgotText: {
     fontSize: 14,
-    color: '#2563EB',
     fontWeight: '600',
+    color: '#3B82F6',
   },
-  loginButton: {
-    backgroundColor: '#2563EB',
-    borderRadius: 12,
-    paddingVertical: 16,
+  loginBtn: {
+    borderRadius: 16,
+    alignItems: 'center',
+    marginTop: 4,
+    marginBottom: 20,
+    overflow: 'hidden',
+  },
+  loginBtnGradient: {
+    paddingVertical: 18,
     paddingHorizontal: 24,
-    marginTop: 8,
-    marginBottom: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    borderRadius: 16,
+  },
+  loginBtnText: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  signupPrompt: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#2563EB',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    gap: 6,
+    marginTop: 16,
+    marginBottom: 10,
   },
-  loginButtonDisabled: {
-    opacity: 0.6,
-  },
-  loginButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-    marginRight: 8,
-  },
-  loginButtonArrow: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  signupContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  signupText: {
-    fontSize: 14,
+  signupPromptText: {
+    fontSize: 15,
     color: '#64748B',
   },
   signupLink: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
     color: '#2563EB',
   },
 });

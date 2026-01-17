@@ -348,8 +348,8 @@ export default function AllOpeningsScreen() {
                       )}
                     </View>
                   ) : requirement.is_filled ? (
-                    <View style={[styles.applyButton, { backgroundColor: ModernColors.neutral.gray200 }]}>
-                      <Text style={[styles.applyButtonText, { color: ModernColors.text.secondary }]}>Spot Filled</Text>
+                    <View style={[styles.applyButton, { backgroundColor: ModernColors.neutral.gray200, opacity: 0.7 }]}>
+                      <Text style={[styles.applyButtonText, { color: ModernColors.text.secondary }]}>Position Already Filled</Text>
                     </View>
                   ) : (requirement.is_expired) ? (
                     <View style={[styles.applyButton, { backgroundColor: ModernColors.neutral.gray200 }]}>

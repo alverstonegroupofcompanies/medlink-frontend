@@ -23,6 +23,7 @@ const CARD_SPACING = 16;
 const BASE_CARD_WIDTH = (SCREEN_WIDTH - HORIZONTAL_PADDING * 2 - CARD_SPACING * 2) / 3;
 const PROMO_CARD_WIDTH = BASE_CARD_WIDTH * 2; // Double the width
 const CARD_HEIGHT = 200;
+const IS_SMALL_SCREEN = SCREEN_WIDTH < 400; // Hide short summary on small screens
 
 interface PromoCarouselProps {
   onPromoPress?: (blog: any) => void;
@@ -134,10 +135,12 @@ export default function PromoCarousel({ onPromoPress }: PromoCarouselProps) {
                 {promo.title}
               </Text>
               
-              {/* Description */}
-              <Text style={styles.promoDescription} numberOfLines={2}>
-                {promo.short_description}
-              </Text>
+              {/* Description - Hide on small screens */}
+              {!IS_SMALL_SCREEN && (
+                <Text style={styles.promoDescription} numberOfLines={2}>
+                  {promo.short_description}
+                </Text>
+              )}
               
               {/* Know More with Arrow */}
               <View style={styles.buttonContainer}>

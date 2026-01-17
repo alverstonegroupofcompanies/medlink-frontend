@@ -332,6 +332,25 @@ export default function PaymentHistoryScreen() {
                 </Text>
               </View>
             )}
+            {/* Payment Breakdown */}
+            {item.doctor_amount && (
+              <>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Doctor Amount:</Text>
+                  <Text style={styles.detailValue}>₹{parseFloat(item.doctor_amount || 0).toFixed(2)}</Text>
+                </View>
+                {item.admin_amount && (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Service Charge:</Text>
+                    <Text style={styles.detailValue}>₹{parseFloat(item.admin_amount || 0).toFixed(2)}</Text>
+                  </View>
+                )}
+                <View style={styles.detailRow}>
+                  <Text style={[styles.detailLabel, { fontWeight: '700' }]}>Total Paid:</Text>
+                  <Text style={[styles.detailValue, { fontWeight: '700' }]}>₹{parseFloat(item.amount || 0).toFixed(2)}</Text>
+                </View>
+              </>
+            )}
             {item.payment_method && (
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Payment Method:</Text>

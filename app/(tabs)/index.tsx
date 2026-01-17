@@ -864,9 +864,9 @@ export default function DoctorHome() {
               </View>
             ) : jobRequirements.filter((req: any) => {
               const isExpired = req.is_expired || false;
-              const isFilled = req.is_filled || false;
               const hasApplied = myApplications.some((app: any) => app.job_requirement_id === req.id);
-              return !isExpired && !isFilled && !hasApplied;
+              // Show all non-expired jobs (including filled ones) that haven't been applied to
+              return !isExpired && !hasApplied;
             }).length === 0 ? (
               <View style={styles.emptyStateContainer}>
                 <View style={styles.emptyStateIcon}>
@@ -892,9 +892,9 @@ export default function DoctorHome() {
                 {jobRequirements
                   .filter((req: any) => {
                     const isExpired = req.is_expired || false;
-                    const isFilled = req.is_filled || false;
                     const hasApplied = myApplications.some((app: any) => app.job_requirement_id === req.id);
-                    return !isExpired && !isFilled && !hasApplied;
+                    // Show all non-expired jobs (including filled ones) that haven't been applied to
+                    return !isExpired && !hasApplied;
                   })
                   .slice(0, 4)
                   .map((requirement) => {
@@ -1024,15 +1024,21 @@ export default function DoctorHome() {
                           </View>
                           
                           {/* Apply Button */}
-                          {!hasApplied && !requirement.is_filled && !isExpired && (
-                            <TouchableOpacity
-                              style={styles.newOpportunityApplyButton}
-                              onPress={() => handleApply(requirement.id)}
-                              activeOpacity={0.8}
-                            >
-                              <Text style={styles.newOpportunityApplyButtonText}>Apply Now</Text>
-                              <ArrowRight size={16} color="#fff" />
-                            </TouchableOpacity>
+                          {!hasApplied && !isExpired && (
+                            requirement.is_filled ? (
+                              <View style={[styles.newOpportunityApplyButton, { backgroundColor: ModernColors.neutral.gray200, opacity: 0.7 }]}>
+                                <Text style={[styles.newOpportunityApplyButtonText, { color: ModernColors.text.secondary }]}>Position Already Filled</Text>
+                              </View>
+                            ) : (
+                              <TouchableOpacity
+                                style={styles.newOpportunityApplyButton}
+                                onPress={() => handleApply(requirement.id)}
+                                activeOpacity={0.8}
+                              >
+                                <Text style={styles.newOpportunityApplyButtonText}>Apply Now</Text>
+                                <ArrowRight size={16} color="#fff" />
+                              </TouchableOpacity>
+                            )
                           )}
                         </View>
                       </ModernCard>
@@ -1048,12 +1054,12 @@ export default function DoctorHome() {
                 >
                 {jobRequirements
                   .filter((req: any) => {
-                    // Filter out expired and filled jobs from "New Opportunities"
+                    // Filter out expired jobs from "New Opportunities"
+                    // Include filled jobs so users can see they're filled
                     const isExpired = req.is_expired || false;
-                    const isFilled = req.is_filled || false;
                     const hasApplied = myApplications.some((app: any) => app.job_requirement_id === req.id);
-                    // Show only active, available jobs that haven't been applied to
-                    return !isExpired && !isFilled && !hasApplied;
+                    // Show all non-expired jobs (including filled ones) that haven't been applied to
+                    return !isExpired && !hasApplied;
                   })
                   .slice(0, 5)
                   .map((requirement) => {
@@ -1193,15 +1199,21 @@ export default function DoctorHome() {
 
                         
                         {/* Apply Button */}
-                        {!hasApplied && !requirement.is_filled && !isExpired && (
-                          <TouchableOpacity
-                            style={styles.newOpportunityApplyButton}
-                            onPress={() => handleApply(requirement.id)}
-                            activeOpacity={0.8}
-                          >
-                            <Text style={styles.newOpportunityApplyButtonText}>Apply Now</Text>
-                            <ArrowRight size={16} color="#fff" />
-                          </TouchableOpacity>
+                        {!hasApplied && !isExpired && (
+                          requirement.is_filled ? (
+                            <View style={[styles.newOpportunityApplyButton, { backgroundColor: ModernColors.neutral.gray200, opacity: 0.7 }]}>
+                              <Text style={[styles.newOpportunityApplyButtonText, { color: ModernColors.text.secondary }]}>Position Already Filled</Text>
+                            </View>
+                          ) : (
+                            <TouchableOpacity
+                              style={styles.newOpportunityApplyButton}
+                              onPress={() => handleApply(requirement.id)}
+                              activeOpacity={0.8}
+                            >
+                              <Text style={styles.newOpportunityApplyButtonText}>Apply Now</Text>
+                              <ArrowRight size={16} color="#fff" />
+                            </TouchableOpacity>
+                          )
                         )}
                       </View>
                     </ModernCard>

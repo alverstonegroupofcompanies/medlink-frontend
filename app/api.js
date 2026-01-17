@@ -3,6 +3,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../config/api';
 import { getUserFriendlyError } from '../utils/errorMessages';
 
+// Flag to prevent multiple simultaneous auth redirects
+let isHandlingAuthError = false;
+let redirectTimeout = null;
+
 // Disable console errors in production
 if (!__DEV__) {
   const originalError = console.error;
@@ -292,73 +296,120 @@ API.interceptors.response.use(
         
         // Handle 401 Unauthorized - token expired or invalid
         if (error.response.status === 401) {
-          console.warn('⚠️ Unauthorized - clearing auth data');
-          try {
-            const url = error.config?.url || '';
-            const { router } = require('expo-router');
+          // Prevent multiple simultaneous auth error handlers
+          if (!isHandlingAuthError) {
+            isHandlingAuthError = true;
+            console.warn('⚠️ Unauthorized - clearing auth data');
             
-            if (url.includes('/hospital/')) {
-              await AsyncStorage.multiRemove(['hospitalToken', 'hospitalInfo']);
-              console.warn('🏥 Cleared hospital auth data');
-              // Redirect to hospital login
-              setTimeout(() => {
-                try {
-                  router.replace('/hospital/login');
-                } catch (navError) {
-                  console.error('Navigation error:', navError);
-                }
-              }, 100);
-            } else if (url.includes('/admin/')) {
-              // Admin routes - don't clear here, let admin handle it
-              console.warn('🔐 Admin route 401 - admin should handle logout');
-            } else {
-              await AsyncStorage.multiRemove(['doctorToken', 'doctorInfo']);
-              console.warn('👨‍⚕️ Cleared doctor auth data');
-              // Redirect to doctor login
-              setTimeout(() => {
-                try {
-                  router.replace('/login');
-                } catch (navError) {
-                  console.error('Navigation error:', navError);
-                }
-              }, 100);
+            try {
+              const url = error.config?.url || '';
+              const { router } = require('expo-router');
+              
+              // Clear existing redirect timeout if any
+              if (redirectTimeout) {
+                clearTimeout(redirectTimeout);
+              }
+              
+              if (url.includes('/hospital/')) {
+                await AsyncStorage.multiRemove(['hospitalToken', 'hospitalInfo']);
+                console.warn('🏥 Cleared hospital auth data');
+                // Redirect to hospital login
+                redirectTimeout = setTimeout(() => {
+                  try {
+                    router.replace('/hospital/login');
+                    // Reset flag after navigation
+                    setTimeout(() => {
+                      isHandlingAuthError = false;
+                    }, 1000);
+                  } catch (navError) {
+                    console.error('Navigation error:', navError);
+                    isHandlingAuthError = false;
+                  }
+                }, 100);
+              } else if (url.includes('/admin/')) {
+                // Admin routes - don't clear here, let admin handle it
+                console.warn('🔐 Admin route 401 - admin should handle logout');
+                isHandlingAuthError = false;
+              } else {
+                await AsyncStorage.multiRemove(['doctorToken', 'doctorInfo']);
+                console.warn('👨‍⚕️ Cleared doctor auth data');
+                // Redirect to doctor login
+                redirectTimeout = setTimeout(() => {
+                  try {
+                    router.replace('/login');
+                    // Reset flag after navigation
+                    setTimeout(() => {
+                      isHandlingAuthError = false;
+                    }, 1000);
+                  } catch (navError) {
+                    console.error('Navigation error:', navError);
+                    isHandlingAuthError = false;
+                  }
+                }, 100);
+              }
+            } catch (clearError) {
+              console.error('Error clearing auth data:', clearError);
+              isHandlingAuthError = false;
             }
-          } catch (clearError) {
-            console.error('Error clearing auth data:', clearError);
+          } else {
+            // Already handling auth error, just suppress this one
+            console.warn('⚠️ Multiple 401 errors detected - auth redirect already in progress');
           }
         }
       }
     } else {
       // Production: Handle auth errors and redirect
       if (error.response?.status === 401) {
-        try {
-          const url = error.config?.url || '';
-          const { router } = require('expo-router');
-          
-          if (url.includes('/hospital/')) {
-            await AsyncStorage.multiRemove(['hospitalToken', 'hospitalInfo']);
-            // Redirect to hospital login
-            setTimeout(() => {
-              try {
-                router.replace('/hospital/login');
-              } catch (navError) {
-                // Silently handle navigation errors
-              }
-            }, 100);
-          } else if (!url.includes('/admin/')) {
-            // Only redirect doctor routes, not admin
-            await AsyncStorage.multiRemove(['doctorToken', 'doctorInfo']);
-            // Redirect to doctor login
-            setTimeout(() => {
-              try {
-                router.replace('/login');
-              } catch (navError) {
-                // Silently handle navigation errors
-              }
-            }, 100);
+        // Prevent multiple simultaneous auth error handlers
+        if (!isHandlingAuthError) {
+          isHandlingAuthError = true;
+          try {
+            const url = error.config?.url || '';
+            const { router } = require('expo-router');
+            
+            // Clear existing redirect timeout if any
+            if (redirectTimeout) {
+              clearTimeout(redirectTimeout);
+            }
+            
+            if (url.includes('/hospital/')) {
+              await AsyncStorage.multiRemove(['hospitalToken', 'hospitalInfo']);
+              // Redirect to hospital login
+              redirectTimeout = setTimeout(() => {
+                try {
+                  router.replace('/hospital/login');
+                  // Reset flag after navigation
+                  setTimeout(() => {
+                    isHandlingAuthError = false;
+                  }, 1000);
+                } catch (navError) {
+                  // Silently handle navigation errors
+                  isHandlingAuthError = false;
+                }
+              }, 100);
+            } else if (!url.includes('/admin/')) {
+              // Only redirect doctor routes, not admin
+              await AsyncStorage.multiRemove(['doctorToken', 'doctorInfo']);
+              // Redirect to doctor login
+              redirectTimeout = setTimeout(() => {
+                try {
+                  router.replace('/login');
+                  // Reset flag after navigation
+                  setTimeout(() => {
+                    isHandlingAuthError = false;
+                  }, 1000);
+                } catch (navError) {
+                  // Silently handle navigation errors
+                  isHandlingAuthError = false;
+                }
+              }, 100);
+            } else {
+              isHandlingAuthError = false;
+            }
+          } catch (clearError) {
+            // Silently handle - no logging in production
+            isHandlingAuthError = false;
           }
-        } catch (clearError) {
-          // Silently handle - no logging in production
         }
       }
     }

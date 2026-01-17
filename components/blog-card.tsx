@@ -13,6 +13,7 @@ const { width } = Dimensions.get('window');
 const CARD_WIDTH = width - 32; // 16px padding on each side
 const IMAGE_HEIGHT = 200;
 const CARD_HEIGHT = IMAGE_HEIGHT + 180; // Fixed height for consistency
+const IS_SMALL_SCREEN = width < 400; // Hide short summary on small screens
 
 interface BlogCardProps {
   blog: {
@@ -69,10 +70,12 @@ export function BlogCard({ blog, onPress }: BlogCardProps) {
           {blog.title}
         </Text>
 
-        {/* Description */}
-        <Text style={styles.description} numberOfLines={expanded ? 10 : 3}>
-          {expanded ? blog.full_description : blog.short_description}
-        </Text>
+        {/* Description - Hide short description on small screens */}
+        {(!IS_SMALL_SCREEN || expanded) && (
+          <Text style={styles.description} numberOfLines={expanded ? 10 : 3}>
+            {expanded ? blog.full_description : blog.short_description}
+          </Text>
+        )}
 
         {/* Read More Button */}
         {!expanded && (
