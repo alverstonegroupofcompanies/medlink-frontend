@@ -1608,6 +1608,25 @@ export default function HospitalDashboard() {
               </View>
             </View>
 
+            {/* Active Sessions Section - Show above job sessions */}
+            {sessions.filter((s: any) => s.status === 'in_progress').length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <View style={styles.sectionTitleContainer}>
+                    <Clock size={20} color={PrimaryColors.main} />
+                    <Text style={styles.sectionTitle}>Active Sessions</Text>
+                  </View>
+                </View>
+                <View style={styles.activeSessionsContainer}>
+                  {sessions
+                    .filter((s: any) => s.status === 'in_progress')
+                    .map((session: any) => (
+                      <ActiveSessionCard key={session.id} session={session} />
+                    ))}
+                </View>
+              </View>
+            )}
+
             {/* Job Sessions Section - Enhanced Design */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
@@ -1642,25 +1661,6 @@ export default function HospitalDashboard() {
                   </View>
               )}
             </View>
-
-            {/* Active Sessions Section - Show above requirements */}
-            {sessions.filter((s: any) => s.status === 'in_progress').length > 0 && (
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <View style={styles.sectionTitleContainer}>
-                    <Clock size={20} color={PrimaryColors.main} />
-                    <Text style={styles.sectionTitle}>Active Sessions</Text>
-                  </View>
-                </View>
-                <View style={styles.activeSessionsContainer}>
-                  {sessions
-                    .filter((s: any) => s.status === 'in_progress')
-                    .map((session: any) => (
-                      <ActiveSessionCard key={session.id} session={session} />
-                    ))}
-                </View>
-              </View>
-            )}
 
             {/* Requirements Section */}
             <View style={styles.section}>

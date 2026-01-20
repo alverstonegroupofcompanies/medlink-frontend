@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useEffect } from 'react';
 import { Platform, View } from 'react-native';
 import { Home, Calendar, Bell, MapPin, User, CreditCard } from 'lucide-react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -159,6 +160,26 @@ export default function HospitalTabLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: 'Settings',
+          tabBarIcon: ({ color, focused }) => (
+            <View
+              style={{
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                backgroundColor: focused ? 'rgba(123, 97, 255, 0.1)' : 'transparent',
+              }}
+            >
+              <MaterialIcons name="settings" size={24} color={color} />
+            </View>
+          ),
+        }}
+      />
       {/* Hidden routes - not shown in tab bar */}
       <Tabs.Screen
         name="login"
@@ -213,8 +234,14 @@ export default function HospitalTabLayout() {
       <Tabs.Screen
         name="dispute"
         options={{
+          tabBarButton: () => null, // Completely hide from tab bar
+        }}
+      />
+      {/* Hide dynamic dispute route that was showing in bottom bar */}
+      <Tabs.Screen
+        name="dispute/[sessionId]"
+        options={{
           href: null,
-          tabBarStyle: { display: 'none' },
         }}
       />
     </Tabs>

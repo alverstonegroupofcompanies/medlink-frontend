@@ -892,37 +892,6 @@ export default function ProfileScreen() {
                   )}
                 </View>
               </ModernCard>
-
-              {/* Support Section - Separate at Bottom */}
-              <ModernCard variant="elevated" padding="md" style={[styles.sectionCard, styles.supportCard]}>
-                <View style={styles.sectionHeader}>
-                  <View style={[styles.sectionIconContainer, styles.supportIconContainer]}>
-                    <Phone size={20} color="#10B981" />
-                  </View>
-                  <Text style={styles.sectionTitle}>Support</Text>
-                </View>
-                <Text style={styles.supportDescription}>
-                  Need help? Contact our support team for assistance
-                </Text>
-                <View style={styles.supportRow}>
-                  <View style={styles.supportIconWrapper}>
-                    <Mail size={20} color="#10B981" />
-                  </View>
-                  <View style={styles.supportContent}>
-                    <Text style={styles.supportLabel}>Email</Text>
-                    <Text style={styles.supportValue}>support@alverconnect.com</Text>
-                  </View>
-                </View>
-                <View style={styles.supportRow}>
-                  <View style={styles.supportIconWrapper}>
-                    <Phone size={20} color="#10B981" />
-                  </View>
-                  <View style={styles.supportContent}>
-                    <Text style={styles.supportLabel}>Phone</Text>
-                    <Text style={styles.supportValue}>+91 1800-123-4567</Text>
-                  </View>
-                </View>
-              </ModernCard>
             </>
           ) : (
             /* Edit Mode */
@@ -1721,49 +1690,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: Spacing.md,
     fontStyle: 'italic',
-  },
-  supportCard: {
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#D1FAE5',
-  },
-  supportIconContainer: {
-    backgroundColor: '#D1FAE5',
-  },
-  supportDescription: {
-    ...Typography.caption,
-    color: ModernColors.text.secondary,
-    marginBottom: Spacing.md,
-    lineHeight: 20,
-  },
-  supportRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-    paddingVertical: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: '#D1FAE5',
-  },
-  supportIconWrapper: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#D1FAE5',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  supportContent: {
-    flex: 1,
-  },
-  supportLabel: {
-    ...Typography.captionBold,
-    color: ModernColors.text.secondary,
-    marginBottom: 2,
-  },
-  supportValue: {
-    ...Typography.body,
-    color: '#059669',
-    fontWeight: '600',
   },
   saveButton: {
     marginTop: Spacing.md,

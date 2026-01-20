@@ -412,20 +412,6 @@ export default function HospitalJobSessionScreen() {
               </Button>
             )}
 
-            {/* Raise Dispute Button - Show for completed or in-progress sessions with issues */}
-            {(isCompleted || isInProgress || isLate) && (
-              <Button 
-                mode="outlined"
-                onPress={() => router.push(`/hospital/dispute/${session.id}` as any)}
-                style={[styles.actionButton, styles.disputeButton]}
-                contentStyle={{height: 48}}
-                icon={() => <AlertCircle size={18} color={StatusColors.error} />}
-                labelStyle={[styles.actionButtonLabel, { color: StatusColors.error }]}
-              >
-                Raise Dispute
-              </Button>
-            )}
-
             {isCompleted && (
               <>
                 <Button 

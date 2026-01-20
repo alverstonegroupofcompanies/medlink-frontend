@@ -382,6 +382,100 @@ export default function DoctorHome() {
         loadJobRequirements();
         loadJobSessions();
     });
+
+    // Listen for application status updates to change status immediately without refresh
+    const applicationStatusSubscription = DeviceEventEmitter.addListener('APPLICATION_STATUS_UPDATED', (updateData: any) => {
+        console.log('🔄 [Dashboard] Application status updated:', updateData);
+        if (updateData && updateData.applicationId) {
+            // Update application status immediately
+            setMyApplications((prev: any[]) => {
+                const updated = prev.map((app: any) => {
+                    if (app.id === updateData.applicationId || app.job_requirement_id === updateData.requirementId) {
+                        const updatedApp = {
+                            ...app,
+                            status: updateData.status,
+                        };
+                        
+                        // If approved and session ID is provided, add job_session
+                        if (updateData.status === 'selected' && updateData.data?.job_session_id) {
+                            updatedApp.job_session = {
+                                id: updateData.data.job_session_id,
+                                status: 'scheduled',
+                                session_date: updateData.data.session_date || app.job_requirement?.work_required_date,
+                            };
+                        }
+                        
+                        return updatedApp;
+                    }
+                    return app;
+                });
+                
+                // If application not found in list, it might be a new approval - reload to get full data
+                const found = updated.some((app: any) => 
+                    app.id === updateData.applicationId || 
+                    (app.job_requirement_id === updateData.requirementId && app.status === updateData.status)
+                );
+                
+                if (!found) {
+                    console.log('ℹ️ [Dashboard] Application not in current list, will reload');
+                    // Reload applications to get the new one
+                    setTimeout(() => loadMyApplications(true), 500);
+                }
+                
+                // Update active jobs count if status changed to selected
+                if (updateData.status === 'selected') {
+                    const active = updated.filter((app: any) => 
+                        app.status === 'selected' && app.job_session?.status === 'active'
+                    ).length;
+                    setActiveJobsCount(active);
+                }
+                
+                return updated;
+            });
+            
+            console.log('✅ [Dashboard] Application status updated in UI');
+        }
+    });
+
+    // Listen for new job postings to add immediately without refresh
+    const newJobSubscription = DeviceEventEmitter.addListener('NEW_JOB_POSTED', (jobRequirement: any) => {
+        console.log('🆕 [Dashboard] New job posted, adding to opportunities:', jobRequirement);
+        if (jobRequirement && jobRequirement.id) {
+            // Check if this job matches doctor's departments
+            const doctorDepartmentIds = doctor?.departments?.map((d: any) => d.department_id || d.id) || [];
+            const jobDepartmentId = jobRequirement.department_id;
+            const jobDepartmentName = jobRequirement.department;
+            
+            // Add job if it matches doctor's departments or if doctor has no departments set
+            const shouldShow = doctorDepartmentIds.length === 0 || 
+                              (jobDepartmentId && doctorDepartmentIds.includes(jobDepartmentId)) ||
+                              (jobDepartmentName && doctor?.departments?.some((d: any) => 
+                                (d.department_id || d.id) === jobDepartmentId ||
+                                d.name === jobDepartmentName ||
+                                (d.department && d.department.name === jobDepartmentName)
+                              ));
+            
+            if (shouldShow) {
+                // Check if job already exists in the list
+                const exists = jobRequirements.some((req: any) => req.id === jobRequirement.id);
+                if (!exists) {
+                    // Ensure job requirement has all necessary fields
+                    const newJob = {
+                        ...jobRequirement,
+                        // Ensure hospital is included if available
+                        hospital: jobRequirement.hospital || null,
+                    };
+                    // Add new job to the beginning of the list
+                    setJobRequirements((prev: any[]) => [newJob, ...prev]);
+                    console.log('✅ [Dashboard] New job added to opportunities list:', newJob.id);
+                } else {
+                    console.log('ℹ️ [Dashboard] Job already exists in list:', jobRequirement.id);
+                }
+            } else {
+                console.log('ℹ️ [Dashboard] Job does not match doctor departments, skipping:', jobRequirement.id);
+            }
+        }
+    });
     
     const subscription = AppState.addEventListener("change", (nextAppState) => {
       if (nextAppState === "active") {
@@ -396,6 +490,8 @@ export default function DoctorHome() {
     return () => {
       subscription.remove();
       refreshSubscription.remove();
+      applicationStatusSubscription.remove();
+      newJobSubscription.remove();
       clearInterval(notificationInterval);
       stopTracking(); 
     };

@@ -20,10 +20,10 @@ import {
   CheckCircle,
   XCircle,
   LogIn,
-  Wallet,
   DollarSign,
   ArrowRight,
   AlertCircle,
+  Navigation,
 } from 'lucide-react-native';
 import { Image } from 'react-native';
 import { DoctorPrimaryColors as PrimaryColors, DoctorNeutralColors as NeutralColors, DoctorStatusColors as StatusColors } from '@/constants/doctor-theme';
@@ -214,13 +214,6 @@ export default function HistoryScreen() {
           style={styles.header}
       >
         <Text style={styles.headerTitle}>Job History</Text>
-        <TouchableOpacity
-          style={styles.walletButton}
-          onPress={() => router.push('/doctor/wallet' as any)}
-        >
-          <Wallet size={18} color={PrimaryColors.main} />
-          <Text style={styles.walletButtonText}>Wallet</Text>
-        </TouchableOpacity>
       </LinearGradient>
 
       {/* Sessions List */}
@@ -243,6 +236,7 @@ export default function HistoryScreen() {
             const hasCheckedOut = session.attendance?.check_out_time;
             const canCheckIn = session.status === 'scheduled' && !hasCheckedIn;
             const canCheckOut = hasCheckedIn && !hasCheckedOut;
+            const isActive = session.status === 'scheduled' || session.status === 'in_progress';
             const hospital = session.job_requirement?.hospital || session.jobRequirement?.hospital;
             const status = getDerivedStatus(session);
 
@@ -472,8 +466,17 @@ export default function HistoryScreen() {
                       <Text style={styles.actionButtonText}>Check In</Text>
                     </TouchableOpacity>
                   )}
+                  {isActive && (
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.trackingButton]}
+                      onPress={() => router.push('/live-tracking')}
+                    >
+                      <Navigation size={16} color="#fff" />
+                      <Text style={styles.actionButtonText}>Live Tracking</Text>
+                    </TouchableOpacity>
+                  )}
                   <TouchableOpacity
-                    style={[styles.actionButton, styles.detailsButton, !canCheckIn && styles.detailsButtonFull]}
+                    style={[styles.actionButton, styles.detailsButton, (!canCheckIn && !isActive) && styles.detailsButtonFull]}
                     onPress={() => {
                       if (session.application_id) {
                         router.push(`/job-detail/${session.application_id}`);
@@ -485,16 +488,6 @@ export default function HistoryScreen() {
                   </TouchableOpacity>
                 </View>
 
-                {/* Raise Dispute Button - Show for completed sessions */}
-                {session.status === 'completed' && (
-                  <TouchableOpacity
-                    style={styles.disputeButton}
-                    onPress={() => router.push(`/dispute/${session.id}` as any)}
-                  >
-                    <AlertCircle size={16} color={StatusColors.error} />
-                    <Text style={styles.disputeButtonText}>Raise Dispute</Text>
-                  </TouchableOpacity>
-                )}
               </View>
             );
           })
@@ -528,22 +521,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#ffffff', // White text
     letterSpacing: -0.3,
-  },
-  walletButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)', // Translucent white for button on gradient
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.4)',
-  },
-  walletButtonText: {
-    color: '#ffffff', // White text
-    fontWeight: '600',
-    fontSize: 13,
   },
   scrollView: {
     flex: 1,
@@ -756,6 +733,9 @@ const styles = StyleSheet.create({
   },
   checkInButton: {
     backgroundColor: StatusColors.success,
+  },
+  trackingButton: {
+    backgroundColor: PrimaryColors.main,
   },
   checkOutButton: {
     backgroundColor: '#f59e0b',

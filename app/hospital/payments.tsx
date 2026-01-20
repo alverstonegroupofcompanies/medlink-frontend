@@ -2,10 +2,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, RefreshControl, ScrollView, Image, StatusBar, Platform } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { ArrowLeft, CreditCard, Calendar, User, DollarSign, CheckCircle, Clock, AlertCircle, Building2, FileText, MapPin, TrendingUp, TrendingDown, ChevronDown } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { MaterialIcons } from '@expo/vector-icons';
 import API from '../api';
 import { ScreenSafeArea, useSafeBottomPadding } from '@/components/screen-safe-area';
 import { HospitalPrimaryColors as PrimaryColors } from '@/constants/hospital-theme';
 import { BASE_BACKEND_URL } from '@/config/api';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function PaymentHistoryScreen() {
   const router = useRouter();
@@ -14,6 +17,7 @@ export default function PaymentHistoryScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'held' | 'released'>('all');
   const safeBottomPadding = useSafeBottomPadding();
+  const insets = useSafeAreaInsets();
 
   const loadPayments = async () => {
     try {
@@ -49,7 +53,83 @@ export default function PaymentHistoryScreen() {
         }
       }
       
-      setPayments(paymentsData);
+      // Group payments to ensure one transaction per payment
+      // Group by: job_session_id + doctor_id + amount (same payment = same transaction)
+      const groupedPayments = new Map<string, any>();
+      const statusPriority: { [key: string]: number } = {
+        'paid': 4,
+        'released': 3,
+        'held': 2,
+        'in_escrow': 2,
+        'pending': 1,
+        'failed': 0,
+        'refunded': 0,
+      };
+      
+      paymentsData.forEach((payment: any) => {
+        // Create unique key: job_session_id + doctor_id + amount
+        // Same session + same doctor + same amount = same payment
+        const sessionId = payment.job_session?.id || payment.job_session_id;
+        const doctorId = payment.doctor_id || payment.doctor?.id || payment.job_session?.doctor_id;
+        const amount = payment.amount?.toFixed(2) || '0.00';
+        
+        // Group key: session + doctor + amount
+        const groupKey = sessionId && doctorId
+          ? `session_${sessionId}_doctor_${doctorId}_amount_${amount}`
+          : payment.id
+          ? `payment_${payment.id}`
+          : `fallback_${doctorId}_${amount}_${payment.created_at}`;
+        
+        if (!groupedPayments.has(groupKey)) {
+          // First payment for this group
+          groupedPayments.set(groupKey, payment);
+        } else {
+          // Merge with existing - keep the one with highest status priority
+          const existing = groupedPayments.get(groupKey);
+          const existingStatus = (existing.status || existing.payment_status || '').toLowerCase();
+          const newStatus = (payment.status || payment.payment_status || '').toLowerCase();
+          
+          const existingPriority = statusPriority[existingStatus] || 0;
+          const newPriority = statusPriority[newStatus] || 0;
+          
+          // Keep the payment with higher priority status
+          if (newPriority > existingPriority) {
+            groupedPayments.set(groupKey, payment);
+          } else if (newPriority === existingPriority) {
+            // If same priority, keep the one with more recent date
+            const existingDate = existing.released_at || existing.paid_at || existing.created_at;
+            const newDate = payment.released_at || payment.paid_at || payment.created_at;
+            if (newDate > existingDate) {
+              groupedPayments.set(groupKey, payment);
+            }
+          }
+        }
+      });
+      
+      // Convert map to array, filter to show only released/paid transactions, and sort by created_at (newest first)
+      const uniquePayments = Array.from(groupedPayments.values())
+        .filter((payment: any) => {
+          // Only show released or paid transactions (hide held/pending/processing)
+          const status = (payment.status || payment.payment_status || '').toLowerCase();
+          return status === 'released' || status === 'paid';
+        })
+        .sort((a, b) => {
+          const dateA = new Date(a.created_at || 0).getTime();
+          const dateB = new Date(b.created_at || 0).getTime();
+          return dateB - dateA;
+        });
+      
+      if (__DEV__) {
+        console.log(`📊 Grouped ${paymentsData.length} payments into ${uniquePayments.length} released transactions`);
+        uniquePayments.forEach((p, idx) => {
+          if (idx < 5) {
+            const dept = p.job_requirement?.department || p.job_session?.job_requirement?.department || 'N/A';
+            console.log(`Transaction ${idx + 1}: ID=${p.id}, Status=${p.status || p.payment_status}, Amount=${p.amount}, Dept=${dept}, Session=${p.job_session?.id}`);
+          }
+        });
+      }
+      
+      setPayments(uniquePayments);
     } catch (error) {
       if (__DEV__) {
         console.error('Error loading payments:', error);
@@ -67,9 +147,9 @@ export default function PaymentHistoryScreen() {
   // Ensure status bar is always blue
   useFocusEffect(
     useCallback(() => {
+      StatusBar.setBarStyle('light-content', true);
       if (Platform.OS === 'android') {
-        StatusBar.setBackgroundColor('#0066FF', true);
-        StatusBar.setBarStyle('light-content', true);
+        StatusBar.setBackgroundColor('#2563EB', true);
         StatusBar.setTranslucent(false);
       }
     }, [])
@@ -94,15 +174,18 @@ export default function PaymentHistoryScreen() {
   };
 
   const getStatusLabel = (status: string) => {
-    switch (status) {
+    // Normalize status - check both status and payment_status fields
+    const normalizedStatus = (status || '').toLowerCase();
+    
+    switch (normalizedStatus) {
       case 'released':
-      case 'paid': return 'Released';
+      case 'paid': return 'Completed';
       case 'held':
-      case 'in_escrow': return 'Held';
+      case 'in_escrow': return 'Processing';
       case 'pending': return 'Pending';
       case 'failed': return 'Failed';
       case 'refunded': return 'Refunded';
-      default: return status.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+      default: return status ? status.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()) : 'Unknown';
     }
   };
 
@@ -152,75 +235,68 @@ export default function PaymentHistoryScreen() {
   };
 
   // Helper function to get doctor name
-  const getDoctorId = (item: any) => {
+  const getDoctorName = (item: any) => {
     const jobSession = item.job_session;
     const doctor = item.doctor;
     
-    // Debug logging
-    if (__DEV__) {
-      console.log('🔍 getDoctorId - Payment ID:', item.id);
-      console.log('   - item.doctor_id:', item.doctor_id);
-      console.log('   - item.doctor:', doctor);
-      console.log('   - item.job_session:', jobSession);
-      console.log('   - jobSession?.doctor_id:', jobSession?.doctor_id);
-      console.log('   - jobSession?.doctor:', jobSession?.doctor);
+    // Priority 1: Get name from jobSession.doctor
+    if (jobSession?.doctor?.name) {
+      return jobSession.doctor.name;
     }
     
-    // Priority 1: Get ID from jobSession.doctor
+    // Priority 2: Get name from direct payment.doctor relationship
+    if (doctor?.name) {
+      return doctor.name;
+    }
+    
+    // Priority 3: Fallback to doctor ID if name not available
     if (jobSession?.doctor?.id) {
-      if (__DEV__) console.log('   ✅ Found doctor ID from jobSession.doctor.id:', jobSession.doctor.id);
       return `Doctor ID: ${jobSession.doctor.id}`;
     }
     
-    // Priority 2: Get ID from direct payment.doctor relationship
     if (doctor?.id) {
-      if (__DEV__) console.log('   ✅ Found doctor ID from doctor.id:', doctor.id);
       return `Doctor ID: ${doctor.id}`;
     }
     
-    // Priority 3: Fallback to doctor_id fields
     if (jobSession?.doctor_id) {
-      if (__DEV__) console.log('   ✅ Found doctor ID from jobSession.doctor_id:', jobSession.doctor_id);
       return `Doctor ID: ${jobSession.doctor_id}`;
     }
     
     if (item.doctor_id) {
-      if (__DEV__) console.log('   ✅ Found doctor ID from item.doctor_id:', item.doctor_id);
       return `Doctor ID: ${item.doctor_id}`;
     }
     
-    if (__DEV__) console.log('   ❌ No doctor ID found for payment:', item.id);
     return null;
   };
 
   const renderItem = ({ item, index }: { item: any; index: number }) => {
-    const isHeld = item.status === 'held' || item.status === 'in_escrow' || item.status === 'pending';
-    const isReleased = item.status === 'released' || item.status === 'paid';
+    // Get status from either status or payment_status field
+    const paymentStatus = item.status || item.payment_status || 'pending';
+    const isHeld = paymentStatus === 'held' || paymentStatus === 'in_escrow' || paymentStatus === 'pending';
+    const isReleased = paymentStatus === 'released' || paymentStatus === 'paid';
     const jobSession = item.job_session;
     const jobRequirement = item.job_requirement;
     const isExpanded = expandedItems.has(item.id);
     const hasDetails = jobSession || jobRequirement;
-    const doctorId = getDoctorId(item);
+    const doctorName = getDoctorName(item);
     const department = jobRequirement?.department || jobSession?.job_requirement?.department;
     
     // Debug logging for render
     if (__DEV__ && index === 0) {
       console.log('🎨 Rendering payment item:', item.id);
-      console.log('   - doctorId result:', doctorId);
+      console.log('   - doctorName result:', doctorName);
       console.log('   - item.doctor:', item.doctor);
       console.log('   - item.job_session:', item.job_session);
       console.log('   - item.job_session?.doctor:', item.job_session?.doctor);
+      console.log('   - item.job_session?.doctor?.name:', item.job_session?.doctor?.name);
     }
     
-    // Get payment description
+    // Get payment description - show department
     const getPaymentDescription = () => {
       if (department) {
         return `Payment for ${department}`;
       }
-      if (jobSession?.session_date) {
-        return `Payment for job session`;
-      }
-      return 'Payment';
+      return 'Payment Released';
     };
 
     return (
@@ -243,20 +319,12 @@ export default function PaymentHistoryScreen() {
               <Text style={styles.transactionDescription} numberOfLines={1}>
                 {getPaymentDescription()}
               </Text>
-              {(() => {
-                if (__DEV__ && index === 0) {
-                  console.log('📝 Rendering doctor ID section for payment:', item.id);
-                  console.log('   - doctorId value:', doctorId);
-                  console.log('   - doctorId type:', typeof doctorId);
-                  console.log('   - Will render?', !!doctorId);
-                }
-                return doctorId ? (
-                  <Text style={styles.transactionDoctor} numberOfLines={1}>
-                    {doctorId}
-                  </Text>
-                ) : null;
-              })()}
-              {department && !doctorId && (
+              {doctorName ? (
+                <Text style={styles.transactionDoctor} numberOfLines={1}>
+                  {doctorName}
+                </Text>
+              ) : null}
+              {department && !doctorName && (
                 <Text style={styles.transactionDoctor} numberOfLines={1}>
                   {department}
                 </Text>
@@ -268,7 +336,7 @@ export default function PaymentHistoryScreen() {
                 <Text style={[styles.transactionStatusText, { 
                   color: isReleased ? '#16A34A' : isHeld ? '#F59E0B' : '#6B7280' 
                 }]}>
-                  {getStatusLabel(item.status)}
+                  {getStatusLabel(paymentStatus)}
                 </Text>
               </View>
             </View>
@@ -308,10 +376,10 @@ export default function PaymentHistoryScreen() {
                 }) : 'N/A'}
               </Text>
             </View>
-            {doctorId && (
+            {doctorName && (
               <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Doctor ID:</Text>
-                <Text style={styles.detailValue}>{doctorId.replace('Doctor ID: ', '')}</Text>
+                <Text style={styles.detailLabel}>Doctor:</Text>
+                <Text style={styles.detailValue}>{doctorName.replace('Doctor ID: ', '')}</Text>
               </View>
             )}
             {department && (
@@ -383,17 +451,26 @@ export default function PaymentHistoryScreen() {
     );
   };
 
+  const releasedAmount = payments
+    .filter(p => p.status === 'released' || p.status === 'paid')
+    .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+
   return (
-    <ScreenSafeArea style={styles.container} backgroundColor="#F8FAFC" statusBarStyle="light-content">
-      <StatusBar barStyle="light-content" backgroundColor="#0066FF" translucent={false} />
+    <ScreenSafeArea style={styles.container} backgroundColor="#2563EB" statusBarStyle="light-content">
+      <StatusBar barStyle="light-content" backgroundColor="#2563EB" translucent={false} />
       
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <ArrowLeft size={24} color="#0F172A" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Payment History</Text>
-        <View style={{ width: 24 }} />
+      {/* Header with Blue Background */}
+      <View style={[styles.headerContainer, { paddingTop: insets.top + 12 }]}>
+        <View style={styles.headerContent}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <ArrowLeft size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.headerTitle}>Payments</Text>
+            <Text style={styles.headerSubtitle}>Manage your payment history</Text>
+          </View>
+          <View style={{ width: 40 }} />
+        </View>
       </View>
 
       {loading ? (
@@ -403,72 +480,119 @@ export default function PaymentHistoryScreen() {
       ) : (
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: safeBottomPadding + 20 }]}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          contentContainerStyle={[styles.scrollContent, { paddingTop: 16, paddingBottom: safeBottomPadding + 20 }]}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={PrimaryColors.main} />}
+          showsVerticalScrollIndicator={false}
         >
-          {/* Stats Cards */}
-          <View style={styles.statsContainer}>
-            <View style={styles.statCard}>
-              <View style={[styles.statIconContainer, { backgroundColor: '#EFF6FF' }]}>
-                <DollarSign size={20} color={PrimaryColors.main} />
-              </View>
-              <Text style={styles.statValue}>₹{stats.totalAmount.toFixed(2)}</Text>
-              <Text style={styles.statLabel}>Total Paid</Text>
-            </View>
-            <View style={styles.statCard}>
-              <View style={[styles.statIconContainer, { backgroundColor: '#FEF3C7' }]}>
-                <Clock size={20} color="#F59E0B" />
-              </View>
-              <Text style={styles.statValue}>₹{stats.heldAmount.toFixed(2)}</Text>
-              <Text style={styles.statLabel}>Held</Text>
-            </View>
-            <View style={styles.statCard}>
-              <View style={[styles.statIconContainer, { backgroundColor: '#D1FAE5' }]}>
-                <CheckCircle size={20} color="#16A34A" />
-              </View>
-              <Text style={styles.statValue}>{stats.released}</Text>
-              <Text style={styles.statLabel}>Released</Text>
-            </View>
-          </View>
-
-          {/* Filter Buttons */}
-          <View style={styles.filterContainer}>
-            {(['all', 'held', 'released'] as const).map((filterType) => (
-              <TouchableOpacity
-                key={filterType}
-                style={[styles.filterButton, filter === filterType && styles.filterButtonActive]}
-                onPress={() => setFilter(filterType)}
-              >
-                <Text style={[styles.filterText, filter === filterType && styles.filterTextActive]}>
-                  {filterType.charAt(0).toUpperCase() + filterType.slice(1)}
-                </Text>
-                {filterType !== 'all' && (
-                  <View style={[styles.filterBadge, filter === filterType && styles.filterBadgeActive]}>
-                    <Text style={[styles.filterBadgeText, filter === filterType && styles.filterBadgeTextActive]}>
-                      {filterType === 'held' ? stats.held : stats.released}
-                    </Text>
+          {/* Dashboard Cards - Combined Card */}
+          <View style={styles.dashboardContainer}>
+            <View style={styles.dashboardRow}>
+              <View style={styles.dashboardCardPrimaryFull}>
+                <LinearGradient
+                  colors={['#2563EB', '#1D4ED8']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.dashboardGradient}
+                >
+                  <View style={styles.dashboardCardHeader}>
+                    <View style={styles.dashboardIconCircle}>
+                      <MaterialIcons name="account-balance-wallet" size={24} color="#FFFFFF" />
+                    </View>
+                    <View style={styles.dashboardCardHeaderText}>
+                      <Text style={styles.dashboardCardTitle}>Payment Summary</Text>
+                      <Text style={styles.dashboardCardSubtitle}>Total, Held & Released</Text>
+                    </View>
                   </View>
-                )}
-              </TouchableOpacity>
-            ))}
+                  
+                  {/* Three Column Layout */}
+                  <View style={styles.paymentSummaryRow}>
+                    {/* Total Paid */}
+                    <View style={styles.paymentSummaryCol}>
+                      <Text style={styles.paymentSummaryLabel}>Total Paid</Text>
+                      <Text
+                        style={styles.paymentSummaryAmount}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.7}
+                      >
+                        ₹{stats.totalAmount.toFixed(2)}
+                      </Text>
+                    </View>
+
+                    <View style={styles.paymentSummaryDivider} />
+
+                    {/* Held */}
+                    <View style={styles.paymentSummaryCol}>
+                      <Text style={styles.paymentSummaryLabel}>Held</Text>
+                      <Text
+                        style={styles.paymentSummaryAmount}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.7}
+                      >
+                        ₹{stats.heldAmount.toFixed(2)}
+                      </Text>
+                      <Text style={styles.paymentSummaryHint}>In escrow</Text>
+                    </View>
+
+                    <View style={styles.paymentSummaryDivider} />
+
+                    {/* Released */}
+                    <View style={styles.paymentSummaryCol}>
+                      <Text style={styles.paymentSummaryLabel}>Released</Text>
+                      <Text
+                        style={styles.paymentSummaryAmount}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.7}
+                      >
+                        ₹{releasedAmount.toFixed(2)}
+                      </Text>
+                    </View>
+                  </View>
+                </LinearGradient>
+              </View>
+            </View>
           </View>
 
-          {/* Payments List */}
-          {filteredPayments.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <CreditCard size={64} color="#CBD5E1" />
-              <Text style={styles.emptyText}>No payments found</Text>
-              <Text style={styles.emptySubtext}>
-                {filter === 'all' 
-                  ? 'You haven\'t made any payments yet'
-                  : `No ${filter} payments at the moment`}
-              </Text>
+          {/* Payment History Section */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Payment History</Text>
             </View>
-          ) : (
-            <View style={styles.transactionsSection}>
-              {filteredPayments.map((item, index) => renderItem({ item, index }))}
+
+            {/* Filter Buttons */}
+            <View style={styles.filterContainer}>
+              {(['all', 'held', 'released'] as const).map((filterType) => (
+                <TouchableOpacity
+                  key={filterType}
+                  style={[styles.filterButton, filter === filterType && styles.filterButtonActive]}
+                  onPress={() => setFilter(filterType)}
+                >
+                  <Text style={[styles.filterButtonText, filter === filterType && styles.filterButtonTextActive]}>
+                    {filterType.charAt(0).toUpperCase() + filterType.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
-          )}
+
+            {/* Payments List */}
+            {filteredPayments.length === 0 ? (
+              <View style={styles.emptyState}>
+                <MaterialIcons name="receipt-long" size={64} color="#e0e0e0" />
+                <Text style={styles.emptyText}>No payments found</Text>
+                <Text style={styles.emptySubtext}>
+                  {filter === 'all' 
+                    ? 'You haven\'t made any payments yet'
+                    : `No ${filter} payments at the moment`}
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.transactionsSection}>
+                {filteredPayments.map((item, index) => renderItem({ item, index }))}
+              </View>
+            )}
+          </View>
         </ScrollView>
       )}
     </ScreenSafeArea>
@@ -480,22 +604,32 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8FAFC',
   },
-  header: {
+  headerContainer: {
+    backgroundColor: '#2563EB',
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+  },
+  headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 16,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+  },
+  headerTextContainer: {
+    flex: 1,
+    alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 28,
     fontWeight: '700',
-    color: '#0F172A',
-    letterSpacing: -0.3,
+    color: '#FFFFFF',
+    letterSpacing: -0.5,
+    lineHeight: 38,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginTop: 4,
+    fontWeight: '400',
   },
   backBtn: {
     padding: 8,
@@ -510,104 +644,255 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
+    paddingHorizontal: 16,
     paddingBottom: 40,
   },
   transactionsSection: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 20,
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
   
-  // Stats Container
-  statsContainer: {
+  // Dashboard Cards - Similar to Wallet
+  dashboardContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 20,
+    gap: 12,
+  },
+  dashboardRow: {
     flexDirection: 'row',
     gap: 12,
-    marginBottom: 20,
   },
-  statCard: {
+  dashboardCardPrimary: {
+    flex: 1,
+    borderRadius: 24,
+    overflow: 'hidden',
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  dashboardCardSecondary: {
+    flex: 1,
+    borderRadius: 24,
+    overflow: 'hidden',
+    shadowColor: '#F59E0B',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  dashboardCardTertiary: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-    padding: 16,
-    borderRadius: 16,
-    alignItems: 'center',
+    borderRadius: 18,
+    padding: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#F3F4F6',
   },
-  statIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  dashboardGradient: {
+    padding: 20,
+    minHeight: 160,
+    justifyContent: 'space-between',
+  },
+  dashboardCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+  dashboardIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginRight: 12,
+    flexShrink: 0,
   },
-  statValue: {
-    fontSize: 18,
+  dashboardCardHeaderText: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  dashboardCardTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
     fontWeight: '700',
-    color: '#0F172A',
+    letterSpacing: 0.2,
+    marginBottom: 4,
+    lineHeight: 20,
+  },
+  dashboardCardSubtitle: {
+    color: 'rgba(255, 255, 255, 0.85)',
+    fontSize: 12,
+    fontWeight: '500',
+    lineHeight: 16,
+  },
+  dashboardCardAmount: {
+    fontSize: 36,
+    lineHeight: 44,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -1,
+    marginBottom: 14,
+    marginTop: 4,
+  },
+  dashboardCardAmountSmall: {
+    fontSize: 28,
+    lineHeight: 36,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.8,
+    marginTop: 8,
+  },
+  dashboardCardPrimaryFull: {
+    flex: 1,
+    borderRadius: 24,
+    overflow: 'hidden',
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  paymentSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginTop: 8,
     marginBottom: 4,
   },
-  statLabel: {
+  paymentSummaryCol: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: 'center',
+  },
+  paymentSummaryDivider: {
+    width: 1,
+    alignSelf: 'stretch',
+    backgroundColor: 'rgba(255,255,255,0.28)',
+    borderRadius: 1,
+    marginVertical: 4,
+  },
+  paymentSummaryLabel: {
+    color: 'rgba(255, 255, 255, 0.85)',
     fontSize: 12,
-    color: '#64748B',
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  paymentSummaryAmount: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+    textAlign: 'center',
+  },
+  paymentSummaryHint: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 10,
     fontWeight: '500',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  dashboardCardContent: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  dashboardIconSquare: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+  },
+  dashboardCardBody: {
+    flex: 1,
+  },
+  dashboardCardLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginBottom: 8,
+    letterSpacing: 0.1,
+  },
+  dashboardCardValue: {
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: '800',
+    color: '#1F2937',
+    letterSpacing: -0.5,
+  },
+  section: {
+    backgroundColor: '#FFFFFF',
+    padding: 20,
+    borderRadius: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  sectionHeader: {
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1F2937',
+    letterSpacing: -0.3,
+    lineHeight: 24,
   },
 
   // Filter Container
   filterContainer: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 12,
     marginBottom: 20,
   },
   filterButton: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
     paddingVertical: 10,
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     borderRadius: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F3F4F6',
     borderWidth: 1,
     borderColor: '#E5E7EB',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   filterButtonActive: {
     backgroundColor: PrimaryColors.main,
     borderColor: PrimaryColors.main,
   },
-  filterText: {
+  filterButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#64748B',
+    color: '#6B7280',
   },
-  filterTextActive: {
-    color: '#FFFFFF',
-  },
-  filterBadge: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-    minWidth: 24,
-    alignItems: 'center',
-  },
-  filterBadgeActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  filterBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#64748B',
-  },
-  filterBadgeTextActive: {
+  filterButtonTextActive: {
     color: '#FFFFFF',
   },
 
-  // Bank Transaction Style
+  // Transaction Style - Matching Wallet
   transactionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -653,16 +938,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1F2937',
     marginBottom: 4,
+    lineHeight: 20,
   },
   transactionDoctor: {
     fontSize: 13,
     color: '#6B7280',
     marginBottom: 6,
+    lineHeight: 18,
   },
   transactionStatusRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    marginTop: 2,
   },
   transactionStatusDot: {
     width: 6,
@@ -672,6 +960,20 @@ const styles = StyleSheet.create({
   transactionStatusText: {
     fontSize: 12,
     fontWeight: '500',
+    lineHeight: 16,
+  },
+  stagesIndicator: {
+    marginLeft: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    borderRadius: 8,
+  },
+  stagesText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#3B82F6',
+    letterSpacing: 0.2,
   },
   transactionRight: {
     alignItems: 'flex-end',
@@ -688,6 +990,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: -0.2,
     textAlign: 'right',
+    lineHeight: 22,
   },
   transactionDivider: {
     height: 1,
@@ -700,19 +1003,20 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 8,
     marginLeft: 66,
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   detailLabel: {
     fontSize: 13,
     color: '#6B7280',
     fontWeight: '500',
+    lineHeight: 18,
   },
   detailValue: {
     fontSize: 13,
@@ -720,10 +1024,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     flex: 1,
     textAlign: 'right',
+    lineHeight: 18,
   },
 
   // Empty State
-  emptyContainer: {
+  emptyState: {
     alignItems: 'center',
     paddingVertical: 80,
     paddingHorizontal: 40,

@@ -66,6 +66,16 @@ export default function TabLayout() {
                       data: e.data
                   });
 
+                  // Emit specific event with application update data for immediate UI update
+                  if (e.data && e.status) {
+                      DeviceEventEmitter.emit('APPLICATION_STATUS_UPDATED', {
+                          applicationId: e.data.job_application_id,
+                          requirementId: e.data.job_requirement_id,
+                          status: e.status,
+                          data: e.data
+                      });
+                  }
+
                   // Trigger global refresh
                   DeviceEventEmitter.emit('REFRESH_DOCTOR_DATA');
               })
@@ -81,6 +91,11 @@ export default function TabLayout() {
                       type: 'info',
                       data: { type: 'new_job_posting', ...e.jobRequirement }
                   });
+
+                  // Emit specific event with job data for immediate UI update
+                  if (e.jobRequirement) {
+                      DeviceEventEmitter.emit('NEW_JOB_POSTED', e.jobRequirement);
+                  }
 
                   // Trigger global refresh
                   DeviceEventEmitter.emit('REFRESH_DOCTOR_DATA');
@@ -226,6 +241,26 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="settings"
+        options={{
+          title: 'Settings',
+          tabBarIcon: ({ color, focused }) => (
+            <View
+              style={{
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                backgroundColor: focused ? 'rgba(0, 102, 255, 0.1)' : 'transparent',
+              }}
+            >
+              <MaterialIcons name="settings" size={24} color={color} />
+            </View>
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="more"
         options={{
           href: null, // Hide from tab bar
@@ -260,8 +295,14 @@ export default function TabLayout() {
       <Tabs.Screen
         name="dispute"
         options={{
+          tabBarButton: () => null, // Completely hide from tab bar
+        }}
+      />
+      {/* Hide dynamic dispute route that was showing as "dispute/[sess...]" in bottom bar */}
+      <Tabs.Screen
+        name="dispute/[sessionId]"
+        options={{
           href: null,
-          tabBarStyle: { display: 'none' },
         }}
       />
     </Tabs>

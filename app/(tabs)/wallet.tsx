@@ -3,6 +3,7 @@ import { View, ScrollView, StyleSheet, RefreshControl, TouchableOpacity, Alert, 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useFocusEffect } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DoctorPrimaryColors as PrimaryColors } from '@/constants/doctor-theme';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -12,7 +13,7 @@ import API from '../api';
 import echo from '@/services/echo';
 import { getDoctorInfo } from '@/utils/auth';
 import { showNotificationFromData } from '@/utils/notifications';
-import { ScreenSafeArea } from '@/components/screen-safe-area';
+import { ScreenSafeArea, useSafeBottomPadding } from '@/components/screen-safe-area';
 
 interface WalletData {
   balance: number;
@@ -57,6 +58,8 @@ interface BankingDetails {
 }
 
 export default function WalletScreen() {
+  const insets = useSafeAreaInsets();
+  const safeBottomPadding = useSafeBottomPadding();
   const [wallet, setWallet] = useState<WalletData | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [bankingDetails, setBankingDetails] = useState<BankingDetails | null>(null);
@@ -244,13 +247,14 @@ export default function WalletScreen() {
 
   if (loading) {
     return (
-      <View style={styles.mainContainer}>
+      <ScreenSafeArea backgroundColor="#2563EB" statusBarStyle="light-content" style={styles.mainContainer}>
+        <StatusBar barStyle="light-content" backgroundColor="#2563EB" translucent={false} animated={true} />
         <ThemedView style={styles.container}>
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={PrimaryColors.main} />
           </View>
         </ThemedView>
-      </View>
+      </ScreenSafeArea>
     );
   }
 
@@ -259,11 +263,20 @@ export default function WalletScreen() {
       <StatusBar barStyle="light-content" backgroundColor="#2563EB" translucent={false} animated={true} />
       
       {/* Header with Blue Background */}
-      <View style={styles.headerContainer}>
+      <View style={[styles.headerContainer, { paddingTop: Math.max(insets.top + 12, 20) }]}>
         <View style={styles.headerContent}>
           <View>
-            <ThemedText style={styles.headerTitle}>My Wallet</ThemedText>
-            <ThemedText style={styles.headerSubtitle}>Manage your earnings & payments</ThemedText>
+            <ThemedText
+              style={styles.headerTitle}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.85}
+            >
+              My Wallet
+            </ThemedText>
+            <ThemedText style={styles.headerSubtitle} numberOfLines={2}>
+              Manage your earnings & payments
+            </ThemedText>
           </View>
         </View>
       </View>
@@ -273,87 +286,127 @@ export default function WalletScreen() {
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={PrimaryColors.main} />
           }
-          contentContainerStyle={[styles.scrollContent, { paddingTop: 16 }]}
+          contentContainerStyle={[styles.scrollContent, { paddingTop: 16, paddingBottom: safeBottomPadding + 20 }]}
           showsVerticalScrollIndicator={false}
         >
-          {/* Balance Cards */}
-          <View style={styles.balanceContainer}>
-            {/* Available Balance - Colored Card */}
-            <View style={styles.balanceCard}>
-              <View style={styles.balanceHeader}>
-                <View style={styles.balanceIconContainer}>
-                  <MaterialIcons name="account-balance-wallet" size={22} color="#FFFFFF" />
-                </View>
-                <ThemedText style={styles.balanceLabel}>Available Balance</ThemedText>
-              </View>
-              <View style={styles.balanceAmountContainer}>
-                <ThemedText style={styles.balanceAmount}>
-                  ₹{wallet?.balance.toFixed(2) || '0.00'}
-                </ThemedText>
-              </View>
-              <TouchableOpacity
-                style={styles.withdrawButton}
-                onPress={() => {
-                  if (!bankingDetails?.has_banking_details) {
-                    Alert.alert(
-                      'Banking Details Required',
-                      'Please add your banking details before withdrawing',
-                      [
-                        { text: 'Cancel', style: 'cancel' },
-                        { text: 'Add Now', onPress: () => setShowBankingForm(true) },
-                      ]
-                    );
-                  } else if ((wallet?.balance || 0) < 100) {
-                    Alert.alert('Insufficient Balance', 'Minimum withdrawal amount is ₹100');
-                  } else {
-                    setShowWithdrawal(true);
-                  }
-                }}
-              >
-                <MaterialIcons name="account-balance" size={18} color="#FFFFFF" />
-                <ThemedText style={styles.withdrawButtonText}>Withdraw to Bank</ThemedText>
-              </TouchableOpacity>
-            </View>
-
-            {/* Pending Balance - Colored Card */}
-            {wallet?.pending_balance > 0 && (
-              <View style={styles.pendingCard}>
-                <View style={styles.pendingHeader}>
-                  <View style={styles.pendingIconContainer}>
-                    <MaterialIcons name="schedule" size={20} color="#FFFFFF" />
+          {/* Dashboard Cards */}
+          <View style={styles.dashboardContainer}>
+            {/* Row 1: Combined Available + Pending (single card) */}
+            <View style={styles.dashboardRow}>
+              <View style={styles.dashboardCardPrimaryFull}>
+                <LinearGradient
+                  colors={['#2563EB', '#1D4ED8']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.dashboardGradient}
+                >
+                  <View style={styles.dashboardCardHeader}>
+                    <View style={styles.dashboardIconCircle}>
+                      <MaterialIcons name="account-balance-wallet" size={24} color="#FFFFFF" />
+                    </View>
+                    <View style={styles.dashboardCardHeaderText}>
+                      <ThemedText style={styles.dashboardCardTitle}>Wallet Balance</ThemedText>
+                      <ThemedText style={styles.dashboardCardSubtitle}>Available + Pending</ThemedText>
+                    </View>
                   </View>
-                  <ThemedText style={styles.pendingLabel}>Pending</ThemedText>
-                </View>
-                <ThemedText style={styles.pendingAmount}>
-                  ₹{wallet?.pending_balance.toFixed(2) || '0.00'}
-                </ThemedText>
-                <ThemedText style={styles.pendingNote}>
-                  Processing payment
-                </ThemedText>
-              </View>
-            )}
-          </View>
+                  
+                  <View style={styles.balanceSplitRow}>
+                    <View style={styles.balanceSplitCol}>
+                      <ThemedText style={styles.balanceSplitLabel}>Available</ThemedText>
+                      <ThemedText
+                        style={styles.balanceSplitAmount}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.65}
+                      >
+                        ₹{wallet?.balance.toFixed(2) || '0.00'}
+                      </ThemedText>
+                    </View>
 
-          {/* Stats - Colored Cards */}
-          <View style={styles.statsContainer}>
-            <View style={styles.statCard}>
-              <View style={styles.statIconContainer}>
-                <MaterialIcons name="trending-up" size={22} color="#FFFFFF" />
+                    <View style={styles.balanceSplitDivider} />
+
+                    <View style={styles.balanceSplitCol}>
+                      <ThemedText style={styles.balanceSplitLabel}>Pending</ThemedText>
+                      <ThemedText
+                        style={styles.balanceSplitAmount}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.65}
+                      >
+                        ₹{wallet?.pending_balance.toFixed(2) || '0.00'}
+                      </ThemedText>
+                      <ThemedText style={styles.balanceSplitHint}>Processing</ThemedText>
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    style={styles.dashboardCtaButton}
+                    onPress={() => {
+                      if (!bankingDetails?.has_banking_details) {
+                        Alert.alert(
+                          'Banking Details Required',
+                          'Please add your banking details before withdrawing',
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            { text: 'Add Now', onPress: () => setShowBankingForm(true) },
+                          ]
+                        );
+                      } else if ((wallet?.balance || 0) < 100) {
+                        Alert.alert('Insufficient Balance', 'Minimum withdrawal amount is ₹100');
+                      } else {
+                        setShowWithdrawal(true);
+                      }
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <MaterialIcons name="account-balance" size={16} color="#2563EB" />
+                    <ThemedText style={styles.dashboardCtaText}>Withdraw</ThemedText>
+                  </TouchableOpacity>
+                </LinearGradient>
               </View>
-              <ThemedText style={styles.statValue}>
-                ₹{wallet?.total_earned.toFixed(2) || '0.00'}
-              </ThemedText>
-              <ThemedText style={styles.statLabel}>Total Earned</ThemedText>
             </View>
 
-            <View style={[styles.statCard, styles.statCardWithdrawn]}>
-              <View style={styles.statIconContainer}>
-                <MaterialIcons name="account-balance" size={22} color="#FFFFFF" />
+            {/* Row 2: Total Earned & Total Withdrawn */}
+            <View style={styles.dashboardRow}>
+              {/* Total Earned */}
+              <View style={styles.dashboardCardTertiary}>
+                <View style={styles.dashboardCardContent}>
+                  <View style={styles.dashboardIconSquare}>
+                    <MaterialIcons name="trending-up" size={20} color="#10B981" />
+                  </View>
+                  <View style={styles.dashboardCardBody}>
+                    <ThemedText style={styles.dashboardCardLabel}>Total Earned</ThemedText>
+                    <ThemedText
+                      style={styles.dashboardCardValue}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.75}
+                    >
+                      ₹{wallet?.total_earned.toFixed(2) || '0.00'}
+                    </ThemedText>
+                  </View>
+                </View>
               </View>
-              <ThemedText style={styles.statValue}>
-                ₹{wallet?.total_withdrawn.toFixed(2) || '0.00'}
-              </ThemedText>
-              <ThemedText style={styles.statLabel}>Total Withdrawn</ThemedText>
+
+              {/* Total Withdrawn */}
+              <View style={styles.dashboardCardTertiary}>
+                <View style={styles.dashboardCardContent}>
+                  <View style={[styles.dashboardIconSquare, styles.dashboardIconSquareWithdrawn]}>
+                    <MaterialIcons name="account-balance" size={20} color="#2563EB" />
+                  </View>
+                  <View style={styles.dashboardCardBody}>
+                    <ThemedText style={styles.dashboardCardLabel}>Total Withdrawn</ThemedText>
+                    <ThemedText
+                      style={styles.dashboardCardValue}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.75}
+                    >
+                      ₹{wallet?.total_withdrawn.toFixed(2) || '0.00'}
+                    </ThemedText>
+                  </View>
+                </View>
+              </View>
             </View>
           </View>
 
@@ -406,6 +459,7 @@ export default function WalletScreen() {
                   const isExpanded = expandedTransactionId === transaction.id;
                   const hasDetails = transaction.job_session?.hospital;
                   const paymentStatus = transaction.payment_approval_status;
+                  const hospitalName = transaction.job_session?.hospital?.name;
                   
                   // Simple status - no admin mentions
                   const getSimpleStatus = () => {
@@ -420,6 +474,31 @@ export default function WalletScreen() {
                       return 'Pending';
                     }
                     return transaction.status;
+                  };
+
+                  // Make "who pays who" clear for users
+                  const getFlowLine = () => {
+                    if (transaction.type === 'withdrawal') return 'You → Bank';
+                    if (transaction.type === 'hold') return 'Hospital → Escrow';
+                    if (transaction.type === 'release') return 'Escrow → You';
+                    if (transaction.type === 'credit') return 'Hospital → You';
+                    if (transaction.type === 'debit') return 'You → Hospital';
+                    return '—';
+                  };
+
+                  const getPrimaryTitle = () => {
+                    if (transaction.type === 'withdrawal') return 'Withdrawal';
+                    if (transaction.type === 'hold') return 'Payment held';
+                    if (transaction.type === 'release') return 'Payment released';
+                    if (transaction.type === 'credit') return 'Payment received';
+                    if (transaction.type === 'debit') return 'Payment sent';
+                    return transaction.description || 'Transaction';
+                  };
+
+                  const getSecondaryLine = () => {
+                    if (hospitalName) return hospitalName;
+                    if (transaction.type === 'withdrawal') return 'Bank transfer';
+                    return transaction.description || '';
                   };
 
                   return (
@@ -439,14 +518,12 @@ export default function WalletScreen() {
                             </ThemedText>
                           </View>
                           <View style={styles.transactionInfoColumn}>
-                            <ThemedText style={styles.transactionDescription} numberOfLines={1}>
-                              {transaction.description}
+                            <ThemedText style={styles.transactionDescription}>
+                              {getPrimaryTitle()}
                             </ThemedText>
-                            {transaction.job_session?.hospital && (
-                              <ThemedText style={styles.transactionHospital} numberOfLines={1}>
-                                {transaction.job_session.hospital.name}
-                              </ThemedText>
-                            )}
+                            <ThemedText style={styles.transactionHospital}>
+                              {getSecondaryLine()}
+                            </ThemedText>
                             <View style={styles.transactionStatusRow}>
                               <View style={[styles.transactionStatusDot, { 
                                 backgroundColor: transaction.status === 'completed' ? '#2563EB' : '#9CA3AF' 
@@ -579,7 +656,7 @@ export default function WalletScreen() {
 const styles = StyleSheet.create({
   mainContainer: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    // MUST NOT override ScreenSafeArea backgroundColor, or iOS status bar area can turn white.
   },
   container: {
     flex: 1,
@@ -590,7 +667,6 @@ const styles = StyleSheet.create({
   },
   headerContainer: {
     backgroundColor: '#2563EB',
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
     paddingBottom: 20,
     paddingHorizontal: 20,
   },
@@ -604,6 +680,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
     letterSpacing: -0.5,
+    lineHeight: 38,
   },
   headerSubtitle: {
     fontSize: 14,
@@ -616,8 +693,8 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   scrollContent: {
-    paddingBottom: 40,
     paddingTop: 0,
+    // paddingBottom is now set dynamically using safeBottomPadding
   },
   loadingContainer: {
     flex: 1,
@@ -681,111 +758,201 @@ const styles = StyleSheet.create({
     backgroundColor: '#E5E7EB',
     marginHorizontal: 4,
   },
-  balanceContainer: {
+  // Dashboard Cards - Modern 2x2 Grid Layout
+  dashboardContainer: {
     paddingHorizontal: 16,
     marginBottom: 20,
-    gap: 16,
+    gap: 12,
   },
-  balanceCard: {
-    backgroundColor: PrimaryColors.main,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 20,
-    borderRadius: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  balanceHeader: {
+  dashboardRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
+    gap: 12,
   },
-  balanceIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
+  dashboardCardPrimary: {
+    flex: 1.4,
+    borderRadius: 24,
+    overflow: 'hidden',
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 8,
   },
-  balanceLabel: {
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontSize: 14,
-    fontWeight: '500',
+  dashboardCardPrimaryFull: {
+    flex: 1,
+    borderRadius: 24,
+    overflow: 'hidden',
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 8,
   },
-  balanceAmountContainer: {
-    paddingVertical: 8,
-    marginBottom: 16,
+  dashboardCardSecondary: {
+    flex: 1,
+    borderRadius: 24,
+    overflow: 'hidden',
+    shadowColor: '#6366F1',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 8,
   },
-  balanceAmount: {
-    color: '#FFFFFF',
-    fontSize: 40,
-    fontWeight: '700',
-    lineHeight: 48,
-    letterSpacing: -1,
-  },
-  withdrawButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  withdrawButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  pendingCard: {
-    backgroundColor: '#6366F1',
-    padding: 20,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  pendingHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  pendingIconContainer: {
-    width: 36,
-    height: 36,
+  dashboardCardTertiary: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
     borderRadius: 18,
+    padding: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+  },
+  dashboardGradient: {
+    padding: 20,
+    minHeight: 160,
+    justifyContent: 'space-between',
+  },
+  balanceSplitRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginTop: 2,
+    marginBottom: 10,
+  },
+  balanceSplitCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  balanceSplitDivider: {
+    width: 1,
+    alignSelf: 'stretch',
+    backgroundColor: 'rgba(255,255,255,0.28)',
+    borderRadius: 1,
+  },
+  balanceSplitLabel: {
+    color: 'rgba(255, 255, 255, 0.85)',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  balanceSplitAmount: {
+    color: '#FFFFFF',
+    fontSize: 26,
+    lineHeight: 32,
+    fontWeight: '900',
+    letterSpacing: -0.6,
+  },
+  balanceSplitHint: {
+    marginTop: 4,
+    color: 'rgba(255, 255, 255, 0.85)',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  dashboardCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+  dashboardIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
+    flexShrink: 0,
   },
-  pendingLabel: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontWeight: '500',
+  dashboardCardHeaderText: {
+    flex: 1,
+    justifyContent: 'center',
   },
-  pendingAmount: {
-    fontSize: 36,
-    fontWeight: '700',
+  dashboardCardTitle: {
     color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+    marginBottom: 4,
+    lineHeight: 20,
+  },
+  dashboardCardSubtitle: {
+    color: 'rgba(255, 255, 255, 0.85)',
+    fontSize: 12,
+    fontWeight: '500',
+    lineHeight: 16,
+  },
+  dashboardCardAmount: {
+    fontSize: 36,
+    lineHeight: 44,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -1,
+    marginBottom: 14,
+    marginTop: 4,
+  },
+  dashboardCardAmountSmall: {
+    fontSize: 28,
+    lineHeight: 36,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.8,
+    marginTop: 8,
+  },
+  dashboardCtaButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    gap: 8,
+  },
+  dashboardCtaText: {
+    color: '#2563EB',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  dashboardCardContent: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  dashboardIconSquare: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#ECFDF5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+  },
+  dashboardIconSquareWithdrawn: {
+    backgroundColor: '#EFF6FF',
+  },
+  dashboardCardBody: {
+    flex: 1,
+  },
+  dashboardCardLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6B7280',
     marginBottom: 8,
+    letterSpacing: 0.1,
+  },
+  dashboardCardValue: {
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: '800',
+    color: '#1F2937',
     letterSpacing: -0.5,
   },
-  pendingNote: {
-    fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontWeight: '400',
-  },
+  // (pendingCard old styles removed; replaced with pendingHeroCard)
   pendingStatusRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -822,45 +989,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#1F2937',
     fontWeight: '700',
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    marginBottom: 20,
-    gap: 12,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    padding: 20,
-    borderRadius: 18,
-    alignItems: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  statIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 4,
-    color: '#333',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    textAlign: 'center',
-    fontWeight: '500',
   },
   section: {
     backgroundColor: '#FFFFFF',
@@ -1052,11 +1180,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1F2937',
     marginBottom: 4,
+    flexWrap: 'wrap',
   },
   transactionHospital: {
     fontSize: 13,
     color: '#6B7280',
     marginBottom: 6,
+    flexWrap: 'wrap',
   },
   transactionStatusRow: {
     flexDirection: 'row',
@@ -1096,7 +1226,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     flexShrink: 0,
-    minWidth: 100,
+    minWidth: 88,
   },
   expandIcon: {
     marginTop: 4,

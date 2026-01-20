@@ -1,7 +1,8 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { StatusBar } from 'expo-status-bar';
+import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
+import { StatusBar, Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useEffect, useState } from 'react';
 import 'react-native-reanimated';
@@ -48,6 +49,13 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
+    // Set default blue status bar for all pages
+    StatusBar.setBarStyle('light-content', true);
+    if (Platform.OS === 'android') {
+      StatusBar.setBackgroundColor('#2563EB', true);
+      StatusBar.setTranslucent(false);
+    }
+    
     let timeoutId: any;
     
     // Setup error handlers
@@ -99,7 +107,11 @@ export default function RootLayout() {
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
             </Stack>
-            <StatusBar style="light" backgroundColor="#0066FF" />
+            {/* Global default blue status bar - applies to all pages */}
+            <ExpoStatusBar style="light" backgroundColor="#2563EB" />
+            {Platform.OS === 'android' && (
+              <StatusBar barStyle="light-content" backgroundColor="#2563EB" translucent={false} />
+            )}
           </ThemeProvider>
         </SafeAreaProvider>
       </PaperProvider>

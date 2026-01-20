@@ -261,28 +261,6 @@ export default function ReviewSessionScreen() {
           </Card.Content>
         </Card>
 
-        {/* Dispute Section */}
-        {!isHospitalApproved && (
-          <Card style={styles.disputeCard} mode="outlined">
-            <Card.Content>
-              <View style={styles.disputeHeader}>
-                <AlertTriangle size={20} color="#DC2626" />
-                <Text style={styles.disputeTitle}>Issue with this shift?</Text>
-              </View>
-              <Text style={styles.disputeText}>
-                If the shift wasn't completed as agreed (e.g., no-show, late arrival), raise a dispute. Payment will remain in escrow until resolved.
-              </Text>
-              <TouchableOpacity 
-                style={styles.disputeButton}
-                onPress={() => Alert.alert('Coming Soon', 'Dispute feature will be available soon.')}
-              >
-                <Text style={styles.disputeButtonText}>Open Dispute Form</Text>
-                <ChevronDown size={16} color="#DC2626" />
-              </TouchableOpacity>
-            </Card.Content>
-          </Card>
-        )}
-
         {/* Escrow Badge */}
         <View style={styles.escrowBadge}>
           <CheckCircle size={16} color="#16A34A" />

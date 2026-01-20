@@ -605,13 +605,19 @@ export default function JobDetailScreen() {
                 <View style={[styles.iconBox, { backgroundColor: '#DCFCE7' }]}>
                     <DollarSign size={20} color="#16A34A" />
                 </View>
-                <Text style={styles.gridLabel}>You Earn</Text>
+                <Text style={styles.gridLabel}>Your Fee</Text>
                 <Text style={styles.gridValue}>
                   ₹
                   {(() => {
-                    const gross = Number(session?.payment_amount || application.job_requirement?.payment_amount || application.job_requirement?.salary_range_min || 0);
-                    const net = gross * 0.8;
-                    return net.toFixed(0);
+                    // Get doctor's fee - check payment doctor_amount first, then session payment_amount, then requirement payment_amount
+                    const doctorFee = Number(
+                      session?.payments?.[0]?.doctor_amount || 
+                      session?.payment_amount || 
+                      application.job_requirement?.payment_amount || 
+                      application.job_requirement?.salary_range_min || 
+                      0
+                    );
+                    return doctorFee.toFixed(0);
                   })()}
                 </Text>
             </View>
@@ -624,32 +630,21 @@ export default function JobDetailScreen() {
             </View>
             
             {(() => {
-                const grossAmount = Number(session?.payment_amount || application.job_requirement?.payment_amount || application.job_requirement?.salary_range_min || 0);
-                const doctorEarning = grossAmount * 0.8;
-                const platformFee = grossAmount * 0.2;
+                // Get doctor's fee - check payment doctor_amount first, then session payment_amount, then requirement payment_amount
+                const doctorFee = Number(
+                    session?.payments?.[0]?.doctor_amount || 
+                    session?.payment_amount || 
+                    application.job_requirement?.payment_amount || 
+                    application.job_requirement?.salary_range_min || 
+                    0
+                );
                 
                 return (
                     <View style={styles.paymentDetailsCard}>
                         <View style={styles.paymentDetailRow}>
-                            <Text style={styles.paymentDetailLabel}>Total Job Value</Text>
-                            <Text style={styles.paymentDetailValue}>
-                                ₹{grossAmount.toLocaleString('en-IN')}
-                            </Text>
-                        </View>
-                        
-                        <View style={styles.paymentDetailRow}>
-                            <Text style={styles.paymentDetailLabel}>Platform Fee (20%)</Text>
-                            <Text style={[styles.paymentDetailValue, { color: '#64748B' }]}>
-                                - ₹{platformFee.toLocaleString('en-IN')}
-                            </Text>
-                        </View>
-                        
-                        <View style={styles.paymentDivider} />
-                        
-                        <View style={styles.paymentDetailRow}>
-                            <Text style={[styles.paymentDetailLabel, { fontWeight: '700', fontSize: 16 }]}>Your Earning</Text>
+                            <Text style={[styles.paymentDetailLabel, { fontWeight: '700', fontSize: 16 }]}>Your Fee</Text>
                             <Text style={[styles.paymentDetailValue, { fontWeight: '700', fontSize: 18, color: '#16A34A' }]}>
-                                ₹{doctorEarning.toLocaleString('en-IN')}
+                                ₹{doctorFee.toLocaleString('en-IN')}
                             </Text>
                         </View>
                         
