@@ -524,27 +524,25 @@ export async function scheduleLocalNotification(
       priority: Notifications.AndroidNotificationPriority.HIGH,
     };
 
+    // Determine channel based on notification type
+    const isHighPriority = data?.type === 'job_approved' ||
+      data?.type === 'attention_needed' ||
+      data?.type === 'missed_checkin' ||
+      data?.type === 'upcoming_session' ||
+      data?.type === 'new_job_posting';
+
     // Add image/icon for Android notifications
-    if (Platform.OS === 'android' && imageUrl) {
+    if (Platform.OS === 'android') {
+      // For Android, the app icon is set in app.config.js
+      // We can use largeIcon for the notification image (hospital logo or app icon)
       notificationContent.android = {
-        largeIcon: imageUrl,
-        channelId: data?.type === 'job_approved' ||
-          data?.type === 'attention_needed' ||
-          data?.type === 'missed_checkin' ||
-          data?.type === 'upcoming_session'
-          ? 'job-alerts'
-          : 'default',
-      };
-    } else if (Platform.OS === 'android') {
-      notificationContent.android = {
-        channelId: data?.type === 'job_approved' ||
-          data?.type === 'attention_needed' ||
-          data?.type === 'missed_checkin' ||
-          data?.type === 'upcoming_session'
-          ? 'job-alerts'
-          : 'default',
+        channelId: isHighPriority ? 'job-alerts' : 'default',
+        // Use provided image URL if available, otherwise notification will use app icon from config
+        ...(imageUrl && { largeIcon: imageUrl }),
       };
     }
+
+    // For iOS, notifications use the app icon from app.config.js automatically
 
     await Notifications.scheduleNotificationAsync({
       content: notificationContent,
@@ -599,7 +597,7 @@ export async function showNotificationFromData(notification: {
       }
     }
 
-    await scheduleLocalNotification(
+    const result = await scheduleLocalNotification(
       notification.title,
       notification.message,
       {
@@ -610,8 +608,16 @@ export async function showNotificationFromData(notification: {
       undefined,
       imageUrl
     );
+    
+    if (result) {
+      console.log('✅ Notification displayed successfully:', notification.title);
+    } else {
+      console.warn('⚠️ Notification was not displayed:', notification.title);
+    }
   } catch (error) {
     console.error('❌ Error showing notification:', error);
+    // Re-throw to allow caller to handle if needed
+    throw error;
   }
 }
 

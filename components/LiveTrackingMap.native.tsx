@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, Text, Image } from 'react-native';
 import { MapPin, Building2, User } from 'lucide-react-native';
 import { HospitalPrimaryColors as PrimaryColors } from '@/constants/hospital-theme';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { getFullImageUrl } from '@/utils/url-helper';
+import { UBER_LIKE_MAP_STYLE } from '@/utils/map-style';
 
 interface DoctorLocation {
   doctor_id: number;
@@ -93,6 +94,7 @@ const fetchDirections = async (
 };
 
 export function LiveTrackingMap({ hospital, doctors, height = 400, initialRegion }: LiveTrackingMapProps) {
+  const mapRef = useRef<MapView | null>(null);
   // Ensure hospital coordinates are numbers
   const hospitalLat = typeof hospital.latitude === 'number' ? hospital.latitude : parseFloat(hospital.latitude || '0');
   const hospitalLng = typeof hospital.longitude === 'number' ? hospital.longitude : parseFloat(hospital.longitude || '0');
@@ -211,11 +213,33 @@ export function LiveTrackingMap({ hospital, doctors, height = 400, initialRegion
   return (
     <View style={[styles.container, { height }]}>
       <MapView
+        ref={mapRef as any}
         style={styles.map}
         region={region}
         provider={PROVIDER_GOOGLE}
         showsUserLocation={false}
         showsMyLocationButton={false}
+        customMapStyle={UBER_LIKE_MAP_STYLE as any}
+        showsBuildings={true}
+        rotateEnabled={true}
+        pitchEnabled={true}
+        toolbarEnabled={false}
+        onMapReady={() => {
+          // Tilt camera for a subtle 3D "Uber-like" feel
+          try {
+            mapRef.current?.animateCamera(
+              {
+                center: { latitude: region.latitude, longitude: region.longitude },
+                pitch: 55,
+                heading: 0,
+                zoom: 15,
+              } as any,
+              { duration: 600 } as any
+            );
+          } catch {
+            // ignore
+          }
+        }}
       >
         {/* Hospital Marker */}
         {!isNaN(hospitalLat) && !isNaN(hospitalLng) && (

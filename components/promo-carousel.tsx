@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,10 @@ import {
   Image,
   Dimensions,
   ActivityIndicator,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import API from '../app/api';
 import { getFullImageUrl } from '@/utils/url-helper';
@@ -19,8 +22,17 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const HORIZONTAL_PADDING = 20; // Spacing.lg equivalent
 const CARD_SPACING = 16;
 // Use 75% of screen width for promo cards
-const PROMO_CARD_WIDTH = SCREEN_WIDTH * 0.75;
-const CARD_HEIGHT = 200;
+const IS_LARGE_SCREEN = SCREEN_WIDTH >= 768;
+const IS_MEDIUM_SCREEN = SCREEN_WIDTH >= 600 && SCREEN_WIDTH < 768; // ~7 inch devices
+const CONTENT_WIDTH = SCREEN_WIDTH - HORIZONTAL_PADDING * 2;
+// Match dashboard padding: full width inside the same horizontal padding on phones,
+// and match 2-column card width on tablets/large screens.
+const PROMO_CARD_WIDTH = IS_LARGE_SCREEN
+  ? (CONTENT_WIDTH - CARD_SPACING) / 2
+  : IS_MEDIUM_SCREEN
+    ? (CONTENT_WIDTH - CARD_SPACING) / 2
+    : Math.min(300, CONTENT_WIDTH); // phones: fixed ~300px card (but never wider than content)
+const CARD_HEIGHT = IS_LARGE_SCREEN ? 230 : 190;
 const IS_SMALL_SCREEN = SCREEN_WIDTH < 400; // Hide short summary on small screens
 
 interface PromoCarouselProps {
@@ -30,13 +42,40 @@ interface PromoCarouselProps {
 export default function PromoCarousel({ onPromoPress }: PromoCarouselProps) {
   const [promos, setPromos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const lastFetchRef = useRef<number>(0);
 
   useEffect(() => {
-    loadPromos();
+    loadPromos({ showLoader: true });
   }, []);
 
-  const loadPromos = async () => {
+  // Refresh promos whenever the screen regains focus (so newly-added blogs appear without app restart)
+  useFocusEffect(
+    React.useCallback(() => {
+      loadPromos({ showLoader: false });
+    }, [])
+  );
+
+  // Also refresh when app comes back from background (debounced)
+  useEffect(() => {
+    const onAppStateChange = (state: AppStateStatus) => {
+      if (state === 'active') {
+        loadPromos({ showLoader: false });
+      }
+    };
+    const sub = AppState.addEventListener('change', onAppStateChange);
+    return () => sub.remove();
+  }, []);
+
+  const loadPromos = async ({ showLoader }: { showLoader: boolean }) => {
     try {
+      const now = Date.now();
+      // Debounce to avoid refetch loops while navigating quickly
+      if (!showLoader && now - lastFetchRef.current < 3000) {
+        return;
+      }
+      lastFetchRef.current = now;
+
+      if (showLoader) setLoading(true);
       const response = await API.get('/blogs');
       if (__DEV__) {
         console.log('📢 Promo Carousel - API Response:', response.data);
@@ -69,6 +108,8 @@ export default function PromoCarousel({ onPromoPress }: PromoCarouselProps) {
       }
       setPromos([]);
     } finally {
+      // Always clear loading if we are currently loading.
+      // (Focus/foreground refresh can run while initial load is in-flight.)
       setLoading(false);
     }
   };
@@ -85,7 +126,11 @@ export default function PromoCarousel({ onPromoPress }: PromoCarouselProps) {
     if (__DEV__) {
       console.log('📢 Promo Carousel - No promos to display');
     }
-    return null; // Don't show anything if no promos
+    return (
+      <View style={styles.emptyContainer}>
+        <Text style={styles.emptyText}>No promos yet</Text>
+      </View>
+    );
   }
 
   return (
@@ -104,6 +149,7 @@ export default function PromoCarousel({ onPromoPress }: PromoCarouselProps) {
             style={[styles.promoCard, { width: PROMO_CARD_WIDTH }]}
             activeOpacity={0.9}
             onPress={() => onPromoPress?.(promo)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             {/* Background Image */}
             {promo.image_url ? (
@@ -111,9 +157,10 @@ export default function PromoCarousel({ onPromoPress }: PromoCarouselProps) {
                 source={{ uri: getFullImageUrl(promo.image_url) }}
                 style={styles.backgroundImage}
                 resizeMode="cover"
+                pointerEvents="none"
               />
             ) : (
-              <View style={styles.imagePlaceholder}>
+              <View style={styles.imagePlaceholder} pointerEvents="none">
                 <Text style={styles.placeholderText}>📢</Text>
               </View>
             )}
@@ -124,10 +171,11 @@ export default function PromoCarousel({ onPromoPress }: PromoCarouselProps) {
               start={{ x: 0, y: 0 }}
               end={{ x: 0, y: 1 }}
               style={styles.tintOverlay}
+              pointerEvents="none"
             />
             
             {/* Content Overlay */}
-            <View style={styles.contentOverlay}>
+            <View style={styles.contentOverlay} pointerEvents="none">
               {/* Title */}
               <Text style={styles.promoTitle} numberOfLines={2}>
                 {promo.title}
@@ -142,14 +190,11 @@ export default function PromoCarousel({ onPromoPress }: PromoCarouselProps) {
               
               {/* Know More with Arrow */}
               <View style={styles.buttonContainer}>
-                <TouchableOpacity
-                  style={styles.knowMoreButton}
-                  onPress={() => onPromoPress?.(promo)}
-                  activeOpacity={0.8}
-                >
+                {/* Visual-only button; whole card is clickable to avoid nested touch issues on small screens */}
+                <View style={styles.knowMoreButton}>
                   <Text style={styles.knowMoreText}>Know More</Text>
                   <ArrowRight size={20} color="#fff" />
-                </TouchableOpacity>
+                </View>
               </View>
             </View>
           </TouchableOpacity>
@@ -161,8 +206,26 @@ export default function PromoCarousel({ onPromoPress }: PromoCarouselProps) {
 
 const styles = StyleSheet.create({
   container: {
-    marginVertical: 20,
+    marginTop: 20,
+    marginBottom: 36, // more breathing room below carousel (prevents shadow band look)
     marginHorizontal: 0, // Match other sections padding
+  },
+  emptyContainer: {
+    marginTop: 20,
+    marginBottom: 36,
+    marginHorizontal: HORIZONTAL_PADDING,
+    paddingVertical: 18,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#64748B',
   },
   loadingContainer: {
     paddingVertical: 20,
@@ -172,17 +235,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0, // Remove padding to match other sections
     paddingLeft: HORIZONTAL_PADDING,
     paddingRight: HORIZONTAL_PADDING,
+    paddingBottom: 6, // prevents carousel from feeling cramped at bottom
   },
   promoCard: {
     marginRight: CARD_SPACING,
     borderRadius: 20,
     height: CARD_HEIGHT,
     overflow: 'hidden',
-    elevation: 8,
+    elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
   },
   backgroundImage: {
     position: 'absolute',
@@ -211,42 +275,52 @@ const styles = StyleSheet.create({
     left: 0,
   },
   contentOverlay: {
-    flex: 1,
-    justifyContent: 'space-between',
-    padding: 20,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 16,
+    paddingBottom: 18,
     zIndex: 1,
   },
   promoTitle: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '800',
     color: '#fff',
-    marginBottom: 8,
-    lineHeight: 28,
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    marginBottom: 0,
+    lineHeight: 24,
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  promoDescription: {
+    fontSize: 13,
+    color: '#fff',
+    lineHeight: 18,
+    marginBottom: 0,
+    marginTop: 6,
+    opacity: 0.95,
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
-  promoDescription: {
-    fontSize: 14,
-    color: '#fff',
-    lineHeight: 20,
-    marginBottom: 12,
-    opacity: 0.95,
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
   buttonContainer: {
+    marginTop: 8,
     alignSelf: 'flex-start',
   },
   knowMoreButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    padding: 4,
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   knowMoreText: {
-    fontSize: 14,
+    fontSize: 11,
     fontWeight: '600',
     color: '#fff',
     textShadowColor: 'rgba(0, 0, 0, 0.5)',

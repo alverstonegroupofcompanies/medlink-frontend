@@ -94,13 +94,15 @@ export default function MoreScreen() {
         // Don't throw - continue with local logout
       }
 
-      // 2. Clear all local storage - aggressive cleanup
-      console.log('🧹 Clearing all login data...');
+      // 2. Clear ALL authentication data (both doctor and hospital) to allow switching
+      console.log('🧹 Clearing all authentication data (doctor + hospital)...');
       await AsyncStorage.multiRemove([
         STORAGE_KEYS.DOCTOR_TOKEN,
         STORAGE_KEYS.DOCTOR_INFO,
         'doctorToken',
         'doctorInfo',
+        'hospitalToken',
+        'hospitalInfo',
       ]);
       
       // Also try individual removal to ensure it's cleared
@@ -108,15 +110,28 @@ export default function MoreScreen() {
       await AsyncStorage.removeItem(STORAGE_KEYS.DOCTOR_INFO);
       await AsyncStorage.removeItem('doctorToken');
       await AsyncStorage.removeItem('doctorInfo');
+      await AsyncStorage.removeItem('hospitalToken');
+      await AsyncStorage.removeItem('hospitalInfo');
 
       // 3. Verify everything is cleared
-      const remainingToken = await AsyncStorage.getItem(STORAGE_KEYS.DOCTOR_TOKEN);
-      const remainingInfo = await AsyncStorage.getItem(STORAGE_KEYS.DOCTOR_INFO);
+      const remainingDoctorToken = await AsyncStorage.getItem(STORAGE_KEYS.DOCTOR_TOKEN);
+      const remainingDoctorInfo = await AsyncStorage.getItem(STORAGE_KEYS.DOCTOR_INFO);
+      const remainingHospitalToken = await AsyncStorage.getItem('hospitalToken');
+      const remainingHospitalInfo = await AsyncStorage.getItem('hospitalInfo');
       
-      if (remainingToken || remainingInfo) {
-        console.warn('⚠️ Data still exists after cleanup');
+      if (remainingDoctorToken || remainingDoctorInfo || remainingHospitalToken || remainingHospitalInfo) {
+        console.warn('⚠️ Data still exists after cleanup, retrying...');
+        // Retry cleanup
+        await AsyncStorage.multiRemove([
+          STORAGE_KEYS.DOCTOR_TOKEN,
+          STORAGE_KEYS.DOCTOR_INFO,
+          'doctorToken',
+          'doctorInfo',
+          'hospitalToken',
+          'hospitalInfo',
+        ]);
       } else {
-        console.log('✅ All login data cleared successfully');
+        console.log('✅ All authentication data cleared successfully (doctor + hospital)');
       }
 
       console.log('✅ Logout complete - redirecting to login screen');

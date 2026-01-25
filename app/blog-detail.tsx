@@ -72,7 +72,7 @@ export default function BlogDetailScreen() {
             <TouchableOpacity onPress={() => router.back()}>
               <ArrowLeft size={24} color="#111827" />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Promo Details</Text>
+            <Text style={styles.headerTitle}>Details</Text>
             <View style={{ width: 24 }} />
           </View>
           <View style={styles.errorContainer}>
@@ -90,7 +90,9 @@ export default function BlogDetailScreen() {
           <TouchableOpacity onPress={() => router.back()}>
             <ArrowLeft size={24} color="#111827" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Promo Details</Text>
+          <Text style={styles.headerTitle} numberOfLines={1}>
+            {blog?.title || 'Details'}
+          </Text>
           <View style={{ width: 24 }} />
         </View>
 

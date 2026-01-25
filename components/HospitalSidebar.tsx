@@ -79,7 +79,7 @@ export default function HospitalSidebar({ visible, onClose }: HospitalSidebarPro
       await AsyncStorage.removeItem('hospitalToken');
       await AsyncStorage.removeItem('hospitalData');
       onClose();
-      router.replace('/hospital/login');
+      router.replace('/login');
     } catch (error) {
       console.error('Logout error:', error);
     }

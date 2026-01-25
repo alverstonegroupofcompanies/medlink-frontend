@@ -185,36 +185,61 @@ export const logoutDoctor = async (showAlert: boolean = true): Promise<void> => 
       // Don't throw - continue with local logout
     }
 
-    // Clear all local storage - do this multiple times to ensure it's cleared
+    // Clear ALL authentication data (both doctor and hospital) to allow switching user types
+    console.log('🧹 Clearing all authentication data (doctor + hospital)...');
+    await AsyncStorage.multiRemove([
+      STORAGE_KEYS.DOCTOR_TOKEN,
+      STORAGE_KEYS.DOCTOR_INFO,
+      STORAGE_KEYS.HOSPITAL_TOKEN,
+      STORAGE_KEYS.HOSPITAL_INFO,
+      'doctorToken',
+      'doctorInfo',
+      'hospitalToken',
+      'hospitalInfo',
+    ]);
+
+    // Also clear using the dedicated function
     await clearDoctorAuth();
 
     // Double-check and clear again
-    const remainingToken = await AsyncStorage.getItem(STORAGE_KEYS.DOCTOR_TOKEN);
-    const remainingInfo = await AsyncStorage.getItem(STORAGE_KEYS.DOCTOR_INFO);
+    const remainingDoctorToken = await AsyncStorage.getItem(STORAGE_KEYS.DOCTOR_TOKEN);
+    const remainingDoctorInfo = await AsyncStorage.getItem(STORAGE_KEYS.DOCTOR_INFO);
+    const remainingHospitalToken = await AsyncStorage.getItem(STORAGE_KEYS.HOSPITAL_TOKEN);
+    const remainingHospitalInfo = await AsyncStorage.getItem(STORAGE_KEYS.HOSPITAL_INFO);
 
-    if (remainingToken || remainingInfo) {
+    if (remainingDoctorToken || remainingDoctorInfo || remainingHospitalToken || remainingHospitalInfo) {
       console.warn('⚠️ Data still exists, performing additional cleanup...');
       await AsyncStorage.multiRemove([
         STORAGE_KEYS.DOCTOR_TOKEN,
         STORAGE_KEYS.DOCTOR_INFO,
-        'doctorToken', // Also try without STORAGE_KEYS prefix
+        STORAGE_KEYS.HOSPITAL_TOKEN,
+        STORAGE_KEYS.HOSPITAL_INFO,
+        'doctorToken',
         'doctorInfo',
+        'hospitalToken',
+        'hospitalInfo',
       ]);
     }
 
     // Verify everything is cleared
-    const finalToken = await AsyncStorage.getItem(STORAGE_KEYS.DOCTOR_TOKEN);
-    const finalInfo = await AsyncStorage.getItem(STORAGE_KEYS.DOCTOR_INFO);
+    const finalDoctorToken = await AsyncStorage.getItem(STORAGE_KEYS.DOCTOR_TOKEN);
+    const finalDoctorInfo = await AsyncStorage.getItem(STORAGE_KEYS.DOCTOR_INFO);
+    const finalHospitalToken = await AsyncStorage.getItem(STORAGE_KEYS.HOSPITAL_TOKEN);
+    const finalHospitalInfo = await AsyncStorage.getItem(STORAGE_KEYS.HOSPITAL_INFO);
 
-    if (finalToken || finalInfo) {
+    if (finalDoctorToken || finalDoctorInfo || finalHospitalToken || finalHospitalInfo) {
       console.error('❌ ERROR: Data still exists after cleanup!');
       // Last resort - try removing individually
       await AsyncStorage.removeItem(STORAGE_KEYS.DOCTOR_TOKEN);
       await AsyncStorage.removeItem(STORAGE_KEYS.DOCTOR_INFO);
+      await AsyncStorage.removeItem(STORAGE_KEYS.HOSPITAL_TOKEN);
+      await AsyncStorage.removeItem(STORAGE_KEYS.HOSPITAL_INFO);
       await AsyncStorage.removeItem('doctorToken');
       await AsyncStorage.removeItem('doctorInfo');
+      await AsyncStorage.removeItem('hospitalToken');
+      await AsyncStorage.removeItem('hospitalInfo');
     } else {
-      console.log('✅ All login data cleared successfully');
+      console.log('✅ All authentication data cleared successfully (doctor + hospital)');
     }
 
     console.log('✅ Logout complete - redirecting to login screen');
@@ -263,7 +288,7 @@ export const logoutDoctor = async (showAlert: boolean = true): Promise<void> => 
 };
 
 /**
- * Logout hospital
+ * Logout hospital - clears ALL auth data to allow switching user types
  */
 export const logoutHospital = async (): Promise<void> => {
   try {
@@ -277,16 +302,44 @@ export const logoutHospital = async (): Promise<void> => {
       }
     } catch (e) { console.warn('Backend logout failed', e); }
 
+    // Clear ALL authentication data (both hospital and doctor) to allow switching
     await AsyncStorage.multiRemove([
       STORAGE_KEYS.HOSPITAL_TOKEN,
       STORAGE_KEYS.HOSPITAL_INFO,
+      STORAGE_KEYS.DOCTOR_TOKEN,
+      STORAGE_KEYS.DOCTOR_INFO,
+      'hospitalToken',
+      'hospitalInfo',
+      'doctorToken',
+      'doctorInfo',
     ]);
-    console.log('✅ Hospital auth cleared');
+    
+    // Double-check and clear individually
+    await AsyncStorage.removeItem(STORAGE_KEYS.HOSPITAL_TOKEN);
+    await AsyncStorage.removeItem(STORAGE_KEYS.HOSPITAL_INFO);
+    await AsyncStorage.removeItem(STORAGE_KEYS.DOCTOR_TOKEN);
+    await AsyncStorage.removeItem(STORAGE_KEYS.DOCTOR_INFO);
+    await AsyncStorage.removeItem('hospitalToken');
+    await AsyncStorage.removeItem('hospitalInfo');
+    await AsyncStorage.removeItem('doctorToken');
+    await AsyncStorage.removeItem('doctorInfo');
+    
+    console.log('✅ All auth data cleared (hospital + doctor)');
     router.dismissAll();
     router.replace('/login');
   } catch (error) {
     console.error('❌ Error logging out hospital:', error);
-    // Force nav
+    // Force clear and nav
+    try {
+      await AsyncStorage.multiRemove([
+        STORAGE_KEYS.HOSPITAL_TOKEN,
+        STORAGE_KEYS.HOSPITAL_INFO,
+        STORAGE_KEYS.DOCTOR_TOKEN,
+        STORAGE_KEYS.DOCTOR_INFO,
+      ]);
+    } catch (e) {
+      console.error('Error in fallback clear:', e);
+    }
     router.replace('/login');
   }
 };

@@ -4,6 +4,7 @@ import { MapPin, Navigation } from 'lucide-react-native';
 import { DoctorPrimaryColors as PrimaryColors, DoctorStatusColors as StatusColors } from '@/constants/doctor-theme';
 import MapView from 'react-native-maps';
 import { Marker } from 'react-native-maps';
+import { UBER_LIKE_MAP_STYLE } from '@/utils/map-style';
 
 interface CheckInMapViewProps {
   hospitalLocation: {
@@ -87,6 +88,10 @@ export function CheckInMapView({
         showsUserLocation={false}
         showsMyLocationButton={false}
         mapType="standard"
+        customMapStyle={UBER_LIKE_MAP_STYLE as any}
+        showsBuildings={true}
+        rotateEnabled={true}
+        pitchEnabled={true}
       >
         {/* Hospital Marker */}
         <Marker

@@ -164,9 +164,16 @@ export default function DoctorDisputeFormScreen() {
       formData.append('title', title.trim());
       formData.append('description', description.trim());
 
-      // Append evidence files - use evidence[] for array notation
-      evidenceFiles.forEach((file) => {
-        const fileUri = Platform.OS === 'ios' ? file.uri.replace('file://', '') : file.uri;
+      // Append evidence files - properly handle file URIs for iOS/Android
+      evidenceFiles.forEach((file, index) => {
+        let fileUri = file.uri;
+        // Handle file:// prefix for different platforms
+        if (Platform.OS === 'android' && !fileUri.startsWith('file://')) {
+          fileUri = `file://${fileUri}`;
+        } else if (Platform.OS === 'ios') {
+          fileUri = fileUri.replace('file://', '');
+        }
+        
         formData.append('evidence[]', {
           uri: fileUri,
           name: file.name,
@@ -184,12 +191,48 @@ export default function DoctorDisputeFormScreen() {
         });
       }
 
-      // Don't set Content-Type manually - axios will set it automatically with boundary for FormData
-      const response = await API.post('/disputes', formData);
+      // Use fetch API instead of Axios for FormData - more reliable in React Native
+      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+      const token = await AsyncStorage.getItem('doctorToken');
+      const { API_BASE_URL } = await import('@/config/api');
+      
+      const response = await fetch(`${API_BASE_URL}/disputes`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : '',
+          // Don't set Content-Type - let fetch handle it automatically for FormData
+        },
+      });
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        // Handle validation errors
+        if (response.status === 422 && responseData?.errors) {
+          const validationErrors = responseData.errors;
+          const errorMessages = Object.entries(validationErrors)
+            .map(([field, messages]: [string, any]) => {
+              const fieldLabel = field.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+              const messageArray = Array.isArray(messages) ? messages : [messages];
+              return `${fieldLabel}: ${messageArray.join(', ')}`;
+            })
+            .join('\n');
+          
+          Alert.alert('Validation Error', errorMessages);
+          return;
+        }
+        
+        // Handle other errors
+        const errorMessage = responseData?.message || 'Failed to create dispute. Please try again.';
+        Alert.alert('Error', errorMessage);
+        return;
+      }
 
       Alert.alert(
         'Success',
-        `Dispute created successfully! Dispute ID: ${response.data.dispute.id}`,
+        `Dispute created successfully! Dispute ID: ${responseData.dispute.id}`,
         [
           {
             text: 'OK',
@@ -200,23 +243,9 @@ export default function DoctorDisputeFormScreen() {
     } catch (error: any) {
       console.error('Error creating dispute:', error);
       
-      // Handle validation errors
-      if (error.response?.status === 422 && error.response?.data?.errors) {
-        const validationErrors = error.response.data.errors;
-        const errorMessages = Object.entries(validationErrors)
-          .map(([field, messages]: [string, any]) => {
-            const fieldLabel = field.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-            const messageArray = Array.isArray(messages) ? messages : [messages];
-            return `${fieldLabel}: ${messageArray.join(', ')}`;
-          })
-          .join('\n');
-        
-        Alert.alert('Validation Error', errorMessages);
-      } else {
-        // Handle other errors
-        const errorMessage = error.response?.data?.message || error.message || 'Failed to create dispute. Please try again.';
-        Alert.alert('Error', errorMessage);
-      }
+      // Handle network errors
+      const errorMessage = error.message || 'Failed to create dispute. Please check your connection and try again.';
+      Alert.alert('Error', errorMessage);
     } finally {
       setLoading(false);
     }

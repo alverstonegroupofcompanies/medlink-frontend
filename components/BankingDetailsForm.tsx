@@ -42,6 +42,30 @@ export const BankingDetailsForm: React.FC<BankingDetailsFormProps> = ({
     upi_id: initialData?.upi_id || '',
   });
 
+  // Update form data when initialData changes (e.g., when modal opens with existing data)
+  React.useEffect(() => {
+    if (visible && initialData) {
+      setFormData({
+        bank_account_holder_name: initialData.bank_account_holder_name || '',
+        bank_account_number: initialData.bank_account_number || '',
+        bank_ifsc_code: initialData.bank_ifsc_code || '',
+        bank_name: initialData.bank_name || '',
+        bank_branch: initialData.bank_branch || '',
+        upi_id: initialData.upi_id || '',
+      });
+    } else if (visible && !initialData) {
+      // Reset form when opening without initial data
+      setFormData({
+        bank_account_holder_name: '',
+        bank_account_number: '',
+        bank_ifsc_code: '',
+        bank_name: '',
+        bank_branch: '',
+        upi_id: '',
+      });
+    }
+  }, [visible, initialData]);
+
   const validateIFSC = (ifsc: string) => {
     const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
     return ifscRegex.test(ifsc.toUpperCase());
@@ -91,10 +115,25 @@ export const BankingDetailsForm: React.FC<BankingDetailsFormProps> = ({
       }
     } catch (error: any) {
       console.error('Save banking details error:', error);
-      Alert.alert(
-        'Error',
-        error.response?.data?.message || 'Failed to save banking details'
-      );
+      
+      // Handle validation errors (422)
+      if (error.response?.status === 422) {
+        const errors = error.response?.data?.errors;
+        if (errors) {
+          // Get first error message from validation errors
+          const firstError = Object.values(errors).flat()[0];
+          Alert.alert('Validation Error', firstError || 'Please check your input and try again');
+        } else {
+          Alert.alert('Validation Error', error.response?.data?.message || 'Please check your input and try again');
+        }
+      } else {
+        // Handle other errors
+        const errorMessage = error.response?.data?.message || 
+                           error.response?.data?.error || 
+                           error.message || 
+                           'Failed to save banking details. Please try again.';
+        Alert.alert('Error', errorMessage);
+      }
     } finally {
       setLoading(false);
     }

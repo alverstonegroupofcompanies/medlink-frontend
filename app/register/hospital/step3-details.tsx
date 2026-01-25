@@ -34,6 +34,7 @@ export default function HospitalDetailsScreen() {
     license_number: '',
   });
   const [logoUri, setLogoUri] = useState<string | null>(null);
+  const [hospitalPictureUri, setHospitalPictureUri] = useState<string | null>(null);
   const [licenseDocument, setLicenseDocument] = useState<{ uri: string; name: string; type: string } | null>(null);
   const [registrationData, setRegistrationData] = useState<any>(null);
 
@@ -80,6 +81,14 @@ export default function HospitalDetailsScreen() {
       setLogoUri(uri);
     } else {
       setLogoUri(null);
+    }
+  };
+
+  const handleHospitalPictureSelected = (uri: string) => {
+    if (uri) {
+      setHospitalPictureUri(uri);
+    } else {
+      setHospitalPictureUri(null);
     }
   };
 
@@ -166,6 +175,21 @@ export default function HospitalDetailsScreen() {
         data.append('logo_path', {
           uri: fileUri,
           name: 'logo.jpg',
+          type: 'image/jpeg',
+        } as any);
+      }
+
+      // Hospital Cover Image
+      if (hospitalPictureUri) {
+        let fileUri = hospitalPictureUri;
+        if (Platform.OS === 'android' && !fileUri.startsWith('file://')) {
+          fileUri = `file://${fileUri}`;
+        } else if (Platform.OS === 'ios') {
+          fileUri = fileUri.replace('file://', '');
+        }
+        data.append('hospital_picture', {
+          uri: fileUri,
+          name: 'hospital_picture.jpg',
           type: 'image/jpeg',
         } as any);
       }
@@ -360,6 +384,21 @@ export default function HospitalDetailsScreen() {
             />
           </View>
 
+          {/* Hospital Image (Cover) */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Hospital Image (Cover)</Text>
+            <Text style={styles.sectionSubtitle}>This will show at the top of your hospital profile.</Text>
+            <ImageCropPicker
+              onImageSelected={handleHospitalPictureSelected}
+              aspectRatio={[16, 9]}
+              circular={false}
+              width={1200}
+              height={675}
+              showControls={true}
+              initialImage={hospitalPictureUri}
+            />
+          </View>
+
           {/* Basic Information */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Basic Information</Text>
@@ -523,6 +562,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1e293b',
     marginBottom: 16,
+  },
+  sectionSubtitle: {
+    fontSize: 13,
+    color: '#64748b',
+    marginTop: -10,
+    marginBottom: 12,
+    lineHeight: 18,
   },
   logoContainer: {
     alignItems: 'center',

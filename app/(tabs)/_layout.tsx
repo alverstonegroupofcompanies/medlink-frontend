@@ -82,22 +82,44 @@ export default function TabLayout() {
               .listen('.NewJobPosted', (e: any) => {
                   if (__DEV__) {
                     console.log('🔔 [Global] New Job Posting received:', e);
+                    console.log('🔔 [Global] Event structure:', JSON.stringify(e, null, 2));
                   }
                   
-                  // Show system notification
+                  // Extract job requirement - handle different event structures
+                  const jobRequirement = e.jobRequirement || e.job_requirement || e.data?.jobRequirement || e;
+                  
+                  if (!jobRequirement || !jobRequirement.id) {
+                      console.warn('⚠️ [Global] Invalid job requirement in event:', e);
+                      return;
+                  }
+                  
+                  // Extract hospital info for notification
+                  const hospital = jobRequirement.hospital || e.hospital;
+                  const hospitalName = hospital?.name || 'A hospital';
+                  const departmentName = jobRequirement.department || 'a department';
+                  
+                  // Show system notification with proper data
+                  console.log('📬 [Global] Attempting to show notification for new job posting');
                   showNotificationFromData({
                       title: 'New Job Opportunity',
-                      message: e.message,
-                      type: 'info',
-                      data: { type: 'new_job_posting', ...e.jobRequirement }
+                      message: e.message || `New ${departmentName} position available at ${hospitalName}`,
+                      type: 'new_job_posting',
+                      user_type: 'doctor',
+                      data: { 
+                          type: 'new_job_posting', 
+                          job_requirement_id: jobRequirement.id,
+                          ...jobRequirement 
+                      },
+                      sender: hospital,
+                      sender_type: 'hospital'
+                  }).catch((error) => {
+                      console.error('❌ [Global] Error showing notification:', error);
                   });
 
                   // Emit specific event with job data for immediate UI update
-                  if (e.jobRequirement) {
-                      DeviceEventEmitter.emit('NEW_JOB_POSTED', e.jobRequirement);
-                  }
+                  DeviceEventEmitter.emit('NEW_JOB_POSTED', jobRequirement);
 
-                  // Trigger global refresh
+                  // Trigger global refresh as fallback
                   DeviceEventEmitter.emit('REFRESH_DOCTOR_DATA');
               });
       }

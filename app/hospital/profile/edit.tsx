@@ -167,7 +167,7 @@ export default function HospitalProfileEditScreen() {
           errorMessage = 'Your session has expired. Please login again.';
           // Redirect to login after a short delay
           setTimeout(() => {
-            router.replace('/hospital/login');
+            router.replace('/login');
           }, 2000);
         } else if (status === 404) {
           errorTitle = 'Not Found';

@@ -13,7 +13,7 @@ import {
   Modal,
 } from 'react-native';
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
-import { ArrowLeft, User, Calendar, MapPin, Building2, CheckCircle, XCircle, Clock, Star } from 'lucide-react-native';
+import { ArrowLeft, User, Calendar, MapPin, Building2, CheckCircle, XCircle, Clock, Star, GitCompare, X, Search, ExternalLink, BarChart3 } from 'lucide-react-native';
 import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors, HospitalStatusColors as StatusColors } from '@/constants/hospital-theme';
 import API from '../../api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -41,6 +41,10 @@ export default function ApplicationsScreen() {
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [pendingApplicationId, setPendingApplicationId] = useState<number | null>(null);
 
+  // Doctor comparison state
+  const [selectedForComparison, setSelectedForComparison] = useState<Set<number>>(new Set());
+  const [showComparisonModal, setShowComparisonModal] = useState(false);
+
   useEffect(() => {
     loadHospital();
     loadApplications();
@@ -52,6 +56,14 @@ export default function ApplicationsScreen() {
       if (requirementId) {
         loadApplications(false);
       }
+      // Ensure status bar is always blue
+      if (Platform.OS === 'android') {
+        StatusBar.setBackgroundColor(PrimaryColors.dark, true);
+        StatusBar.setBarStyle('light-content', true);
+        StatusBar.setTranslucent(false);
+      }
+      StatusBar.setBarStyle('light-content', true);
+      return () => {};
     }, [requirementId])
   );
 
@@ -347,11 +359,36 @@ export default function ApplicationsScreen() {
     );
   };
 
+  const toggleComparisonSelection = (applicationId: number) => {
+    setSelectedForComparison(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(applicationId)) {
+        newSet.delete(applicationId);
+      } else {
+        newSet.add(applicationId);
+      }
+      return newSet;
+    });
+  };
+
+  const getSelectedApplications = () => {
+    return applications.filter(app => selectedForComparison.has(app.id));
+  };
+
+  const handleCompare = () => {
+    const selected = getSelectedApplications();
+    if (selected.length >= 2) {
+      setShowComparisonModal(true);
+    } else {
+      Alert.alert('Select Doctors', 'Please select at least 2 doctors to compare.');
+    }
+  };
+
   if (loading) {
     return (
       <ScreenSafeArea backgroundColor={PrimaryColors.dark}>
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
+        <StatusBar barStyle="light-content" backgroundColor={PrimaryColors.dark} />
         <View style={styles.header}>
           <TouchableOpacity 
             onPress={() => {
@@ -379,9 +416,9 @@ export default function ApplicationsScreen() {
   }
 
   return (
-    <ScreenSafeArea backgroundColor={NeutralColors.background}>
+    <ScreenSafeArea backgroundColor={PrimaryColors.dark}>
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
+      <StatusBar barStyle="light-content" backgroundColor={PrimaryColors.dark} />
       
       {/* Header */}
       <View style={styles.header}>
@@ -390,7 +427,6 @@ export default function ApplicationsScreen() {
             if (router.canGoBack()) {
               router.back();
             } else {
-              // Navigate to dashboard tab
               router.push('/hospital/dashboard');
             }
           }} 
@@ -398,37 +434,24 @@ export default function ApplicationsScreen() {
         >
           <ArrowLeft size={24} color="#fff" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Applications</Text>
-        <View style={styles.backButton} />
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>
+            {requirement?.department || 'Cardiology'} Applicants
+          </Text>
+          <Text style={styles.headerSubtitle}>
+            {hospital?.name || 'ST. JUDE MEDICAL CENTER'}
+          </Text>
+        </View>
+        <TouchableOpacity style={styles.searchButton}>
+          <Search size={24} color="#fff" />
+        </TouchableOpacity>
       </View>
 
-      {/* Requirement Info */}
+      {/* Job Post Info */}
       {requirement && (
-        <View style={styles.requirementCard}>
-          <View style={styles.requirementHeader}>
-            <Building2 size={20} color={PrimaryColors.main} />
-            <Text style={styles.requirementTitle}>{requirement.department}</Text>
-          </View>
-          <View style={styles.requirementDetails}>
-            <View style={styles.detailRow}>
-              <Calendar size={14} color={NeutralColors.textSecondary} />
-              <Text style={styles.detailText}>{requirement.work_type}</Text>
-            </View>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailText}>{requirement.required_sessions} sessions</Text>
-            </View>
-            {requirement.address && (
-              <View style={styles.detailRow}>
-                <MapPin size={14} color={NeutralColors.textSecondary} />
-                <Text style={styles.detailText}>{requirement.address}</Text>
-              </View>
-            )}
-          </View>
-          <View style={styles.applicationsCount}>
-            <Text style={styles.applicationsCountText}>
-              {applications.length} {applications.length === 1 ? 'Application' : 'Applications'}
-            </Text>
-          </View>
+        <View style={styles.jobPostInfo}>
+          <Text style={styles.jobPostTitle}>JOB POST: {requirement.department?.toUpperCase() || 'SENIOR CARDIOLOGIST'}</Text>
+          <Text style={styles.applicantCount}>{applications.length} Applicants</Text>
         </View>
       )}
 
@@ -446,131 +469,128 @@ export default function ApplicationsScreen() {
             if (__DEV__) {
               console.log(`🎨 Rendering application ${application.id}: status = "${application.status}"`);
             }
+            const isSelected = selectedForComparison.has(application.id);
             return (
-            <TouchableOpacity 
+            <View 
               key={application.id} 
-              style={styles.applicationCard}
-              onPress={() => {
-                if (application.doctor?.id) {
-                  router.push(`/hospital/doctor-profile/${application.doctor.id}`);
-                }
-              }}
-              activeOpacity={0.7}
+              style={[styles.applicationCard, isSelected && styles.applicationCardSelected]}
             >
-              <View style={styles.applicationHeader}>
-                <View style={styles.doctorInfo}>
-                  <Image
-                    source={{
-                      uri: getFullImageUrl(application.doctor?.profile_photo),
-                    }}
-                    style={styles.doctorImage}
-                  />
-                  <View style={styles.doctorDetails}>
-                    <Text style={styles.doctorName}>
-                      {application.doctor?.name || 'Doctor'}
-                    </Text>
-                    <Text style={styles.doctorSpecialization}>
-                      {application.doctor?.specialization || 'Not specified'}
-                    </Text>
-                    {application.doctor?.current_location && (
-                      <View style={styles.locationRow}>
-                        <MapPin size={12} color={NeutralColors.textSecondary} />
-                        <Text style={styles.locationText}>
-                          {application.doctor.current_location}
-                        </Text>
-                      </View>
-                    )}
-                    {renderStars(application.doctor?.average_rating || 0, application.doctor?.total_ratings || 0)}
-                  </View>
+              {/* Checkbox */}
+              <TouchableOpacity
+                style={styles.comparisonCheckbox}
+                onPress={() => toggleComparisonSelection(application.id)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+                  {isSelected && <CheckCircle size={16} color="#fff" fill="#fff" />}
                 </View>
-                <View style={[styles.statusBadge, { backgroundColor: `${getStatusColor(application.status || 'pending')}20` }]}>
-                  {getStatusIcon(application.status || 'pending')}
-                  <Text style={[styles.statusText, { color: getStatusColor(application.status || 'pending') }]}>
-                    {getStatusText(application.status || 'pending')}
+              </TouchableOpacity>
+
+              {/* Profile Picture */}
+              <Image
+                source={{
+                  uri: getFullImageUrl(application.doctor?.profile_photo),
+                }}
+                style={styles.doctorImage}
+              />
+
+              {/* Doctor Info */}
+              <View style={styles.doctorInfoSection}>
+                <View style={styles.nameRow}>
+                  <Text style={styles.doctorName}>
+                    {application.doctor?.name || 'Doctor'}
+                  </Text>
+                  {application.status === 'selected' && (
+                    <View style={styles.selectedBadge}>
+                      <Text style={styles.selectedBadgeText}>(Selected)</Text>
+                    </View>
+                  )}
+                  {(application.status === 'pending' || !application.status) && (
+                    <View style={styles.newBadge}>
+                      <Text style={styles.newBadgeText}>NEW</Text>
+                    </View>
+                  )}
+                </View>
+
+                <Text style={styles.specialtyText}>
+                  {application.doctor?.departments?.[0]?.name || 
+                   application.doctor?.departments?.[0]?.department?.name ||
+                   application.doctor?.specialization || 
+                   'Not specified'}
+                </Text>
+
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoText}>
+                    {application.doctor?.experience || 'N/A'}+ Years
                   </Text>
                 </View>
-              </View>
 
-              {application.cover_letter && (
-                <View style={styles.coverLetterSection}>
-                  <Text style={styles.coverLetterLabel}>Cover Letter:</Text>
-                  <Text style={styles.coverLetterText}>{application.cover_letter}</Text>
-                </View>
-              )}
-
-              <View style={styles.applicationDetails}>
-                {application.proposed_rate && (
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Proposed Rate:</Text>
-                    <Text style={styles.detailValue}>${application.proposed_rate}</Text>
-                  </View>
-                )}
-                {application.available_date && (
-                  <View style={styles.detailItem}>
-                    <Text style={styles.detailLabel}>Available Date:</Text>
-                    <Text style={styles.detailValue}>
-                      {new Date(application.available_date).toLocaleDateString()}
-                    </Text>
-                  </View>
-                )}
-                <View style={styles.detailItem}>
-                  <Text style={styles.detailLabel}>Applied:</Text>
-                  <Text style={styles.detailValue}>
-                    {formatISTDateTime(application.created_at)}
+                <View style={styles.infoRow}>
+                  <Text style={styles.educationText}>
+                    {application.doctor?.qualifications || 'MD, Medical School'}
                   </Text>
                 </View>
-              </View>
 
-              {/* Accept/Reject Buttons */}
-              {(application.status === 'pending' || !application.status) && (
-                <View style={styles.actionButtons}>
-                  <TouchableOpacity
-                    style={[
-                      styles.actionButton, 
-                      styles.rejectButton,
-                      processingId === application.id && processingAction === 'reject' && { opacity: 0.6 }
-                    ]}
-                    onPress={() => {
-                      console.log('🔴 Reject button clicked for application:', application.id);
-                      handleReject(application.id, application.doctor?.name || 'this doctor');
-                    }}
-                    disabled={processingId !== null && processingId !== application.id}
-                    activeOpacity={0.7}
-                  >
-                    {processingId === application.id && processingAction === 'reject' ? (
-                      <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                      <>
-                        <XCircle size={18} color="#fff" />
-                        <Text style={styles.rejectButtonText}>Reject</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.actionButton, 
-                      styles.acceptButton,
-                      processingId === application.id && processingAction === 'accept' && { opacity: 0.6 }
-                    ]}
-                    onPress={() => {
-                      console.log('🔵 Accept button clicked for application:', application.id);
-                      handleAccept(application.id, application.doctor?.name || 'this doctor');
-                    }}
-                    disabled={processingId !== null && processingId !== application.id}
-                    activeOpacity={0.7}
-                  >
-                    {processingId === application.id && processingAction === 'accept' ? (
-                      <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                      <>
-                        <CheckCircle size={18} color="#fff" />
-                        <Text style={styles.acceptButtonText}>Accept</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              )}
-            </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.profileLink}
+                  onPress={() => {
+                    if (application.doctor?.id) {
+                      router.push(`/hospital/doctor-profile/${application.doctor.id}`);
+                    }
+                  }}
+                >
+                  <Text style={styles.profileLinkText}>Profile</Text>
+                  <ExternalLink size={14} color={PrimaryColors.main} />
+                </TouchableOpacity>
+
+                {/* Accept/Reject Buttons - Only show for pending applications */}
+                {(application.status === 'pending' || !application.status) && (
+                  <View style={styles.cardActionButtons}>
+                    <TouchableOpacity
+                      style={[styles.cardActionButton, styles.cardRejectButton]}
+                      onPress={() => {
+                        Alert.alert(
+                          'Reject Application',
+                          `Are you sure you want to reject ${application.doctor?.name || 'this doctor'}'s application?`,
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            {
+                              text: 'Reject',
+                              style: 'destructive',
+                              onPress: () => handleReject(application.id, application.doctor?.name || 'this doctor'),
+                            },
+                          ]
+                        );
+                      }}
+                      disabled={processingId !== null && processingId !== application.id}
+                    >
+                      {processingId === application.id && processingAction === 'reject' ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <>
+                          <XCircle size={16} color="#fff" />
+                          <Text style={styles.cardRejectButtonText}>Reject</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.cardActionButton, styles.cardAcceptButton]}
+                      onPress={() => handleAccept(application.id, application.doctor?.name || 'this doctor')}
+                      disabled={processingId !== null && processingId !== application.id}
+                    >
+                      {processingId === application.id && processingAction === 'accept' ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <>
+                          <CheckCircle size={16} color="#fff" />
+                          <Text style={styles.cardAcceptButtonText}>Accept</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            </View>
             );
           })
         )}
@@ -806,6 +826,140 @@ export default function ApplicationsScreen() {
           onFailure={handlePaymentFailure}
         />
       )}
+
+      {/* Floating Action Button for Comparison */}
+      {selectedForComparison.size >= 2 && (
+        <TouchableOpacity 
+          style={styles.floatingCompareButton}
+          onPress={() => {
+            router.push({
+              pathname: '/hospital/applications/compare',
+              params: {
+                requirementId: requirementId,
+                applicationIds: Array.from(selectedForComparison).join(',')
+              }
+            });
+          }}
+        >
+          <View style={styles.floatingCompareBadge}>
+            <Text style={styles.floatingCompareBadgeText}>{selectedForComparison.size}</Text>
+          </View>
+          <Text style={styles.floatingCompareButtonText}>Compare Candidates</Text>
+          <BarChart3 size={20} color="#fff" />
+        </TouchableOpacity>
+      )}
+
+      {/* Comparison Modal */}
+      <Modal
+        visible={showComparisonModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowComparisonModal(false)}
+      >
+        <View style={styles.comparisonModalOverlay}>
+          <View style={styles.comparisonModalContent}>
+            <View style={styles.comparisonModalHeader}>
+              <Text style={styles.comparisonModalTitle}>Compare Doctors</Text>
+              <TouchableOpacity
+                onPress={() => setShowComparisonModal(false)}
+                style={styles.comparisonModalClose}
+              >
+                <X size={24} color={NeutralColors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.comparisonScrollView} showsVerticalScrollIndicator={true}>
+              {getSelectedApplications().map((app) => (
+                <View key={app.id} style={styles.comparisonCard}>
+                  <View style={styles.comparisonCardHeader}>
+                    <Image
+                      source={{ uri: getFullImageUrl(app.doctor?.profile_photo) }}
+                      style={styles.comparisonDoctorImage}
+                    />
+                    <View style={styles.comparisonDoctorInfo}>
+                      <Text style={styles.comparisonDoctorName}>
+                        {app.doctor?.name || 'Doctor'}
+                      </Text>
+                      <Text style={styles.comparisonDoctorSpecialization}>
+                        {app.doctor?.specialization || 'Not specified'}
+                      </Text>
+                      {renderStars(app.doctor?.average_rating || 0, app.doctor?.total_ratings || 0)}
+                    </View>
+                  </View>
+                  <View style={styles.comparisonDetails}>
+                    <View style={styles.comparisonDetailRow}>
+                      <Text style={styles.comparisonDetailLabel}>Experience:</Text>
+                      <Text style={styles.comparisonDetailValue}>
+                        {app.doctor?.experience || 'N/A'} years
+                      </Text>
+                    </View>
+                    <View style={styles.comparisonDetailRow}>
+                      <Text style={styles.comparisonDetailLabel}>Rating:</Text>
+                      <Text style={styles.comparisonDetailValue}>
+                        {app.doctor?.average_rating ? `${app.doctor.average_rating.toFixed(1)}/5` : 'No ratings'}
+                      </Text>
+                    </View>
+                    <View style={styles.comparisonDetailRow}>
+                      <Text style={styles.comparisonDetailLabel}>Total Ratings:</Text>
+                      <Text style={styles.comparisonDetailValue}>
+                        {app.doctor?.total_ratings || 0}
+                      </Text>
+                    </View>
+                    {app.proposed_rate && (
+                      <View style={styles.comparisonDetailRow}>
+                        <Text style={styles.comparisonDetailLabel}>Proposed Rate:</Text>
+                        <Text style={styles.comparisonDetailValue}>
+                          ₹{app.proposed_rate.toLocaleString()}
+                        </Text>
+                      </View>
+                    )}
+                    {app.doctor?.current_location && (
+                      <View style={styles.comparisonDetailRow}>
+                        <Text style={styles.comparisonDetailLabel}>Location:</Text>
+                        <Text style={styles.comparisonDetailValue} numberOfLines={1}>
+                          {app.doctor.current_location}
+                        </Text>
+                      </View>
+                    )}
+                    {app.available_date && (
+                      <View style={styles.comparisonDetailRow}>
+                        <Text style={styles.comparisonDetailLabel}>Available:</Text>
+                        <Text style={styles.comparisonDetailValue}>
+                          {new Date(app.available_date).toLocaleDateString()}
+                        </Text>
+                      </View>
+                    )}
+                    <View style={styles.comparisonDetailRow}>
+                      <Text style={styles.comparisonDetailLabel}>Applied:</Text>
+                      <Text style={styles.comparisonDetailValue}>
+                        {formatISTDateTime(app.created_at)}
+                      </Text>
+                    </View>
+                    {app.cover_letter && (
+                      <View style={styles.comparisonCoverLetter}>
+                        <Text style={styles.comparisonCoverLetterLabel}>Cover Letter:</Text>
+                        <Text style={styles.comparisonCoverLetterText} numberOfLines={3}>
+                          {app.cover_letter}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+            <View style={styles.comparisonModalActions}>
+              <TouchableOpacity
+                style={styles.comparisonClearButton}
+                onPress={() => {
+                  setSelectedForComparison(new Set());
+                  setShowComparisonModal(false);
+                }}
+              >
+                <Text style={styles.comparisonClearButtonText}>Clear Selection</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
     </ScreenSafeArea>
   );
@@ -817,6 +971,48 @@ const styles = StyleSheet.create({
     backgroundColor: NeutralColors.background,
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 50 : 20,
+    paddingBottom: 16,
+    backgroundColor: PrimaryColors.dark,
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+    marginHorizontal: 16,
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginTop: 2,
+  },
+  searchButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  jobPostInfo: {
+    backgroundColor: PrimaryColors.dark,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+  },
+  jobPostTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#fff',
+    letterSpacing: 0.5,
+  },
+  applicantCount: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.9)',
+    marginTop: 4,
+  },
+  headerOld: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -895,9 +1091,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: 20,
-    paddingTop: 0,
-    paddingBottom: 100,
+    paddingTop: 16,
+    paddingBottom: 120,
   },
   emptyState: {
     alignItems: 'center',
@@ -918,14 +1113,23 @@ const styles = StyleSheet.create({
   },
   applicationCard: {
     backgroundColor: NeutralColors.cardBackground,
-    borderRadius: 16,
+    borderRadius: 12,
     padding: 16,
-    marginBottom: 16,
+    marginBottom: 12,
+    marginHorizontal: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+    position: 'relative',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  applicationCardSelected: {
+    borderWidth: 2,
+    borderColor: PrimaryColors.main,
   },
   applicationHeader: {
     flexDirection: 'row',
@@ -939,12 +1143,106 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   doctorImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    marginRight: 12,
-    backgroundColor: 'transparent',
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: NeutralColors.border,
     overflow: 'hidden',
+  },
+  doctorInfoSection: {
+    flex: 1,
+    gap: 6,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  newBadge: {
+    backgroundColor: StatusColors.success,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  newBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#fff',
+    letterSpacing: 0.5,
+  },
+  selectedBadge: {
+    backgroundColor: PrimaryColors.main,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  selectedBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  specialtyText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: PrimaryColors.main,
+    marginTop: 2,
+  },
+  infoRow: {
+    marginTop: 2,
+  },
+  infoText: {
+    fontSize: 13,
+    color: NeutralColors.textSecondary,
+  },
+  educationText: {
+    fontSize: 13,
+    color: NeutralColors.textSecondary,
+    fontStyle: 'italic',
+  },
+  profileLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  profileLinkText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: PrimaryColors.main,
+  },
+  cardActionButtons: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: NeutralColors.divider,
+  },
+  cardActionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  cardAcceptButton: {
+    backgroundColor: StatusColors.success,
+  },
+  cardRejectButton: {
+    backgroundColor: StatusColors.error,
+  },
+  cardAcceptButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  cardRejectButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
   },
   doctorDetails: {
     flex: 1,
@@ -953,7 +1251,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: NeutralColors.textPrimary,
-    marginBottom: 4,
   },
   doctorSpecialization: {
     fontSize: 14,
@@ -1259,6 +1556,216 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 15,
     fontWeight: '700',
+  },
+  // Comparison styles
+  compareButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  compareButtonText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  applicationCardSelected: {
+    borderWidth: 2,
+    borderColor: PrimaryColors.main,
+    backgroundColor: `${PrimaryColors.main}08`,
+  },
+  comparisonCheckbox: {
+    marginTop: 4,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: NeutralColors.border,
+    backgroundColor: NeutralColors.cardBackground,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxSelected: {
+    backgroundColor: PrimaryColors.main,
+    borderColor: PrimaryColors.main,
+  },
+  floatingCompareButton: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    right: 20,
+    backgroundColor: PrimaryColors.main,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+    gap: 12,
+    zIndex: 1000,
+  },
+  floatingCompareBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  floatingCompareBadgeText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: PrimaryColors.main,
+  },
+  floatingCompareButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
+    flex: 1,
+  },
+  comparisonModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  comparisonModalContent: {
+    backgroundColor: NeutralColors.cardBackground,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '90%',
+    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+  },
+  comparisonModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: NeutralColors.border,
+  },
+  comparisonModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: PrimaryColors.dark,
+  },
+  comparisonModalClose: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 16,
+    backgroundColor: NeutralColors.border,
+  },
+  comparisonScrollView: {
+    maxHeight: '100%',
+  },
+  comparisonCard: {
+    backgroundColor: '#fff',
+    margin: 16,
+    marginBottom: 12,
+    padding: 16,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  comparisonCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: NeutralColors.divider,
+  },
+  comparisonDoctorImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginRight: 12,
+    backgroundColor: 'transparent',
+  },
+  comparisonDoctorInfo: {
+    flex: 1,
+  },
+  comparisonDoctorName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: NeutralColors.textPrimary,
+    marginBottom: 4,
+  },
+  comparisonDoctorSpecialization: {
+    fontSize: 14,
+    color: PrimaryColors.main,
+    fontWeight: '500',
+    marginBottom: 6,
+  },
+  comparisonDetails: {
+    gap: 10,
+  },
+  comparisonDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  comparisonDetailLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: NeutralColors.textSecondary,
+    flex: 1,
+  },
+  comparisonDetailValue: {
+    fontSize: 14,
+    color: NeutralColors.textPrimary,
+    fontWeight: '500',
+    flex: 1,
+    textAlign: 'right',
+  },
+  comparisonCoverLetter: {
+    marginTop: 8,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: NeutralColors.divider,
+  },
+  comparisonCoverLetterLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: NeutralColors.textPrimary,
+    marginBottom: 6,
+  },
+  comparisonCoverLetterText: {
+    fontSize: 13,
+    color: NeutralColors.textSecondary,
+    lineHeight: 18,
+  },
+  comparisonModalActions: {
+    padding: 20,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: NeutralColors.border,
+  },
+  comparisonClearButton: {
+    backgroundColor: NeutralColors.border,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  comparisonClearButtonText: {
+    color: NeutralColors.textPrimary,
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
 

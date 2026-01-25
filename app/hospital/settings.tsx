@@ -94,9 +94,25 @@ export default function HospitalSettingsScreen() {
                 console.warn('Backend logout failed, continuing with local logout');
               }
 
-              // Clear local storage
-              await AsyncStorage.multiRemove([HOSPITAL_TOKEN_KEY, HOSPITAL_INFO_KEY]);
-              router.replace('/hospital/login');
+              // Clear ALL authentication data (both hospital and doctor) to allow switching
+              await AsyncStorage.multiRemove([
+                HOSPITAL_TOKEN_KEY, 
+                HOSPITAL_INFO_KEY,
+                'hospitalToken',
+                'hospitalInfo',
+                'doctorToken',
+                'doctorInfo',
+              ]);
+              
+              // Double-check and clear individually
+              await AsyncStorage.removeItem(HOSPITAL_TOKEN_KEY);
+              await AsyncStorage.removeItem(HOSPITAL_INFO_KEY);
+              await AsyncStorage.removeItem('hospitalToken');
+              await AsyncStorage.removeItem('hospitalInfo');
+              await AsyncStorage.removeItem('doctorToken');
+              await AsyncStorage.removeItem('doctorInfo');
+              
+              router.replace('/login'); // Go to doctor login, user can switch from there
             } catch (error) {
               console.error('Logout error:', error);
               Alert.alert('Error', 'Failed to logout. Please try again.');
@@ -125,7 +141,7 @@ export default function HospitalSettingsScreen() {
                     text: 'OK',
                     onPress: async () => {
                       await AsyncStorage.multiRemove([HOSPITAL_TOKEN_KEY, HOSPITAL_INFO_KEY]);
-                      router.replace('/hospital/login');
+                      router.replace('/login');
                     },
                   },
                 ]);

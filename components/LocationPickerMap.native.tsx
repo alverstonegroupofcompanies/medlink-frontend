@@ -4,6 +4,7 @@ import MapView, { Marker, Region, UrlTile, PROVIDER_GOOGLE } from 'react-native-
 import { MapPin } from 'lucide-react-native';
 import { HospitalPrimaryColors as PrimaryColors } from '@/constants/hospital-theme';
 import * as Location from 'expo-location';
+import { UBER_LIKE_MAP_STYLE } from '@/utils/map-style';
 
 interface LocationPickerMapProps {
   initialLatitude?: number | string;
@@ -77,6 +78,10 @@ export function LocationPickerMap({
         onRegionChangeComplete={onRegionChangeComplete}
         showsUserLocation={true}
         showsMyLocationButton={true}
+        customMapStyle={UBER_LIKE_MAP_STYLE as any}
+        showsBuildings={true}
+        rotateEnabled={true}
+        pitchEnabled={true}
       >
       </MapView>
       

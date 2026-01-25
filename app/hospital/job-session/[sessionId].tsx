@@ -147,25 +147,33 @@ export default function HospitalJobSessionScreen() {
   const isPaid = session.payment_status === 'paid' || session.payment_status === 'released';
   const paymentHeld = session.payment_status === 'held' || session.payment_status === 'pending';
 
-  // Check if doctor is late (15+ minutes past scheduled start time without check-in)
-  const isLate = (() => {
-    if (isCompleted || isInProgress || !session.session_date) return false;
-    
-    const sessionDate = new Date(session.session_date);
-    const now = new Date();
-    const timeDiff = now.getTime() - sessionDate.getTime();
-    const minutesLate = Math.floor(timeDiff / (1000 * 60));
-    
-    return minutesLate >= 15 && !session.check_in_time;
+  // Late is shown ONLY after the scheduled check-in time has passed (session_date + start_time),
+  // and only if doctor has not checked in yet.
+  const scheduledCheckInDateTime = (() => {
+    if (!session?.session_date) return null;
+    const dt = new Date(session.session_date);
+    const startTime = session?.job_requirement?.start_time;
+    if (startTime) {
+      const [hh, mm] = String(startTime).split(':');
+      const hours = parseInt(hh, 10);
+      const minutes = parseInt(mm, 10);
+      if (!Number.isNaN(hours) && !Number.isNaN(minutes)) {
+        dt.setHours(hours, minutes, 0, 0);
+      }
+    }
+    return dt;
   })();
 
-  const minutesLate = (() => {
-    if (!isLate || !session.session_date) return 0;
-    const sessionDate = new Date(session.session_date);
+  const lateMinutes = (() => {
+    if (isCompleted || isInProgress) return 0;
+    if (!scheduledCheckInDateTime) return 0;
+    if (hasCheckedIn) return 0;
     const now = new Date();
-    const timeDiff = now.getTime() - sessionDate.getTime();
-    return Math.floor(timeDiff / (1000 * 60));
+    if (now <= scheduledCheckInDateTime) return 0;
+    return Math.max(0, Math.floor((now.getTime() - scheduledCheckInDateTime.getTime()) / (1000 * 60)));
   })();
+
+  const isLate = lateMinutes > 0;
 
   const handleCall = () => {
     if (doctor?.phone_number) {
@@ -252,7 +260,7 @@ export default function HospitalJobSessionScreen() {
                     )}
                     {isLate && (
                       <View style={styles.lateBadge}>
-                        <Text style={styles.lateText}>LATE ({minutesLate}m)</Text>
+                        <Text style={styles.lateText}>LATE ({lateMinutes}m)</Text>
                       </View>
                     )}
                   </View>
@@ -422,7 +430,7 @@ export default function HospitalJobSessionScreen() {
                   icon={() => <ArrowRight size={20} color="#fff" />}
                   labelStyle={styles.actionButtonLabel}
                 >
-                  {isPaid ? 'View Payment Details' : 'Submit Rating & Release Funds'}
+                  {isPaid ? 'Payment Released' : 'Submit Rating & Release Funds'}
                 </Button>
                 {requirement && (
                   <Button 
@@ -441,53 +449,55 @@ export default function HospitalJobSessionScreen() {
           </Card.Content>
         </Card>
 
-        {/* Payment Summary Card */}
-        <Card style={[styles.card, styles.paymentCard]} mode="outlined">
-          <Card.Content>
-            <View style={styles.paymentHeader}>
-              <View style={{flexDirection: 'row', alignItems: 'center', gap: 8}}>
-                <Building2 size={20} color={PrimaryColors.main} />
-                <Text style={styles.paymentTitle}>Payment Summary</Text>
+        {/* Payment Summary Card - Hide after payment is released */}
+        {!isPaid && (
+          <Card style={[styles.card, styles.paymentCard]} mode="outlined">
+            <Card.Content>
+              <View style={styles.paymentHeader}>
+                <View style={{flexDirection: 'row', alignItems: 'center', gap: 8}}>
+                  <Building2 size={20} color={PrimaryColors.main} />
+                  <Text style={styles.paymentTitle}>Payment Summary</Text>
+                </View>
               </View>
-            </View>
-            
-            {/* Payment Breakdown */}
-            {(() => {
-              const doctorAmount = parseFloat(session.payment_amount || session.payments?.[0]?.doctor_amount || '0');
-              const serviceCharge = parseFloat(session.payments?.[0]?.admin_amount || '0') || (doctorAmount * 0.20);
-              const totalAmount = parseFloat(session.payments?.[0]?.amount || '0') || (doctorAmount + serviceCharge);
               
-              return (
-                <>
-                  <View style={styles.paymentBreakdownRow}>
-                    <Text style={styles.paymentBreakdownLabel}>Doctor Amount:</Text>
-                    <Text style={styles.paymentBreakdownValue}>₹{doctorAmount.toFixed(2)}</Text>
-                  </View>
-                  <View style={styles.paymentBreakdownRow}>
-                    <Text style={styles.paymentBreakdownLabel}>Service Charge (20%):</Text>
-                    <Text style={styles.paymentBreakdownValue}>₹{serviceCharge.toFixed(2)}</Text>
-                  </View>
-                  <View style={styles.paymentDivider} />
-                  <View style={styles.paymentTotalRow}>
-                    <Text style={styles.paymentTotalLabel}>Total Paid:</Text>
-                    <Text style={styles.paymentAmount}>₹{totalAmount.toFixed(2)}</Text>
-                  </View>
-                </>
-              );
-            })()}
-            
-            <View style={styles.paymentFooter}>
-              <Text style={styles.paymentNote}>Doctor receives full amount. Service charge included.</Text>
-              <Chip 
-                style={{backgroundColor: isPaid ? StatusColors.successBg : paymentHeld ? PrimaryColors.lightest : NeutralColors.border}} 
-                textStyle={{color: isPaid ? StatusColors.successDark : paymentHeld ? PrimaryColors.dark : NeutralColors.textTertiary, fontWeight: 'bold', fontSize: 11}}
-                icon={isPaid ? 'check' : 'clock'}
-              >
-                {isPaid ? 'PAID' : paymentHeld ? 'HELD' : 'PENDING'}
-              </Chip>
-            </View>
-          </Card.Content>
-        </Card>
+              {/* Payment Breakdown */}
+              {(() => {
+                const doctorAmount = parseFloat(session.payment_amount || session.payments?.[0]?.doctor_amount || '0');
+                const serviceCharge = parseFloat(session.payments?.[0]?.admin_amount || '0') || (doctorAmount * 0.20);
+                const totalAmount = parseFloat(session.payments?.[0]?.amount || '0') || (doctorAmount + serviceCharge);
+                
+                return (
+                  <>
+                    <View style={styles.paymentBreakdownRow}>
+                      <Text style={styles.paymentBreakdownLabel}>Doctor Amount:</Text>
+                      <Text style={styles.paymentBreakdownValue}>₹{doctorAmount.toFixed(2)}</Text>
+                    </View>
+                    <View style={styles.paymentBreakdownRow}>
+                      <Text style={styles.paymentBreakdownLabel}>Service Charge (20%):</Text>
+                      <Text style={styles.paymentBreakdownValue}>₹{serviceCharge.toFixed(2)}</Text>
+                    </View>
+                    <View style={styles.paymentDivider} />
+                    <View style={styles.paymentTotalRow}>
+                      <Text style={styles.paymentTotalLabel}>Total Paid:</Text>
+                      <Text style={styles.paymentAmount}>₹{totalAmount.toFixed(2)}</Text>
+                    </View>
+                  </>
+                );
+              })()}
+              
+              <View style={styles.paymentFooter}>
+                <Text style={styles.paymentNote}>Doctor receives full amount. Service charge included.</Text>
+                <Chip 
+                  style={{backgroundColor: isPaid ? StatusColors.successBg : paymentHeld ? PrimaryColors.lightest : NeutralColors.border}} 
+                  textStyle={{color: isPaid ? StatusColors.successDark : paymentHeld ? PrimaryColors.dark : NeutralColors.textTertiary, fontWeight: 'bold', fontSize: 11}}
+                  icon={isPaid ? 'check' : 'clock'}
+                >
+                  {isPaid ? 'PAID' : paymentHeld ? 'HELD' : 'PENDING'}
+                </Chip>
+              </View>
+            </Card.Content>
+          </Card>
+        )}
 
         {/* Reviews Section - Show after completion */}
         {isCompleted && session?.ratings && session.ratings.length > 0 && (

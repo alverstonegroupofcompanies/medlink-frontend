@@ -662,7 +662,7 @@ export default function HospitalDashboard() {
           hasLoadedSessions.current = true;
       } catch (error: any) {
           if (error.response?.status === 401) {
-            router.replace('/hospital/login');
+            router.replace('/login');
           }
       } finally {
           // Only turn off loading if we turned it on
@@ -753,7 +753,7 @@ export default function HospitalDashboard() {
         const token = await AsyncStorage.getItem(HOSPITAL_TOKEN_KEY);
         if (!token) {
           // console.log('⚠️ Hospital not authenticated, redirecting to login...');
-          router.replace('/hospital/login');
+          router.replace('/login');
           return;
         }
         // If authenticated, load data
@@ -922,7 +922,7 @@ export default function HospitalDashboard() {
     } catch (error: any) {
       console.error('Error loading requirements:', error);
       if (error.response?.status === 401) {
-        router.replace('/hospital/login');
+        router.replace('/login');
       }
     }
   };
@@ -1295,16 +1295,16 @@ export default function HospitalDashboard() {
       console.error('❌ Clear error details:', JSON.stringify(clearError, null, 2));
     }
     
-    // Navigate directly to login page
+    // Navigate directly to unified login page
     // console.log('🔄 Navigating to login page...');
     try {
-      router.replace('/hospital/login');
+      router.replace('/login');
       // console.log('✅ Hospital logout navigation completed');
     } catch (navError) {
       console.error('❌ Hospital logout navigation error:', navError);
       // Try alternative
       try {
-        router.push('/hospital/login');
+        router.push('/login');
       } catch (altError) {
         console.error('❌ Alternative navigation also failed:', altError);
       }
@@ -1963,113 +1963,70 @@ export default function HospitalDashboard() {
           }}
         />
 
-        {/* Available Doctors Section - Premium Expandable Card */}
+        {/* Available Doctors Section - Minimal & Clean */}
         {allDoctors.length > 0 && (
           <View style={styles.section}>
-            <Card style={styles.availableDoctorsCard} mode="outlined">
-              <TouchableOpacity
-                style={styles.availableDoctorsHeader}
-                onPress={() => setShowAllDoctors(!showAllDoctors)}
-                activeOpacity={0.8}
-              >
-                <View style={styles.availableDoctorsHeaderLeft}>
-                  <View style={styles.availableDoctorsIconContainer}>
-                    <Sparkles size={24} color={PrimaryColors.main} />
-                  </View>
-                  <View style={styles.availableDoctorsTitleContainer}>
-                    <Text style={styles.availableDoctorsTitle}>Available Doctors</Text>
-                    <Text style={styles.availableDoctorsDescription}>
-                      {allDoctors.length} verified doctors ready for assignments
-                    </Text>
-                  </View>
-                </View>
-                <View style={[styles.availableDoctorsChevron, showAllDoctors && styles.availableDoctorsChevronRotated]}>
-                  <ChevronDown size={24} color={PrimaryColors.main} />
-                </View>
-              </TouchableOpacity>
-              
-              {showAllDoctors && (
-                <Card.Content style={styles.availableDoctorsContent}>
-                  {loadingDoctors ? (
+            {/* Simple Title */}
+            <Text style={styles.availableDoctorsTitleClean}>Available Doctors</Text>
+            
+            {/* Horizontal Scrolling Cards */}
+            {loadingDoctors ? (
                     <View style={styles.loadingContainer}>
                       <ActivityIndicator size="small" color={PrimaryColors.main} />
                       <Text style={styles.loadingText}>Loading doctors...</Text>
                     </View>
                   ) : (
-                    <View style={styles.doctorsFlatList}>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.doctorsScrollContent}
+                      decelerationRate="fast"
+                    >
                       {allDoctors.map((doctor: any) => (
                         <TouchableOpacity
                           key={doctor.id}
-                          style={styles.doctorCard}
+                          style={styles.doctorCardHorizontal}
                           onPress={() => {
                             setSelectedDoctor(doctor);
                             setShowDoctorModal(true);
                           }}
                           activeOpacity={0.8}
                         >
-                          {/* Profile Picture */}
-                          <View style={styles.doctorCardAvatarContainer}>
-                            {doctor.profile_photo ? (
-                              <Avatar.Image
-                                size={64}
-                                source={{ uri: getFullImageUrl(doctor.profile_photo) }}
-                                style={styles.doctorCardAvatar}
-                              />
-                            ) : (
-                              <Avatar.Text
-                                size={64}
-                                label={doctor.name?.charAt(0)?.toUpperCase() || 'D'}
-                                style={[styles.doctorCardAvatar, { backgroundColor: PrimaryColors.light }]}
-                                labelStyle={{ color: PrimaryColors.main, fontSize: 24, fontWeight: '700' }}
-                              />
-                            )}
-                          </View>
+                          {/* Square Image - Full Width */}
+                          {doctor.profile_photo ? (
+                            <Image
+                              source={{ uri: getFullImageUrl(doctor.profile_photo) }}
+                              style={styles.doctorCardImage}
+                              resizeMode="cover"
+                            />
+                          ) : (
+                            <View style={styles.doctorCardImagePlaceholder}>
+                              <User size={40} color={PrimaryColors.main} />
+                            </View>
+                          )}
                           
-                          {/* Doctor Info */}
-                          <View style={styles.doctorCardInfo}>
+                          {/* Details Section */}
+                          <View style={styles.doctorCardDetails}>
                             <Text style={styles.doctorCardName} numberOfLines={1}>
                               Dr. {doctor.name}
                             </Text>
-                            <View style={styles.doctorCardDepartments}>
-                              {doctor.departments && doctor.departments.length > 0 ? (
-                                <Text style={styles.doctorCardDepartment} numberOfLines={1}>
-                                  {doctor.departments.join(', ')}
-                                </Text>
-                              ) : (
-                                <Text style={styles.doctorCardDepartment} numberOfLines={1}>
-                                  {doctor.department || 'General'}
-                                </Text>
-                              )}
-                            </View>
-                            <View style={styles.doctorCardFooter}>
-                              <View style={styles.doctorCardRating}>
-                                <Star size={14} color="#FFB800" fill="#FFB800" />
-                                <Text style={styles.doctorCardRatingText}>
-                                  {doctor.average_rating?.toFixed(1) || '0.0'}
-                                </Text>
-                              </View>
-                              {doctor.hourly_rate > 0 && (
-                                <>
-                                  <Text style={styles.doctorCardSeparator}>•</Text>
-                                  <Text style={styles.doctorCardRate}>
-                                    ₹{doctor.hourly_rate.toFixed(0)}/hr
-                                  </Text>
-                                </>
-                              )}
-                            </View>
-                          </View>
                           
-                          {/* Arrow Icon */}
-                          <View style={styles.doctorCardArrow}>
-                            <ArrowRight size={20} color={NeutralColors.textTertiary} />
+                            {/* Department */}
+                            <Text style={styles.doctorCardDepartment} numberOfLines={1}>
+                              {doctor.departments && doctor.departments.length > 0 
+                                ? doctor.departments[0] 
+                                : doctor.department || 'Specialist'}
+                            </Text>
+                            
+                            {/* View More Arrow */}
+                            <View style={styles.doctorCardViewMore}>
+                              <ArrowRight size={16} color={PrimaryColors.main} />
+                            </View>
                           </View>
                         </TouchableOpacity>
                       ))}
-                    </View>
-                  )}
-                </Card.Content>
-              )}
-            </Card>
+              </ScrollView>
+            )}
           </View>
         )}
       </ScrollView>
@@ -2102,7 +2059,7 @@ export default function HospitalDashboard() {
                 contentContainerStyle={styles.modalScrollContent}
                 showsVerticalScrollIndicator={false}
               >
-                {/* Profile Section */}
+                {/* Profile Section - Clean & Minimal */}
                 <View style={styles.modalProfileSection}>
                   {selectedDoctor.profile_photo ? (
                     <Avatar.Image
@@ -2120,105 +2077,109 @@ export default function HospitalDashboard() {
                   )}
                   <Text style={styles.modalDoctorName}>Dr. {selectedDoctor.name}</Text>
                   
-                  {/* Rating */}
-                  <View style={styles.modalRatingContainer}>
+                  {/* Department - Subtle text */}
+                  {selectedDoctor.department && (
+                    <Text style={styles.modalDepartmentSubtitle}>
+                      {selectedDoctor.department}
+                    </Text>
+                  )}
+                  
+                  {/* Rating - Inline */}
+                  <View style={styles.modalRatingRow}>
                     <View style={styles.modalStarsRow}>
                       {Array.from({ length: 5 }).map((_, i) => (
                         <Star
                           key={i}
-                          size={18}
-                          color={i < Math.floor(selectedDoctor.average_rating || 0) ? "#FFB800" : NeutralColors.border}
+                          size={16}
+                          color={i < Math.floor(selectedDoctor.average_rating || 0) ? "#FFB800" : "#E5E7EB"}
                           fill={i < Math.floor(selectedDoctor.average_rating || 0) ? "#FFB800" : "transparent"}
                         />
                       ))}
                     </View>
-                    <Text style={styles.modalRatingText}>
-                      {selectedDoctor.average_rating?.toFixed(1) || '0.0'} ({selectedDoctor.total_ratings || 0} ratings)
+                    <Text style={styles.modalRatingValue}>
+                      {selectedDoctor.average_rating?.toFixed(1) || '0.0'}
+                    </Text>
+                    <Text style={styles.modalRatingCount}>
+                      ({selectedDoctor.total_ratings || 0})
                     </Text>
                   </View>
 
-                  {/* Verified Badge */}
+                  {/* Verified Badge - Minimal */}
                   <View style={styles.modalVerifiedBadge}>
-                    <CheckCircle2 size={16} color={StatusColors.success} />
-                    <Text style={styles.modalVerifiedText}>Verified Doctor</Text>
+                    <CheckCircle2 size={14} color={StatusColors.success} />
+                    <Text style={styles.modalVerifiedText}>Verified</Text>
                   </View>
                 </View>
 
-                {/* Department Badge */}
-                {selectedDoctor.department && (
-                  <View style={styles.modalDepartmentBadge}>
-                    <Stethoscope size={16} color={PrimaryColors.main} />
-                    <Text style={styles.modalDepartmentText}>{selectedDoctor.department}</Text>
-                  </View>
-                )}
-
-                {/* Stats Section */}
-                <View style={styles.modalStatsSection}>
+                {/* Information Section - Clean List */}
+                <View style={styles.modalInfoSection}>
+                  {/* Completed Sessions */}
                   {selectedDoctor.completed_sessions !== undefined && (
-                    <View style={styles.modalStatItem}>
-                      <View style={[styles.modalStatIcon, { backgroundColor: PrimaryColors.lightest }]}>
-                        <CheckCircle2 size={20} color={PrimaryColors.main} />
+                    <View style={styles.modalInfoRow}>
+                      <View style={styles.modalInfoLeft}>
+                        <CheckCircle2 size={18} color={PrimaryColors.main} />
+                        <Text style={styles.modalInfoLabel}>Sessions Completed</Text>
                       </View>
-                      <View style={styles.modalStatContent}>
-                        <Text style={styles.modalStatValue}>{selectedDoctor.completed_sessions || 0}</Text>
-                        <Text style={styles.modalStatLabel}>Sessions Completed</Text>
-                      </View>
+                      <Text style={styles.modalInfoValue}>{selectedDoctor.completed_sessions || 0}</Text>
                     </View>
                   )}
+
+                  {/* Divider */}
+                  {selectedDoctor.completed_sessions !== undefined && selectedDoctor.total_working_hours !== undefined && (
+                    <View style={styles.modalInfoDivider} />
+                  )}
                   
+                  {/* Working Hours */}
                   {selectedDoctor.total_working_hours !== undefined && (
-                    <View style={styles.modalStatItem}>
-                      <View style={[styles.modalStatIcon, { backgroundColor: StatusColors.successBg }]}>
-                        <Clock size={20} color={StatusColors.success} />
+                    <View style={styles.modalInfoRow}>
+                      <View style={styles.modalInfoLeft}>
+                        <Clock size={18} color={PrimaryColors.main} />
+                        <Text style={styles.modalInfoLabel}>Total Hours</Text>
                       </View>
-                      <View style={styles.modalStatContent}>
-                        <Text style={styles.modalStatValue}>{selectedDoctor.total_working_hours || 0} hrs</Text>
-                        <Text style={styles.modalStatLabel}>Total Working Hours</Text>
-                      </View>
+                      <Text style={styles.modalInfoValue}>{selectedDoctor.total_working_hours || 0} hrs</Text>
                     </View>
                   )}
+
+                  {/* Divider */}
+                  {selectedDoctor.total_working_hours !== undefined && selectedDoctor.hourly_rate > 0 && (
+                    <View style={styles.modalInfoDivider} />
+                  )}
                   
+                  {/* Hourly Rate */}
                   {selectedDoctor.hourly_rate > 0 && (
-                    <View style={styles.modalStatItem}>
-                      <View style={[styles.modalStatIcon, { backgroundColor: '#FEF3C7' }]}>
-                        <DollarSign size={20} color="#D97706" />
+                    <View style={styles.modalInfoRow}>
+                      <View style={styles.modalInfoLeft}>
+                        <DollarSign size={18} color={PrimaryColors.main} />
+                        <Text style={styles.modalInfoLabel}>Hourly Rate</Text>
                       </View>
-                      <View style={styles.modalStatContent}>
-                        <Text style={styles.modalStatValue}>₹{selectedDoctor.hourly_rate.toFixed(0)}/hr</Text>
-                        <Text style={styles.modalStatLabel}>Hourly Rate</Text>
-                      </View>
+                      <Text style={styles.modalInfoValue}>₹{selectedDoctor.hourly_rate.toFixed(0)}</Text>
                     </View>
                   )}
-                  
-                  <View style={styles.modalStatItem}>
-                    <View style={[styles.modalStatIcon, { backgroundColor: '#DBEAFE' }]}>
-                      <Star size={20} color="#2563EB" />
+
+                  {/* Divider */}
+                  {selectedDoctor.location && (selectedDoctor.hourly_rate > 0 || selectedDoctor.total_working_hours !== undefined) && (
+                    <View style={styles.modalInfoDivider} />
+                  )}
+
+                  {/* Location */}
+                  {selectedDoctor.location && (
+                    <View style={styles.modalInfoRow}>
+                      <View style={styles.modalInfoLeft}>
+                        <MapPin size={18} color={PrimaryColors.main} />
+                        <Text style={styles.modalInfoLabel}>Location</Text>
+                      </View>
+                      <Text style={[styles.modalInfoValue, { flex: 1, textAlign: 'right' }]} numberOfLines={2}>
+                        {selectedDoctor.location}
+                      </Text>
                     </View>
-                    <View style={styles.modalStatContent}>
-                      <Text style={styles.modalStatValue}>{selectedDoctor.total_ratings || 0}</Text>
-                      <Text style={styles.modalStatLabel}>Total Ratings</Text>
-                    </View>
-                  </View>
+                  )}
                 </View>
 
-                {/* Location Section */}
-                {selectedDoctor.location && (
-                  <View style={styles.modalLocationSection}>
-                    <View style={styles.modalLocationHeader}>
-                      <MapPin size={18} color={PrimaryColors.main} />
-                      <Text style={styles.modalLocationTitle}>Location</Text>
-                    </View>
-                    <Text style={styles.modalLocationText}>{selectedDoctor.location}</Text>
-                  </View>
-                )}
-
-                {/* Security Notice */}
+                {/* Security Notice - Minimal */}
                 <View style={styles.modalSecurityNotice}>
-                  <View style={styles.modalSecurityIcon}>
-                    <User size={16} color={NeutralColors.textSecondary} />
-                  </View>
+                  <Shield size={14} color={NeutralColors.textTertiary} />
                   <Text style={styles.modalSecurityText}>
-                    Contact information is protected for security reasons. You can contact doctors through the platform after assigning them to a job.
+                    Contact details protected. Connect after assignment.
                   </Text>
                 </View>
               </ScrollView>
@@ -3274,16 +3235,21 @@ const styles = StyleSheet.create({
   },
   // Available Doctors - Flat List Styles
   doctorsFlatList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
     paddingHorizontal: 0,
+    justifyContent: 'flex-start',
   },
   doctorCard: {
-    flexDirection: 'row',
+    width: '48%',
+    minWidth: 150,
+    flexDirection: 'column',
     alignItems: 'center',
     backgroundColor: '#fff',
     borderRadius: 16,
     padding: 16,
-    marginBottom: 8,
+    paddingVertical: 20,
     borderWidth: 1,
     borderColor: NeutralColors.divider,
     shadowColor: '#000',
@@ -3293,55 +3259,75 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   doctorCardAvatarContainer: {
-    marginRight: 16,
+    marginBottom: 12,
   },
   doctorCardAvatar: {
+    marginBottom: 12,
     backgroundColor: PrimaryColors.light,
   },
   doctorCardInfo: {
-    flex: 1,
-    gap: 6,
+    alignItems: 'center',
+    width: '100%',
   },
   doctorCardName: {
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '700',
     color: NeutralColors.textPrimary,
     letterSpacing: -0.3,
-    marginBottom: 2,
+    marginBottom: 4,
+    textAlign: 'center',
   },
   doctorCardDepartment: {
-    fontSize: 14,
+    fontSize: 12,
     color: NeutralColors.textSecondary,
     fontWeight: '500',
-    marginBottom: 4,
+    marginBottom: 8,
+    textAlign: 'center',
   },
   doctorCardFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginTop: 2,
+    justifyContent: 'center',
   },
   doctorCardRating: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    marginTop: 4,
   },
   doctorCardRatingText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: NeutralColors.textPrimary,
   },
   doctorCardSeparator: {
-    fontSize: 14,
+    fontSize: 12,
     color: NeutralColors.textTertiary,
   },
   doctorCardRate: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
     color: PrimaryColors.main,
+    marginTop: 4,
+    textAlign: 'center',
   },
   doctorCardArrow: {
-    marginLeft: 8,
+    display: 'none',
+  },
+  loadingContainer: {
+    padding: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: NeutralColors.textSecondary,
+    fontWeight: '500',
+  },
+  doctorCardDepartments: {
+    marginBottom: 4,
   },
   // Available Doctors Premium Card Styles
   availableDoctorsCard: {
@@ -3410,6 +3396,79 @@ const styles = StyleSheet.create({
   availableDoctorsContent: {
     paddingTop: 8,
     paddingBottom: 4,
+  },
+  // Available Doctors - Minimal Clean Design
+  availableDoctorsTitleClean: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: NeutralColors.textPrimary,
+    marginBottom: 16,
+    paddingHorizontal: 20,
+  },
+  doctorsScrollContent: {
+    paddingLeft: 20,
+    paddingRight: 20,
+    paddingBottom: 32,
+    gap: 16,
+  },
+  doctorCardHorizontal: {
+    width: 170,
+    minWidth: 170,
+    flexDirection: 'column',
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  doctorCardImage: {
+    width: '100%',
+    height: 160,
+    backgroundColor: NeutralColors.lightest,
+  },
+  doctorCardImagePlaceholder: {
+    width: '100%',
+    height: 160,
+    backgroundColor: PrimaryColors.lightest,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  doctorCardDetails: {
+    padding: 12,
+    gap: 6,
+  },
+  doctorCardAvatar: {
+    display: 'none',
+  },
+  doctorCardName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: NeutralColors.textPrimary,
+    textAlign: 'left',
+    letterSpacing: -0.2,
+  },
+  doctorCardDepartment: {
+    fontSize: 11,
+    color: NeutralColors.textSecondary,
+    fontWeight: '500',
+    textAlign: 'left',
+    marginBottom: 8,
+  },
+  doctorCardViewMore: {
+    alignSelf: 'flex-end',
+    marginTop: 'auto',
+  },
+  doctorCardHourlyRate: {
+    display: 'none',
+  },
+  bookNowButton: {
+    display: 'none',
+  },
+  bookNowText: {
+    display: 'none',
   },
   // Legacy department styles (kept for compatibility)
   doctorsContainer: {
@@ -3615,158 +3674,109 @@ const styles = StyleSheet.create({
   },
   modalProfileSection: {
     alignItems: 'center',
-    padding: 24,
-    backgroundColor: PrimaryColors.dark,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    paddingVertical: 32,
+    paddingHorizontal: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: NeutralColors.divider,
   },
   modalAvatar: {
     marginBottom: 16,
-    borderWidth: 4,
-    borderColor: '#fff',
   },
   modalDoctorName: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#fff',
-    marginBottom: 12,
+    color: NeutralColors.textPrimary,
+    marginBottom: 6,
+    letterSpacing: -0.5,
   },
-  modalRatingContainer: {
+  modalDepartmentSubtitle: {
+    fontSize: 15,
+    color: NeutralColors.textSecondary,
+    marginBottom: 12,
+    fontWeight: '500',
+  },
+  modalRatingRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
     marginBottom: 12,
   },
   modalStarsRow: {
     flexDirection: 'row',
-    gap: 4,
-    marginBottom: 8,
+    gap: 3,
   },
-  modalRatingText: {
-    fontSize: 14,
-    color: '#fff',
-    fontWeight: '600',
-  },
-  modalVerifiedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    gap: 6,
-  },
-  modalVerifiedText: {
-    fontSize: 13,
-    color: '#fff',
-    fontWeight: '600',
-  },
-  modalStatsSection: {
-    padding: 20,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    justifyContent: 'space-between',
-  },
-  modalStatItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: NeutralColors.cardBackground,
-    padding: 16,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: NeutralColors.divider,
-    width: '48%',
-    minWidth: 140,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  modalStatIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalStatContent: {
-    flex: 1,
-  },
-  modalStatValue: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: NeutralColors.textPrimary,
-    marginBottom: 2,
-    letterSpacing: -0.3,
-  },
-  modalStatLabel: {
-    fontSize: 12,
-    color: NeutralColors.textSecondary,
-    fontWeight: '500',
-  },
-  modalDepartmentBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'center',
-    backgroundColor: PrimaryColors.lightest,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: PrimaryColors.light,
-    gap: 8,
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  modalDepartmentText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: PrimaryColors.main,
-  },
-  modalLocationSection: {
-    backgroundColor: NeutralColors.cardBackground,
-    borderRadius: 16,
-    padding: 20,
-    marginHorizontal: 20,
-    marginTop: 8,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: NeutralColors.divider,
-  },
-  modalLocationHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 12,
-  },
-  modalLocationTitle: {
+  modalRatingValue: {
     fontSize: 16,
     fontWeight: '700',
     color: NeutralColors.textPrimary,
   },
-  modalLocationText: {
+  modalRatingCount: {
     fontSize: 14,
+    color: NeutralColors.textTertiary,
+    fontWeight: '500',
+  },
+  modalVerifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: StatusColors.successBg,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 5,
+  },
+  modalVerifiedText: {
+    fontSize: 12,
+    color: StatusColors.success,
+    fontWeight: '600',
+  },
+  modalInfoSection: {
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+  },
+  modalInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+  },
+  modalInfoLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  modalInfoLabel: {
+    fontSize: 15,
     color: NeutralColors.textSecondary,
-    lineHeight: 20,
+    fontWeight: '500',
+  },
+  modalInfoValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: NeutralColors.textPrimary,
+    letterSpacing: -0.3,
+  },
+  modalInfoDivider: {
+    height: 1,
+    backgroundColor: NeutralColors.divider,
+    marginHorizontal: 0,
   },
   modalSecurityNotice: {
     flexDirection: 'row',
-    backgroundColor: NeutralColors.lightest,
-    padding: 16,
-    margin: 20,
-    borderRadius: 12,
+    alignItems: 'flex-start',
+    backgroundColor: NeutralColors.cardBackground,
+    padding: 14,
+    marginHorizontal: 20,
+    marginVertical: 20,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: PrimaryColors.light,
-    gap: 12,
-  },
-  modalSecurityIcon: {
-    marginTop: 2,
+    borderColor: NeutralColors.divider,
+    gap: 10,
   },
   modalSecurityText: {
     flex: 1,
-    fontSize: 13,
-    color: NeutralColors.textSecondary,
-    lineHeight: 18,
+    fontSize: 12,
+    color: NeutralColors.textTertiary,
+    lineHeight: 17,
   },
 });

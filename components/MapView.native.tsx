@@ -5,6 +5,7 @@ import { MapPin, Navigation } from 'lucide-react-native';
 import { PrimaryColors, NeutralColors, StatusColors } from '@/constants/theme';
 import MapView from 'react-native-maps';
 import { Marker } from 'react-native-maps';
+import { UBER_LIKE_MAP_STYLE } from '@/utils/map-style';
 
 interface MapViewComponentProps {
   initialLocation?: { latitude: number; longitude: number };
@@ -90,6 +91,10 @@ export function MapViewComponent({
         showsUserLocation={true}
         showsMyLocationButton={false}
         mapType="standard"
+        customMapStyle={UBER_LIKE_MAP_STYLE as any}
+        showsBuildings={true}
+        rotateEnabled={true}
+        pitchEnabled={true}
       >
         {selectedLocation && (
           <Marker

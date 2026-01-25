@@ -26,6 +26,7 @@ import { AppSplashScreen } from '@/components/splash-screen';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { setupNotificationListeners } from '@/utils/notifications';
 import { setupErrorHandlers } from '@/utils/error-logger';
+import '@/utils/live-location-task';
 
 // Keep the native splash screen visible while we load
 SplashScreen.preventAutoHideAsync();

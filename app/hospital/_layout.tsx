@@ -22,13 +22,13 @@ export default function HospitalTabLayout() {
             if (__DEV__) {
               console.log('⚠️ Hospital not authenticated, redirecting to login...');
             }
-            router.replace('/hospital/login');
+            router.replace('/login');
           }
         } catch (error) {
           if (__DEV__) {
             console.error('Error checking auth:', error);
           }
-          router.replace('/hospital/login');
+          router.replace('/login');
         }
       };
       checkAuth();

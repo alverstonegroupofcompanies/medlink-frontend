@@ -469,7 +469,12 @@ export default function HistoryScreen() {
                   {isActive && (
                     <TouchableOpacity
                       style={[styles.actionButton, styles.trackingButton]}
-                      onPress={() => router.push('/live-tracking')}
+                      onPress={() => {
+                        Alert.alert(
+                          'Live Location Sharing',
+                          'Live tracking runs in the background after you start sharing from Job Details. You can minimize the app and the hospital can still see your location.'
+                        );
+                      }}
                     >
                       <Navigation size={16} color="#fff" />
                       <Text style={styles.actionButtonText}>Live Tracking</Text>

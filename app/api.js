@@ -25,7 +25,12 @@ if (!__DEV__) {
 // Create Axios instance with configurable base URL
 const API = axios.create({
   baseURL: API_BASE_URL,
-  headers: { 'Content-Type': 'application/json' },
+  headers: {
+    'Content-Type': 'application/json',
+    // Force Laravel to return JSON (otherwise validation/auth errors can 302 redirect to HTML)
+    Accept: 'application/json',
+    'X-Requested-With': 'XMLHttpRequest',
+  },
   timeout: 120000, // 120 second timeout for file uploads (2 minutes)
   maxContentLength: Infinity, // No limit on response size
   maxBodyLength: Infinity, // No limit on request body size (for file uploads)
@@ -75,18 +80,34 @@ API.interceptors.request.use(
       // Check if this is a public route
       const isPublicRoute = publicRoutes.some(route => url.includes(route));
       
-      // Check if this is a hospital route
-      if (url.includes('/hospital/')) {
-        // Hospital route - use hospital token
+      // Check if this is a hospital route or a generic route that might use hospital token
+      const isHospitalRoute = url.includes('/hospital/');
+      const isDoctorRoute = url.includes('/doctor/') || url.includes('/jobs/') || url.includes('/attendance/');
+      
+      if (isHospitalRoute) {
+        // Explicit hospital route - use hospital token
         token = await AsyncStorage.getItem('hospitalToken');
         if (__DEV__ && token) {
           console.log('🏥 Using hospital token for:', url);
         }
-      } else {
-        // Doctor route or other - use doctor token
+      } else if (isDoctorRoute) {
+        // Explicit doctor route - use doctor token
         token = await AsyncStorage.getItem('doctorToken');
         if (__DEV__ && token) {
           console.log('👨‍⚕️ Using doctor token for:', url);
+        }
+      } else {
+        // Generic route (like /disputes, /notifications) - try both, prioritize what works
+        // This is critical for shared routes
+        const hToken = await AsyncStorage.getItem('hospitalToken');
+        const dToken = await AsyncStorage.getItem('doctorToken');
+        
+        // Use hospital token if we are likely a hospital (based on path or presence of only hospital token)
+        // or just use whichever one exists
+        token = hToken || dToken;
+        
+        if (__DEV__ && token) {
+          console.log(`${hToken ? '🏥' : '👨‍⚕️'} Using generic token for: ${url}`);
         }
       }
       

@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ArrowLeft, Star, CheckCircle, AlertTriangle, ChevronDown } from 'lucide-react-native';
+import { ArrowLeft, Star, CheckCircle, AlertTriangle, ChevronDown, AlertCircle } from 'lucide-react-native';
 import { Card, Text, Button, Surface, Avatar, Chip, ActivityIndicator } from 'react-native-paper';
 import API from '../../api';
 import { HospitalPrimaryColors as PrimaryColors } from '@/constants/hospital-theme';
@@ -68,15 +68,18 @@ export default function ReviewSessionScreen() {
       });
 
       // 2. Confirm and Release Payment (integrated)
-      await API.post(`/hospital/sessions/${sessionId}/confirm`);
+      const confirmResponse = await API.post(`/hospital/sessions/${sessionId}/confirm`);
 
       // 3. Reload session to get updated status
       await loadSession();
       
-      Alert.alert('Success', 'Work approved and payment released for admin verification.');
+      // Show appropriate message based on response
+      const message = confirmResponse.data?.message || 'Work approved successfully.';
+      Alert.alert('Success', message);
     } catch (error: any) {
       console.error('Approval failed:', error);
-      Alert.alert('Error', error.response?.data?.message || 'Failed to approve session');
+      const errorMessage = error.response?.data?.message || 'Failed to approve session';
+      Alert.alert('Error', errorMessage);
     } finally {
       setSubmitting(false);
     }
@@ -260,6 +263,28 @@ export default function ReviewSessionScreen() {
             )}
           </Card.Content>
         </Card>
+        
+        {/* Dispute Section */}
+        {!isHospitalApproved && (
+          <Card style={styles.disputeCard} mode="outlined">
+            <Card.Content>
+              <View style={styles.disputeHeader}>
+                <AlertCircle size={20} color="#DC2626" />
+                <Text style={styles.disputeTitle}>Need to report an issue?</Text>
+              </View>
+              <Text style={styles.disputeText}>
+                If you encountered any issues with the doctor's attendance or quality of work, you can raise a dispute before releasing the payment.
+              </Text>
+              <TouchableOpacity 
+                style={styles.disputeButton}
+                onPress={() => router.push(`/hospital/dispute/${sessionId}`)}
+              >
+                <Text style={styles.disputeButtonText}>Open Dispute Form</Text>
+                <ArrowLeft size={16} color="#DC2626" style={{ transform: [{ rotate: '180deg' }] }} />
+              </TouchableOpacity>
+            </Card.Content>
+          </Card>
+        )}
 
         {/* Escrow Badge */}
         <View style={styles.escrowBadge}>

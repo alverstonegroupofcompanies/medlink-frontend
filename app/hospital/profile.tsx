@@ -6,6 +6,8 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
+  ImageBackground,
+  Dimensions,
   ActivityIndicator,
   StatusBar,
   RefreshControl,
@@ -39,6 +41,8 @@ import { isDoctorLoggedIn } from '@/utils/auth';
 import { ModernCard } from '@/components/modern-card';
 
 const HOSPITAL_INFO_KEY = 'hospitalInfo';
+const CONTENT_MAX_WIDTH = 720;
+const { width } = Dimensions.get('window');
 
 export default function HospitalProfileScreen() {
   const [hospital, setHospital] = useState<any>(null);
@@ -68,6 +72,26 @@ export default function HospitalProfileScreen() {
       await AsyncStorage.setItem(HOSPITAL_INFO_KEY, JSON.stringify(hospitalData));
     } catch (error: any) {
       console.error('Error loading hospital profile:', error);
+      const status = error?.response?.status;
+
+      // If unauthorized, redirect to hospital login (prevents "Profile not found" confusion)
+      if (status === 401) {
+        try {
+          await AsyncStorage.removeItem('hospitalToken');
+        } catch {}
+        router.replace('/login');
+        return;
+      }
+
+      // Fallback to cached profile (helps when network is flaky)
+      try {
+        const cached = await AsyncStorage.getItem(HOSPITAL_INFO_KEY);
+        if (cached) {
+          setHospital(JSON.parse(cached));
+          return;
+        }
+      } catch {}
+
       Alert.alert('Error', error.response?.data?.message || 'Failed to load profile');
     } finally {
       setLoading(false);
@@ -169,24 +193,42 @@ export default function HospitalProfileScreen() {
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
         
-        {/* Modern Gradient Header */}
-        <LinearGradient
-          colors={[PrimaryColors.dark, PrimaryColors.main]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.headerGradient}
-        >
+        {/* Cover Header (Hospital Image) */}
+        <View style={styles.headerGradient}>
+          {hospital.hospital_picture_url || hospital.hospital_picture ? (
+            <ImageBackground
+              source={{
+                uri:
+                  hospital.hospital_picture_url ||
+                  `${BASE_BACKEND_URL}/app/${hospital.hospital_picture}`,
+              }}
+              style={styles.coverImage}
+              resizeMode="cover"
+            >
+              <LinearGradient
+                colors={['rgba(0,0,0,0.45)', 'rgba(0,0,0,0.16)', 'rgba(0,0,0,0.6)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={styles.coverDim}
+              />
+            </ImageBackground>
+          ) : (
+            <LinearGradient
+              colors={[PrimaryColors.dark, PrimaryColors.main]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.coverImage}
+            />
+          )}
+
           <View style={styles.headerContent}>
             <Text style={styles.headerTitle}>Profile</Text>
-            <TouchableOpacity 
-              onPress={() => router.push('/hospital/profile/edit')} 
-              style={styles.editButton}
-            >
+            <TouchableOpacity onPress={() => router.push('/hospital/profile/edit')} style={styles.editButton}>
               <Edit size={20} color={PrimaryColors.main} />
               <Text style={styles.editButtonText}>Edit</Text>
             </TouchableOpacity>
           </View>
-        </LinearGradient>
+        </View>
 
         <ScrollView 
           style={styles.scrollView}
@@ -196,6 +238,46 @@ export default function HospitalProfileScreen() {
           }
           showsVerticalScrollIndicator={false}
         >
+          {/* Uploaded Images */}
+          <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionIconContainer}>
+                <Building2 size={20} color={PrimaryColors.main} />
+              </View>
+              <Text style={styles.sectionTitle}>Images</Text>
+            </View>
+
+            <View style={styles.imagesRow}>
+              <View style={styles.imageItem}>
+                <Text style={styles.imageLabel}>Logo / Profile</Text>
+                {hospital.logo_url || hospital.logo_path ? (
+                  <Image
+                    source={{ uri: hospital.logo_url || `${BASE_BACKEND_URL}/app/${hospital.logo_path}` }}
+                    style={styles.thumbCircle}
+                  />
+                ) : (
+                  <View style={[styles.thumbCircle, styles.thumbPlaceholder]}>
+                    <Building2 size={22} color={PrimaryColors.main} />
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.imageItem}>
+                <Text style={styles.imageLabel}>Cover</Text>
+                {hospital.hospital_picture_url || hospital.hospital_picture ? (
+                  <Image
+                    source={{ uri: hospital.hospital_picture_url || `${BASE_BACKEND_URL}/app/${hospital.hospital_picture}` }}
+                    style={styles.thumbCover}
+                  />
+                ) : (
+                  <View style={[styles.thumbCover, styles.thumbPlaceholder]}>
+                    <Building2 size={22} color={PrimaryColors.main} />
+                  </View>
+                )}
+              </View>
+            </View>
+          </ModernCard>
+
           {/* Profile Card with Modern Design */}
           <ModernCard variant="elevated" style={styles.profileCard}>
             <View style={styles.profileHeader}>
@@ -282,19 +364,7 @@ export default function HospitalProfileScreen() {
               </View>
             )}
 
-            {(hospital.latitude && hospital.longitude) && (
-              <View style={[styles.detailRow, styles.lastDetailRow]}>
-                <View style={styles.iconWrapper}>
-                  <MapPin size={18} color={PrimaryColors.main} />
-                </View>
-                <View style={styles.detailContent}>
-                  <Text style={styles.detailLabel}>Location Coordinates</Text>
-                  <Text style={styles.detailValue}>
-                    {parseFloat(String(hospital.latitude)).toFixed(6)}, {parseFloat(String(hospital.longitude)).toFixed(6)}
-                  </Text>
-                </View>
-              </View>
-            )}
+            {/* Coordinates intentionally hidden (show address only) */}
           </ModernCard>
 
           {/* License Information */}
@@ -427,6 +497,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: NeutralColors.background,
   },
+  coverImage: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  coverDim: {
+    ...StyleSheet.absoluteFillObject,
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -452,6 +528,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
+    overflow: 'hidden',
+    minHeight: 180,
   },
   headerContent: {
     flexDirection: 'row',
@@ -489,9 +567,46 @@ const styles = StyleSheet.create({
   content: {
     padding: 16,
     paddingTop: 24,
+    width: '100%',
+    maxWidth: width >= 768 ? CONTENT_MAX_WIDTH : '100%',
+    alignSelf: 'center',
   },
   profileCard: {
     marginBottom: 20,
+  },
+  imagesRow: {
+    flexDirection: 'row',
+    gap: 14,
+  },
+  imageItem: {
+    flex: 1,
+    gap: 10,
+  },
+  imageLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: NeutralColors.textSecondary,
+  },
+  thumbCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#fff',
+  },
+  thumbCover: {
+    width: '100%',
+    height: 64,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#fff',
+  },
+  thumbPlaceholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: `${PrimaryColors.main}10`,
   },
   profileHeader: {
     alignItems: 'center',

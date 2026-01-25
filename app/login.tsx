@@ -29,7 +29,9 @@ import {
   EyeOff, 
   Activity,
   CheckCircle,
-  Stethoscope
+  Stethoscope,
+  Building2,
+  User
 } from 'lucide-react-native';
 
 export default function LoginScreen() {
@@ -37,9 +39,10 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [userType, setUserType] = useState<'doctor' | 'hospital'>('doctor');
   const colorScheme = useColorScheme();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const isTablet = width >= 768;
 
   // No auto-login - user must always login manually
@@ -53,29 +56,46 @@ export default function LoginScreen() {
     setLoading(true);
   
     try {
-      const response = await API.post('/doctor/login', {
+      const endpoint = userType === 'doctor' ? '/doctor/login' : '/hospital/login';
+      const response = await API.post(endpoint, {
         email: email.trim(),
         password: password.trim(),
       });
   
-      const { token, doctor } = response.data;
+      if (userType === 'doctor') {
+        const { token, doctor } = response.data;
+        await saveDoctorAuth(token, doctor);
+        
+        // Register for push notifications
+        try {
+          const { registerForPushNotifications } = require('@/utils/notifications');
+          await registerForPushNotifications();
+        } catch (error) {
+          console.warn('⚠️ Failed to register for push notifications:', error);
+        }
 
-      // Save authentication data using centralized function
-      await saveDoctorAuth(token, doctor);
+        Alert.alert('✅ Login Successful', 'Welcome back, doctor!');
+        setTimeout(() => {
+          router.replace('/(tabs)');
+        }, 1200);
+      } else {
+        const { token, hospital } = response.data;
+        const { saveHospitalAuth } = require('@/utils/auth');
+        await saveHospitalAuth(token, hospital);
+        
+        // Register for push notifications
+        try {
+          const { registerForPushNotifications } = require('@/utils/notifications');
+          await registerForPushNotifications('hospital');
+        } catch (error) {
+          console.warn('⚠️ Failed to register for push notifications:', error);
+        }
 
-      // Register for push notifications after successful login
-      try {
-        const { registerForPushNotifications } = require('@/utils/notifications');
-        await registerForPushNotifications();
-      } catch (error) {
-        console.warn('⚠️ Failed to register for push notifications:', error);
+        Alert.alert('✅ Login Successful', 'Welcome back!');
+        setTimeout(() => {
+          router.replace('/hospital/dashboard');
+        }, 1200);
       }
-
-      Alert.alert('✅ Login Successful', 'Welcome back, doctor!');
-
-      setTimeout(() => {
-        router.replace('/(tabs)');
-      }, 1200);
 
     } catch (error: any) {
       console.log('Login error:', error.response?.data || error.message);
@@ -105,17 +125,18 @@ export default function LoginScreen() {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
-      <LinearGradient
-        colors={['#1e40af', '#3b82f6', '#60a5fa']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.gradient}
-      >
-        {/* Animated background circles */}
-        <View style={styles.bgCircle1} />
-        <View style={styles.bgCircle2} />
-        
-        <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+      
+      {/* Full-screen background app icon */}
+      <Image
+        source={require('@/assets/images/icon.png')}
+        style={styles.fullBackgroundImage}
+        resizeMode="cover"
+      />
+      
+      {/* Overlay for better readability */}
+      <View style={styles.overlay} />
+      
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
           <KeyboardAvoidingView 
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.keyboardView}
@@ -140,24 +161,37 @@ export default function LoginScreen() {
                 </View>
               </View>
 
-              {/* Login/Signup Toggle */}
-              <View style={styles.toggleContainer}>
-                <TouchableOpacity style={styles.toggleActive}>
-                  <ThemedText style={styles.toggleTextActive}>Log In</ThemedText>
+              {/* Doctor/Hospital Toggle */}
+              <View style={styles.userTypeToggleContainer}>
+                <TouchableOpacity 
+                  style={[styles.userTypeToggle, userType === 'doctor' && styles.userTypeToggleActive]}
+                  onPress={() => setUserType('doctor')}
+                >
+                  <User size={18} color={userType === 'doctor' ? '#FFFFFF' : '#64748B'} />
+                  <ThemedText style={[styles.userTypeToggleText, userType === 'doctor' && styles.userTypeToggleTextActive]}>
+                    Doctor
+                  </ThemedText>
                 </TouchableOpacity>
                 <TouchableOpacity 
-                    style={styles.toggleInactive} 
-                    onPress={() => router.push('/register/doctor/step1-email')}
+                  style={[styles.userTypeToggle, userType === 'hospital' && styles.userTypeToggleActive]}
+                  onPress={() => setUserType('hospital')}
                 >
-                  <ThemedText style={styles.toggleTextInactive}>Sign Up</ThemedText>
+                  <Building2 size={18} color={userType === 'hospital' ? '#FFFFFF' : '#64748B'} />
+                  <ThemedText style={[styles.userTypeToggleText, userType === 'hospital' && styles.userTypeToggleTextActive]}>
+                    Hospital
+                  </ThemedText>
                 </TouchableOpacity>
               </View>
 
               {/* Welcome Text */}
               <View style={styles.welcomeContainer}>
-                <ThemedText style={styles.welcomeHeading}>Welcome Back, Doctor.</ThemedText>
+                <ThemedText style={styles.welcomeHeading}>
+                  Welcome Back, {userType === 'doctor' ? 'Doctor' : 'Hospital'}.
+                </ThemedText>
                 <ThemedText style={styles.welcomeSubheading}>
-                  Secure access to premium medical shifts.
+                  {userType === 'doctor' 
+                    ? 'Secure access to premium medical shifts.'
+                    : 'Manage your medical staff and job postings.'}
                 </ThemedText>
               </View>
 
@@ -224,23 +258,23 @@ export default function LoginScreen() {
               {/* Sign Up Prompt */}
               <View style={styles.signupPrompt}>
                 <ThemedText style={styles.signupPromptText}>New here? </ThemedText>
-                <TouchableOpacity onPress={() => router.push('/register/doctor/step1-email')}>
+                <TouchableOpacity
+                  onPress={() =>
+                    router.push(
+                      userType === 'doctor'
+                        ? '/register/doctor/step1-email'
+                        : '/register/hospital/step1-email'
+                    )
+                  }
+                >
                   <ThemedText style={styles.signupLink}>Create an account</ThemedText>
                 </TouchableOpacity>
               </View>
 
-              {/* Hospital Login Button */}
-              <TouchableOpacity 
-                style={styles.hospitalLoginBtn}
-                onPress={() => router.push('/hospital/login')}
-              >
-                <ThemedText style={styles.hospitalLoginText}>Hospital Login</ThemedText>
-              </TouchableOpacity>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
-      </LinearGradient>
     </View>
   );
 }
@@ -248,30 +282,30 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#1e40af',
   },
-  gradient: {
-    flex: 1,
-  },
-  bgCircle1: {
+  fullBackgroundImage: {
     position: 'absolute',
-    width: 400,
-    height: 400,
-    borderRadius: 200,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    top: -200,
-    right: -100,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    zIndex: 0,
   },
-  bgCircle2: {
+  overlay: {
     position: 'absolute',
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    bottom: -150,
-    left: -100,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(30, 64, 175, 0.7)', // Blue overlay for better text readability
+    zIndex: 1,
   },
   safeArea: {
     flex: 1,
+    zIndex: 2,
   },
   keyboardView: {
     flex: 1,
@@ -324,39 +358,40 @@ const styles = StyleSheet.create({
     color: '#1E3A8A', // Dark Blue
     letterSpacing: 0.5,
   },
-  toggleContainer: {
+  userTypeToggleContainer: {
     flexDirection: 'row',
     backgroundColor: '#F1F5F9',
     borderRadius: 16,
     padding: 6,
     marginBottom: 24,
+    gap: 6,
   },
-  toggleActive: {
+  userTypeToggle: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
     paddingVertical: 12,
     borderRadius: 12,
-    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  userTypeToggleActive: {
+    backgroundColor: '#2563EB',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
-  toggleInactive: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  toggleTextActive: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#2563EB',
-  },
-  toggleTextInactive: {
+  userTypeToggleText: {
     fontSize: 15,
     fontWeight: '600',
     color: '#64748B',
+  },
+  userTypeToggleTextActive: {
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   welcomeContainer: {
     marginBottom: 20,
@@ -369,6 +404,10 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     textAlign: 'center',
     letterSpacing: -0.5,
+    // Prevent bottom glyph clipping (notably on Android) for bold/large text
+    lineHeight: 34,
+    includeFontPadding: false,
+    paddingBottom: 2,
   },
   welcomeSubheading: {
     fontSize: 16,
@@ -486,21 +525,4 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#2563EB',
   },
-  hospitalLoginBtn: {
-    marginTop: 8,
-    marginBottom: 20,
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    backgroundColor: 'rgba(100, 116, 139, 0.08)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(100, 116, 139, 0.15)',
-  },
-  hospitalLoginText: {
-    fontSize: 14,
-    color: '#64748B',
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-
 });

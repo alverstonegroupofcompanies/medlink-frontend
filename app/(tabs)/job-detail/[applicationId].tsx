@@ -22,12 +22,14 @@ import {
   Building2, 
   Navigation, 
   ArrowLeft, 
-  DollarSign,
+  IndianRupee,
   Share2,
   Calendar,
   AlertTriangle,
   Check,
-  Star
+  Star,
+  AlertCircle,
+  ArrowRight
 } from 'lucide-react-native';
 import { DoctorPrimaryColors as PrimaryColors, DoctorStatusColors as StatusColors, DoctorNeutralColors as NeutralColors } from '@/constants/doctor-theme';
 import { ModernColors } from '@/constants/modern-theme';
@@ -46,9 +48,18 @@ export default function JobDetailScreen() {
   const [currentLocation, setCurrentLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [distance, setDistance] = useState<number | null>(null);
   const [address, setAddress] = useState<string>('Loading address...');
+  const [disputes, setDisputes] = useState<any[]>([]);
 
   useFocusEffect(
     React.useCallback(() => {
+      // Guard against missing/invalid route param (can happen during fast navigation)
+      if (!applicationId) {
+        setLoading(false);
+        setApplication(null);
+        Alert.alert('Unable to Open Job', 'Missing application id. Please go back and try again.');
+        return;
+      }
+
       loadApplication();
       getCurrentLocation();
       
@@ -72,9 +83,25 @@ export default function JobDetailScreen() {
   const loadApplication = async () => {
     try {
       setLoading(true);
-      const response = await API.get(`/doctor/applications/${applicationId}`);
+      // Prevent infinite spinner if request hangs (network issue / backend down)
+      const request = API.get(`/doctor/applications/${applicationId}`);
+      const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Request timed out. Please check your connection and try again.')), 20000)
+      );
+      const response: any = await Promise.race([request, timeout]);
       const app = response.data.application;
       setApplication(app);
+      
+      // Load disputes if session exists
+      if (app?.job_session?.id) {
+        try {
+          const disputesResponse = await API.get(`/disputes?job_session_id=${app.job_session.id}`);
+          setDisputes(disputesResponse.data.disputes || []);
+        } catch (error) {
+          console.log('Error loading disputes:', error);
+          setDisputes([]);
+        }
+      }
       
       // Pre-fill address if available
       // Pre-fill address: Priority to job requirement custom address
@@ -94,7 +121,10 @@ export default function JobDetailScreen() {
         console.error('Error loading application:', error);
       }
       const message = error?.userFriendlyMessage || error?.message || 'Unable to load job details. Please try again.';
-      Alert.alert('Unable to Load', message);
+      Alert.alert('Unable to Load', message, [
+        { text: 'Go Back', style: 'cancel', onPress: () => router.back() },
+        { text: 'Retry', onPress: () => loadApplication() },
+      ]);
     } finally {
       setLoading(false);
     }
@@ -603,7 +633,7 @@ export default function JobDetailScreen() {
 
             <View style={styles.gridItem}>
                 <View style={[styles.iconBox, { backgroundColor: '#DCFCE7' }]}>
-                    <DollarSign size={20} color="#16A34A" />
+                    <IndianRupee size={20} color="#16A34A" />
                 </View>
                 <Text style={styles.gridLabel}>Your Fee</Text>
                 <Text style={styles.gridValue}>
@@ -804,7 +834,7 @@ export default function JobDetailScreen() {
                           </View>
                         ) : (
                           <View style={styles.paymentBox}>
-                              <DollarSign size={20} color="#D97706" />
+                              <IndianRupee size={20} color="#D97706" />
                               <Text style={styles.paymentText}>Payment Pending</Text>
                           </View>
                         )}
@@ -862,6 +892,86 @@ export default function JobDetailScreen() {
                   )}
                 </View>
               ))}
+          </View>
+        )}
+
+        {/* Dispute Section - Show after completion */}
+        {session?.status === 'completed' && (
+          <View style={styles.disputeSection}>
+            {disputes.length > 0 ? (
+              // Show existing disputes
+              disputes.map((dispute: any, index: number) => (
+                <TouchableOpacity 
+                  key={dispute.id || index} 
+                  style={styles.disputeCard}
+                  onPress={() => router.push(`/(tabs)/dispute/detail/${dispute.id}`)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.disputeHeader}>
+                    <AlertCircle size={20} color="#DC2626" />
+                    <Text style={styles.disputeTitle}>Dispute #{dispute.id}</Text>
+                    <View style={[
+                      styles.disputeStatusBadge,
+                      dispute.status === 'resolved' ? { backgroundColor: '#DCFCE7' } :
+                      dispute.status === 'under_review' ? { backgroundColor: '#FEF3C7' } :
+                      dispute.status === 'closed' ? { backgroundColor: '#F3F4F6' } :
+                      { backgroundColor: '#FEE2E2' }
+                    ]}>
+                      <Text style={[
+                        styles.disputeStatusText,
+                        dispute.status === 'resolved' ? { color: '#15803D' } :
+                        dispute.status === 'under_review' ? { color: '#D97706' } :
+                        dispute.status === 'closed' ? { color: '#6B7280' } :
+                        { color: '#DC2626' }
+                      ]}>
+                        {dispute.status === 'resolved' ? 'Resolved' :
+                         dispute.status === 'under_review' ? 'Under Review' :
+                         dispute.status === 'open' ? 'Open' :
+                         dispute.status === 'closed' ? 'Closed' : 'Rejected'}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.disputeDetails}>
+                    <Text style={styles.disputeType}>Type: {dispute.dispute_type?.charAt(0).toUpperCase() + dispute.dispute_type?.slice(1) || 'N/A'}</Text>
+                    <Text style={styles.disputeTitle2}>{dispute.title}</Text>
+                    <Text style={styles.disputeDate}>
+                      Created: {new Date(dispute.created_at).toLocaleDateString('en-US', { 
+                        year: 'numeric', 
+                        month: 'short', 
+                        day: 'numeric' 
+                      })}
+                    </Text>
+                    {dispute.messages && dispute.messages.length > 0 && (
+                      <Text style={styles.messageCount}>
+                        💬 {dispute.messages.length} message{dispute.messages.length !== 1 ? 's' : ''}
+                      </Text>
+                    )}
+                  </View>
+                  <View style={styles.tapHint}>
+                    <ArrowRight size={16} color="#6B7280" />
+                    <Text style={styles.tapHintText}>Tap to view details</Text>
+                  </View>
+                </TouchableOpacity>
+              ))
+            ) : (
+              // Show create dispute option
+              <View style={styles.disputeCard}>
+                <View style={styles.disputeHeader}>
+                  <AlertCircle size={20} color="#DC2626" />
+                  <Text style={styles.disputeTitle}>Need help with this job?</Text>
+                </View>
+                <Text style={styles.disputeText}>
+                  If you encountered any issues with the hospital, payment, or facility, you can raise a dispute for our team to review.
+                </Text>
+                <TouchableOpacity 
+                  style={styles.disputeButton}
+                  onPress={() => router.push(`/(tabs)/dispute/${session.id}`)}
+                >
+                  <Text style={styles.disputeButtonText}>Report an Issue</Text>
+                  <ArrowRight size={16} color="#DC2626" />
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         )}
 
@@ -1339,5 +1449,104 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     textTransform: 'capitalize',
+  },
+  disputeSection: {
+    marginHorizontal: 16,
+    marginBottom: 40,
+  },
+  disputeCard: {
+    backgroundColor: '#FEF2F2',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  disputeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  disputeTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  disputeText: {
+    fontSize: 13,
+    color: '#991B1B',
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  disputeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+  },
+  disputeButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#DC2626',
+    marginRight: 4,
+  },
+  disputeStatusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginLeft: 'auto',
+  },
+  disputeStatusText: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  disputeDetails: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  disputeType: {
+    fontSize: 12,
+    color: '#64748B',
+    marginBottom: 6,
+    fontWeight: '600',
+  },
+  disputeTitle2: {
+    fontSize: 14,
+    color: '#0F172A',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  disputeDate: {
+    fontSize: 11,
+    color: '#94A3B8',
+  },
+  messageCount: {
+    fontSize: 12,
+    color: '#6366F1',
+    fontWeight: '600',
+    marginTop: 8,
+  },
+  tapHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 4,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  tapHintText: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
   },
 });

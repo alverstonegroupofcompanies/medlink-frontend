@@ -37,6 +37,13 @@ export default function DoctorDetailsScreen() {
     preferred_work_type: '',
     preferred_location: '',
     professional_achievements: '',
+    // Banking Details (required for payments)
+    bank_account_holder_name: '',
+    bank_account_number: '',
+    bank_ifsc_code: '',
+    bank_name: '',
+    bank_branch: '',
+    upi_id: '',
   });
   const [departmentIds, setDepartmentIds] = useState<number[]>([]);
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
@@ -109,6 +116,18 @@ export default function DoctorDetailsScreen() {
       return;
     }
 
+    // Banking validation (required for payouts)
+    if (!formData.bank_account_holder_name || !formData.bank_account_number || !formData.bank_ifsc_code) {
+      Alert.alert('Validation Error', 'Bank Account Holder Name, Account Number, and IFSC Code are required');
+      return;
+    }
+    const normalizedIfsc = formData.bank_ifsc_code.trim().toUpperCase();
+    const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+    if (!ifscRegex.test(normalizedIfsc)) {
+      Alert.alert('Validation Error', 'Please enter a valid IFSC code (e.g., HDFC0001234)');
+      return;
+    }
+
     if (!registrationData?.email || !registrationData?.otp) {
       Alert.alert('Error', 'Registration session expired. Please start over.');
       router.replace('/register/doctor/step1-email');
@@ -135,6 +154,14 @@ export default function DoctorDetailsScreen() {
       if (formData.preferred_work_type) data.append('preferred_work_type', formData.preferred_work_type);
       if (formData.preferred_location) data.append('preferred_location', formData.preferred_location);
       if (formData.professional_achievements) data.append('professional_achievements', formData.professional_achievements);
+
+      // Banking Details (required)
+      data.append('bank_account_holder_name', formData.bank_account_holder_name);
+      data.append('bank_account_number', formData.bank_account_number);
+      data.append('bank_ifsc_code', normalizedIfsc);
+      if (formData.bank_name) data.append('bank_name', formData.bank_name);
+      if (formData.bank_branch) data.append('bank_branch', formData.bank_branch);
+      if (formData.upi_id) data.append('upi_id', formData.upi_id);
 
       // Departments - Send as both array format and JSON for compatibility
       departmentIds.forEach((id, index) => {
@@ -474,6 +501,60 @@ export default function DoctorDetailsScreen() {
             </View>
           </View>
 
+          {/* Banking Details */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Banking Details</Text>
+            <Text style={styles.sectionHint}>
+              Required for receiving payments. Please ensure details match your bank records.
+            </Text>
+
+            <InputField
+              label="Account Holder Name *"
+              value={formData.bank_account_holder_name}
+              onChangeText={(text) => handleInputChange('bank_account_holder_name', text)}
+              placeholder="Name as per bank"
+            />
+            <InputField
+              label="Account Number *"
+              value={formData.bank_account_number}
+              onChangeText={(text) => handleInputChange('bank_account_number', text.replace(/\s/g, ''))}
+              placeholder="Enter account number"
+              keyboardType="number-pad"
+            />
+            <InputField
+              label="IFSC Code *"
+              value={formData.bank_ifsc_code}
+              onChangeText={(text) => handleInputChange('bank_ifsc_code', text.toUpperCase().replace(/\s/g, ''))}
+              placeholder="e.g., HDFC0001234"
+            />
+
+            <View style={styles.row}>
+              <View style={styles.rowItem}>
+                <InputField
+                  label="Bank Name"
+                  value={formData.bank_name}
+                  onChangeText={(text) => handleInputChange('bank_name', text)}
+                  placeholder="e.g., HDFC Bank"
+                />
+              </View>
+              <View style={styles.rowItem}>
+                <InputField
+                  label="Branch"
+                  value={formData.bank_branch}
+                  onChangeText={(text) => handleInputChange('bank_branch', text)}
+                  placeholder="e.g., Anna Nagar"
+                />
+              </View>
+            </View>
+
+            <InputField
+              label="UPI ID (optional)"
+              value={formData.upi_id}
+              onChangeText={(text) => handleInputChange('upi_id', text)}
+              placeholder="e.g., name@upi"
+            />
+          </View>
+
           {/* Documents */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Documents (Optional)</Text>
@@ -512,7 +593,7 @@ export default function DoctorDetailsScreen() {
   );
 }
 
-function InputField({ label, value, onChangeText, placeholder, keyboardType, secureTextEntry }: any) {
+function InputField({ label, value, onChangeText, placeholder, keyboardType, secureTextEntry, autoCapitalize }: any) {
   return (
     <View style={styles.inputContainer}>
       <Text style={styles.label}>{label}</Text>
@@ -524,6 +605,7 @@ function InputField({ label, value, onChangeText, placeholder, keyboardType, sec
         placeholderTextColor="#94a3b8"
         keyboardType={keyboardType}
         secureTextEntry={secureTextEntry}
+        autoCapitalize={autoCapitalize}
       />
     </View>
   );
@@ -575,6 +657,20 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1e293b',
     marginBottom: 16,
+  },
+  sectionHint: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: -10,
+    marginBottom: 12,
+    lineHeight: 16,
+  },
+  row: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  rowItem: {
+    flex: 1,
   },
   photoContainer: {
     alignItems: 'center',

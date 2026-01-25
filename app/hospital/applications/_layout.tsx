@@ -8,6 +8,7 @@ export default function ApplicationsLayout() {
       }}
     >
       <Stack.Screen name="[requirementId]" />
+      <Stack.Screen name="compare" />
     </Stack>
   );
 }

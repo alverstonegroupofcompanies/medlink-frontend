@@ -28,6 +28,9 @@ import { ModernCard } from "@/components/modern-card";
 import { useLocationTracking } from "@/hooks/useLocationTracking";
 import { getFullImageUrl } from "@/utils/url-helper";
 import PromoCarousel from "@/components/promo-carousel";
+import { Portal, Dialog, Button } from 'react-native-paper';
+import { MinimalSessionCard } from "@/components/MinimalSessionCard";
+
 
 const { width } = Dimensions.get('window');
 const isTablet = width >= 768; // 11 inch tablet is typically 768px or more
@@ -56,7 +59,7 @@ export default function DoctorHome() {
   const [completedJobsCount, setCompletedJobsCount] = useState(0);
   const [notificationCount, setNotificationCount] = useState(0);
   const safeBottomPadding = useSafeBottomPadding();
-  const { startTracking, stopTracking, isTracking } = useLocationTracking();
+  const { startTracking, stopTracking, isTracking, permissionDialog, closePermissionDialog } = useLocationTracking();
 
   const loadDoctor = async () => {
     try {
@@ -238,7 +241,7 @@ export default function DoctorHome() {
             { text: 'Cancel', style: 'cancel' },
             { 
               text: 'Add Now', 
-              onPress: () => router.push('/(tabs)/wallet')
+              onPress: () => router.push('/(tabs)/wallet?openBanking=1')
             },
           ]
         );
@@ -251,6 +254,21 @@ export default function DoctorHome() {
       loadMyApplications();
     } catch (error: any) {
       const message = error.response?.data?.message || 'Failed to submit application';
+      const normalized = String(message || '').toLowerCase();
+
+      // If backend ever blocks due to missing banking details, guide user to fix it.
+      if (normalized.includes('bank') || normalized.includes('ifsc') || normalized.includes('account')) {
+        Alert.alert(
+          'Banking Details Required',
+          'Please add your banking details in Wallet before applying for jobs.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Add Now', onPress: () => router.push('/(tabs)/wallet?openBanking=1') },
+          ]
+        );
+        return;
+      }
+
       // Check if error is about position being filled
       if (message.toLowerCase().includes('filled') || message.toLowerCase().includes('already')) {
         Alert.alert('Position Filled', 'This position has already been filled. Please look for other opportunities.');
@@ -374,7 +392,7 @@ export default function DoctorHome() {
       loadNotifications();
     }, 30000);
 
-    // Listen for global refresh events from _layout.tsx
+    // Listen for global refresh events from _layout.tsx (for applications/sessions, not jobs)
     const refreshSubscription = DeviceEventEmitter.addListener('REFRESH_DOCTOR_DATA', () => {
         console.log('🔄 [Dashboard] Received global refresh event');
         loadMyApplications();
@@ -439,43 +457,66 @@ export default function DoctorHome() {
 
     // Listen for new job postings to add immediately without refresh
     const newJobSubscription = DeviceEventEmitter.addListener('NEW_JOB_POSTED', (jobRequirement: any) => {
-        console.log('🆕 [Dashboard] New job posted, adding to opportunities:', jobRequirement);
+        console.log('🆕 [Dashboard] New job posted event received:', jobRequirement);
         if (jobRequirement && jobRequirement.id) {
             // Check if this job matches doctor's departments
-            const doctorDepartmentIds = doctor?.departments?.map((d: any) => d.department_id || d.id) || [];
-            const jobDepartmentId = jobRequirement.department_id;
-            const jobDepartmentName = jobRequirement.department;
+            const doctorDepartmentIds = doctor?.departments?.map((d: any) => 
+                d.department_id || d.id || d.department?.id || d.department?.department_id
+            ).filter(Boolean) || [];
+            const jobDepartmentId = jobRequirement.department_id || jobRequirement.department?.id;
+            const jobDepartmentName = jobRequirement.department || jobRequirement.department?.name;
             
-            // Add job if it matches doctor's departments or if doctor has no departments set
+            // More lenient filtering: show job if:
+            // 1. Doctor has no departments set (show all)
+            // 2. Job department ID matches any of doctor's departments
+            // 3. Job department name matches any of doctor's department names
             const shouldShow = doctorDepartmentIds.length === 0 || 
-                              (jobDepartmentId && doctorDepartmentIds.includes(jobDepartmentId)) ||
+                              (jobDepartmentId && doctorDepartmentIds.includes(Number(jobDepartmentId))) ||
+                              (jobDepartmentId && doctorDepartmentIds.some((id: any) => Number(id) === Number(jobDepartmentId))) ||
                               (jobDepartmentName && doctor?.departments?.some((d: any) => 
-                                (d.department_id || d.id) === jobDepartmentId ||
                                 d.name === jobDepartmentName ||
+                                d.department?.name === jobDepartmentName ||
                                 (d.department && d.department.name === jobDepartmentName)
                               ));
             
             if (shouldShow) {
                 // Check if job already exists in the list
-                const exists = jobRequirements.some((req: any) => req.id === jobRequirement.id);
-                if (!exists) {
-                    // Ensure job requirement has all necessary fields
-                    const newJob = {
-                        ...jobRequirement,
-                        // Ensure hospital is included if available
-                        hospital: jobRequirement.hospital || null,
-                    };
-                    // Add new job to the beginning of the list
-                    setJobRequirements((prev: any[]) => [newJob, ...prev]);
-                    console.log('✅ [Dashboard] New job added to opportunities list:', newJob.id);
-                } else {
-                    console.log('ℹ️ [Dashboard] Job already exists in list:', jobRequirement.id);
-                }
+                setJobRequirements((prev: any[]) => {
+                    const exists = prev.some((req: any) => req.id === jobRequirement.id);
+                    if (!exists) {
+                        // Ensure job requirement has all necessary fields
+                        const newJob = {
+                            ...jobRequirement,
+                            // Ensure hospital is included if available
+                            hospital: jobRequirement.hospital || null,
+                            // Ensure is_expired is set (default to false for new jobs)
+                            is_expired: jobRequirement.is_expired || false,
+                            // Ensure is_active is set (default to true for new jobs)
+                            is_active: jobRequirement.is_active !== undefined ? jobRequirement.is_active : true,
+                        };
+                        // Add new job to the beginning of the list
+                        const updated = [newJob, ...prev];
+                        console.log('✅ [Dashboard] New job added to opportunities list:', newJob.id, newJob.department);
+                        return updated;
+                    } else {
+                        console.log('ℹ️ [Dashboard] Job already exists in list, updating:', jobRequirement.id);
+                        // Update existing job with latest data
+                        return prev.map(req => req.id === jobRequirement.id ? { ...req, ...jobRequirement } : req);
+                    }
+                });
             } else {
-                console.log('ℹ️ [Dashboard] Job does not match doctor departments, skipping:', jobRequirement.id);
+                console.log('ℹ️ [Dashboard] Job does not match doctor departments, skipping:', {
+                    jobId: jobRequirement.id,
+                    jobDeptId: jobDepartmentId,
+                    jobDeptName: jobDepartmentName,
+                    doctorDeptIds: doctorDepartmentIds
+                });
             }
+        } else {
+            console.warn('⚠️ [Dashboard] Invalid job requirement data received:', jobRequirement);
         }
     });
+
     
     const subscription = AppState.addEventListener("change", (nextAppState) => {
       if (nextAppState === "active") {
@@ -489,7 +530,7 @@ export default function DoctorHome() {
 
     return () => {
       subscription.remove();
-      refreshSubscription.remove();
+      if (refreshSubscription) refreshSubscription.remove();
       applicationStatusSubscription.remove();
       newJobSubscription.remove();
       clearInterval(notificationInterval);
@@ -501,7 +542,8 @@ export default function DoctorHome() {
   useEffect(() => {
     if (activeSessions.length > 0 && !isTracking) {
         console.log("Auto-starting tracking for active session...", activeSessions[0].id);
-        startTracking(activeSessions[0].id);
+        // Don't show permission dialogs automatically (prevents flicker).
+        startTracking(activeSessions[0].id, { interactive: false });
     } else if (activeSessions.length === 0 && isTracking) {
         stopTracking();
     }
@@ -534,7 +576,7 @@ export default function DoctorHome() {
         {Array.from({ length: total }).map((_, i) => (
           <Star
             key={i}
-            size={14}
+            size={12}
             color={i < count ? "#FFB800" : ModernColors.neutral.gray300}
             fill={i < count ? "#FFB800" : "transparent"}
           />
@@ -638,13 +680,6 @@ export default function DoctorHome() {
     },
   ];
 
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good Morning';
-    if (hour < 17) return 'Good Afternoon';
-    return 'Good Evening';
-  };
-
   const trackingIndicator = isTracking ? (
     <View style={{ 
         backgroundColor: 'rgba(16, 185, 129, 0.2)', // More transparent/minimal background
@@ -683,6 +718,20 @@ export default function DoctorHome() {
     >
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor="#0066FF" translucent={false} />
+
+        <Portal>
+          <Dialog visible={permissionDialog.visible} onDismiss={closePermissionDialog}>
+            <Dialog.Title>{permissionDialog.title}</Dialog.Title>
+            <Dialog.Content>
+              <Text style={{ color: ModernColors.text.secondary, lineHeight: 20 }}>
+                {permissionDialog.message}
+              </Text>
+            </Dialog.Content>
+            <Dialog.Actions>
+              <Button onPress={closePermissionDialog}>OK</Button>
+            </Dialog.Actions>
+          </Dialog>
+        </Portal>
         
         {/* Modern Header with Gradient */}
         <LinearGradient
@@ -698,7 +747,6 @@ export default function DoctorHome() {
                   key={`doctor-${doctor?.id || 'no-id'}-${doctor?.profile_photo || 'no-photo'}`}
                   source={{ uri: getProfilePhotoUrl(doctor) }}
                   style={styles.profileImage}
-                  cache="reload"
                 />
                 {doctor?.verification_status === 'approved' ? (
                   <View style={styles.verifiedBadge}>
@@ -711,7 +759,6 @@ export default function DoctorHome() {
                 )}
               </View>
               <View style={styles.profileInfo}>
-                <Text style={styles.greetingText}>{getGreeting()}</Text>
                 <Text style={styles.doctorName}>{doctor?.name || "Dr. User"}</Text>
                 {trackingIndicator}
                 {rating > 0 && renderStars(rating)}
@@ -721,7 +768,7 @@ export default function DoctorHome() {
               style={styles.notificationButton}
               onPress={() => router.push('/notifications')}
             >
-              <Bell size={22} color="#fff" />
+              <Bell size={18} color="#fff" />
               {notificationCount > 0 && (
                 <View style={styles.notificationBadge}>
                   <Text style={styles.notificationCount}>
@@ -734,7 +781,7 @@ export default function DoctorHome() {
               style={[styles.notificationButton, { marginLeft: 12, backgroundColor: 'rgba(255,255,255,0.2)' }]}
               onPress={handleLogout}
             >
-              <LogOut size={20} color="#fff" />
+              <LogOut size={18} color="#fff" />
             </TouchableOpacity>
           </View>
         </LinearGradient>
@@ -956,6 +1003,162 @@ export default function DoctorHome() {
             </View>
           )}
 
+          {/* Active Sessions Section */}
+          {activeSessions.length > 0 && (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionTitleContainer}>
+                  <View style={styles.activeIndicator} />
+                  <Text style={styles.sectionTitle}>Active Sessions</Text>
+                </View>
+              </View>
+
+              <View style={styles.activeSessionsContainer}>
+                {activeSessions.map((session: any) => {
+                  const application = myApplications.find(
+                    (app: any) => app.job_session?.id === session.id
+                  );
+                  const hospital = session.job_requirement?.hospital || session.jobRequirement?.hospital;
+                  const checkInTime = session.check_in_time 
+                    ? new Date(session.check_in_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+                    : null;
+                  const sessionDate = session.session_date 
+                    ? new Date(session.session_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+                    : 'Date TBD';
+                  const startTime = session.job_requirement?.start_time || session.jobRequirement?.start_time
+                    ? new Date(`2000-01-01 ${session.job_requirement?.start_time || session.jobRequirement?.start_time}`).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+                    : 'Time TBD';
+                  const location = session.job_requirement?.location_name || session.job_requirement?.address || hospital?.address || 'Location TBD';
+                  const paymentAmount = session.payment_amount || session.job_requirement?.payment_amount || 0;
+                  const dept = session.job_requirement?.department || session.jobRequirement?.department || 'Department';
+                  const statusPill = (() => {
+                    if (session.status === 'in_progress') return { text: 'In Progress', color: ModernColors.warning.main };
+                    if (checkInTime) return { text: 'Checked In', color: ModernColors.success.main };
+                    return { text: 'Scheduled', color: ModernColors.primary.main };
+                  })();
+
+                  return (
+                    <ModernCard key={session.id} variant="elevated" padding="md" style={styles.activeSessionCard}>
+                      {/* Header (Hospital-style) */}
+                      <View style={styles.activeSessionTopRow}>
+                        <View style={styles.activeSessionTopLeft}>
+                          <View style={styles.activeSessionDeptBadge}>
+                            <Building2 size={14} color={ModernColors.primary.main} />
+                            <Text style={styles.activeSessionDeptText} numberOfLines={1}>{dept}</Text>
+                          </View>
+                          <View style={[styles.activeSessionStatusBadge, { borderColor: statusPill.color, backgroundColor: `${statusPill.color}14` }]}>
+                            <View style={[styles.activeSessionStatusDot, { backgroundColor: statusPill.color }]} />
+                            <Text style={[styles.activeSessionStatusText, { color: statusPill.color }]}>{statusPill.text}</Text>
+                          </View>
+                        </View>
+
+                        {!!paymentAmount && (
+                          <View style={styles.activeSessionPayBadge}>
+                            <Text style={styles.activeSessionPayText}>₹{Number(paymentAmount).toLocaleString('en-IN')}</Text>
+                          </View>
+                        )}
+                      </View>
+
+                      {/* Main title */}
+                      <Text style={styles.activeSessionHospitalName} numberOfLines={1}>
+                        {hospital?.name || 'Hospital'}
+                      </Text>
+
+                      <View style={styles.activeSessionDetails}>
+                        <View style={styles.activeSessionDetailRow}>
+                          <MapPin size={14} color={ModernColors.text.secondary} />
+                          <Text style={styles.activeSessionDetailText} numberOfLines={1}>{location}</Text>
+                        </View>
+                        <View style={styles.activeSessionDetailRow}>
+                          <Calendar size={14} color={ModernColors.text.secondary} />
+                          <Text style={styles.activeSessionDetailText}>{sessionDate}</Text>
+                        </View>
+                        <View style={styles.activeSessionDetailRow}>
+                          <Clock size={14} color={ModernColors.text.secondary} />
+                          <Text style={styles.activeSessionDetailText}>
+                            {startTime}
+                            {checkInTime && ` • Check-in: ${checkInTime}`}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Process Steps */}
+                      <View style={styles.processStepsContainer}>
+                        <View style={[styles.processStep, checkInTime && styles.processStepCompleted]}>
+                          <View style={[styles.processStepDot, checkInTime && { backgroundColor: ModernColors.success.main }]} />
+                          <Text style={[styles.processStepText, checkInTime && { color: ModernColors.success.main }]}>
+                            Check-in {checkInTime ? `✓ ${checkInTime}` : 'Pending'}
+                          </Text>
+                        </View>
+                        <View style={[styles.processStep, session.status === 'in_progress' && styles.processStepCompleted]}>
+                          <View style={[styles.processStepDot, session.status === 'in_progress' && { backgroundColor: ModernColors.success.main }]} />
+                          <Text style={[styles.processStepText, session.status === 'in_progress' && { color: ModernColors.success.main }]}>
+                            Session Active {session.status === 'in_progress' ? '✓' : 'Pending'}
+                          </Text>
+                        </View>
+                        <View style={[styles.processStep, session.attendance?.check_out_time && styles.processStepCompleted]}>
+                          <View style={[styles.processStepDot, session.attendance?.check_out_time && { backgroundColor: ModernColors.success.main }]} />
+                          <Text style={[styles.processStepText, session.attendance?.check_out_time && { color: ModernColors.success.main }]}>
+                            Check-out {session.attendance?.check_out_time ? '✓' : 'Pending'}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <TouchableOpacity
+                        style={styles.activeSessionViewButton}
+                        onPress={() => {
+                          if (application) {
+                            router.push(`/(tabs)/job-detail/${application.id}`);
+                          }
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.activeSessionViewButtonText}>View Details</Text>
+                        <ArrowRight size={16} color={ModernColors.primary.main} />
+                      </TouchableOpacity>
+                    </ModernCard>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
+          {/* Past Sessions (Completed/Cancelled/Scheduled but not active) */}
+          {jobSessions.filter(s => !activeSessions.some(active => active.id === s.id)).length > 0 && (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionTitleContainer}>
+                  <Clock size={20} color={ModernColors.primary.main} />
+                  <Text style={styles.sectionTitle}>Shift History</Text>
+                </View>
+              </View>
+              
+              <View>
+                {jobSessions
+                  .filter(s => !activeSessions.some(active => active.id === s.id))
+                  .slice(0, 5) // Limit to 5 recent
+                  .map(session => {
+                    const application = myApplications.find(app => app.job_session?.id === session.id);
+                    return (
+                        <MinimalSessionCard 
+                            key={session.id} 
+                            session={session} 
+                            onPress={() => {
+                                if (application) {
+                                    router.push(`/(tabs)/job-detail/${application.id}`);
+                                } else {
+                                    // Fallback if application logic fails
+                                    // router.push(`/session/${session.id}`);
+                                }
+                            }}
+                        />
+                    );
+                  })
+                }
+              </View>
+            </View>
+          )}
+
           {/* New Opportunities Section */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
@@ -979,23 +1182,23 @@ export default function DoctorHome() {
               return !isExpired && !hasApplied;
             }).length === 0 ? (
               <View style={styles.emptyStateContainer}>
-                <View style={styles.emptyStateIcon}>
-                  <TrendingUp size={64} color={ModernColors.primary.light} />
+                <View style={styles.emptyJobsState}>
+                  <TrendingUp size={48} color={ModernColors.primary.light} style={{ marginBottom: 12 }} />
+                  <Text style={styles.emptyStateTitle}>No New Opportunities</Text>
+                  <Text style={styles.emptyStateSubtext}>
+                    {!doctor?.departments || doctor.departments.length === 0 
+                      ? 'Add your departments in your profile to see relevant job opportunities.' 
+                      : 'Check back soon for new job postings matching your departments.'}
+                  </Text>
+                  {(!doctor?.departments || doctor.departments.length === 0) && (
+                    <TouchableOpacity
+                      style={styles.updateProfileButton}
+                      onPress={() => router.push('/profile')}
+                    >
+                      <Text style={styles.updateProfileButtonText}>Update Profile</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
-                <Text style={styles.emptyStateTitle}>No New Opportunities</Text>
-                <Text style={styles.emptyStateMessage}>
-                  {doctor?.department_id 
-                    ? 'Great news! You\'ve seen all available opportunities in your department. Check back soon for new openings.' 
-                    : 'Start by adding your department in your profile to discover relevant job opportunities.'}
-                </Text>
-                {!doctor?.department_id && (
-                  <TouchableOpacity 
-                    style={styles.emptyStateButton}
-                    onPress={() => router.push('/profile')}
-                  >
-                    <Text style={styles.emptyStateButtonText}>Update Profile</Text>
-                  </TouchableOpacity>
-                )}
               </View>
             ) : isTablet ? (
               <View style={styles.openingsGrid}>
@@ -1043,8 +1246,8 @@ export default function DoctorHome() {
                     const location = requirement.location_name || requirement.address || requirement.hospital?.address || 'Location TBD';
                     
                     return (
-                      <ModernCard key={requirement.id} variant="elevated" padding="md" style={styles.newOpportunityCard}>
-                        {/* Hospital Image - Right side */}
+                      <ModernCard key={requirement.id} variant="elevated" padding="sm" style={styles.newOpportunityCard}>
+                        {/* Hospital Image Background - Right Side */}
                         {hospitalPicture && (
                           <View style={styles.newOpportunityImageBackground}>
                             <Image
@@ -1058,7 +1261,7 @@ export default function DoctorHome() {
                         
                         {/* Content Container */}
                         <View style={hospitalPicture ? styles.newOpportunityContentWrapper : styles.newOpportunityContentWrapperFull}>
-                          {/* Header with Logo and Urgent Badge */}
+                          {/* Header with Logo */}
                           <View style={styles.newOpportunityCardHeader}>
                             <View style={styles.newOpportunityHeaderLeft}>
                               {requirement.hospital?.logo_url ? (
@@ -1083,61 +1286,45 @@ export default function DoctorHome() {
                                 </Text>
                               </View>
                             </View>
-                            {/* Urgent Badge - Only if posted today */}
-                            {isPostedToday && (
-                              <View style={styles.urgentBadge}>
-                                <AlertCircle size={12} color="#EF4444" />
-                                <Text style={styles.urgentBadgeText}>Urgent</Text>
-                              </View>
-                            )}
                           </View>
                           
-                          {/* Posted Time */}
-                          {postedTime && (
-                            <View style={styles.postedTimeRow}>
-                              <Clock size={12} color={ModernColors.text.secondary} />
-                              <Text style={styles.postedTimeText}>
-                                Posted {isPostedToday ? `today at ${postedTime}` : `on ${postedDateStr} at ${postedTime}`}
-                              </Text>
+                          {/* Urgent Badge - Top right corner over image */}
+                          {isPostedToday && (
+                            <View style={styles.urgentBadgeOverlay}>
+                              <AlertCircle size={12} color="#EF4444" />
+                              <Text style={styles.urgentBadgeText}>Urgent</Text>
                             </View>
                           )}
                           
-                          {/* Details */}
+                          {/* Details - Compact like application card */}
                           <View style={styles.newOpportunityDetailsContainer}>
                             <View style={styles.newOpportunityDetailRow}>
-                              <MapPin size={14} color={ModernColors.text.secondary} />
-                              <Text style={styles.newOpportunityDetailText} numberOfLines={1}>{location}</Text>
+                              <Calendar size={12} color={ModernColors.text.secondary} />
+                              <Text style={styles.newOpportunityDetailText} numberOfLines={1}>{workDate}</Text>
                             </View>
-                            
                             <View style={styles.newOpportunityDetailRow}>
-                              <Calendar size={14} color={ModernColors.text.secondary} />
-                              <Text style={styles.newOpportunityDetailText}>{workDate}</Text>
-                            </View>
-                            
-                            <View style={styles.newOpportunityDetailRow}>
-                              <Clock size={14} color={ModernColors.text.secondary} />
-                              <Text style={styles.newOpportunityDetailText}>
+                              <Clock size={12} color={ModernColors.text.secondary} />
+                              <Text style={styles.newOpportunityDetailText} numberOfLines={1}>
                                 {startTime}{endTime ? ` - ${endTime}` : ''}
                               </Text>
                             </View>
-                          </View>
-                          
-                          {/* Payment Details */}
-                          <View style={styles.newOpportunityPaymentContainer}>
-                            <View style={styles.newOpportunityPaymentRow}>
-                              <Coins size={16} color={ModernColors.primary.main} />
-                              <Text style={styles.newOpportunityPaymentLabel}>Payment:</Text>
-                              <Text style={styles.newOpportunityPaymentAmount}>
-                                ₹{Number(paymentAmount).toLocaleString('en-IN')}
+                            <View style={styles.newOpportunityDetailRow}>
+                              <MapPin size={12} color={ModernColors.text.secondary} />
+                              <Text style={styles.newOpportunityDetailText} numberOfLines={1}>{location}</Text>
+                            </View>
+                            <View style={styles.newOpportunityDetailRow}>
+                              <Text style={{ fontSize: 12, fontWeight: '600', color: ModernColors.primary.main }}>₹</Text>
+                              <Text style={[styles.newOpportunityDetailText, { color: ModernColors.primary.main, fontWeight: '600' }]} numberOfLines={1}>
+                                {paymentAmount}
                               </Text>
                             </View>
                           </View>
                           
-                          {/* Apply Button */}
+                          {/* Apply Button - Similar style to application card */}
                           {!hasApplied && !isExpired && (
                             requirement.is_filled ? (
                               <View style={[styles.newOpportunityApplyButton, { backgroundColor: ModernColors.neutral.gray200, opacity: 0.7 }]}>
-                                <Text style={[styles.newOpportunityApplyButtonText, { color: ModernColors.text.secondary }]}>Position Already Filled</Text>
+                                <Text style={[styles.newOpportunityApplyButtonText, { color: ModernColors.text.secondary }]}>Position Filled</Text>
                               </View>
                             ) : (
                               <TouchableOpacity
@@ -1217,8 +1404,8 @@ export default function DoctorHome() {
                   const paymentAmount = requirement.payment_amount || 0;
                   
                   return (
-                    <ModernCard key={requirement.id} variant="elevated" padding="md" style={styles.newOpportunityCard}>
-                      {/* Hospital Image - Right side */}
+                    <ModernCard key={requirement.id} variant="elevated" padding="sm" style={styles.newOpportunityCard}>
+                      {/* Hospital Image Background - Right Side */}
                       {hospitalPicture && (
                         <View style={styles.newOpportunityImageBackground}>
                           <Image
@@ -1232,7 +1419,15 @@ export default function DoctorHome() {
                       
                       {/* Content Container */}
                       <View style={hospitalPicture ? styles.newOpportunityContentWrapper : styles.newOpportunityContentWrapperFull}>
-                        {/* Header with Logo and Urgent Badge */}
+                        {/* Urgent Badge - Top right corner over image */}
+                        {isPostedToday && (
+                          <View style={styles.urgentBadgeOverlay}>
+                            <AlertCircle size={12} color="#EF4444" />
+                            <Text style={styles.urgentBadgeText}>Urgent</Text>
+                          </View>
+                        )}
+
+                        {/* Header with Logo */}
                         <View style={styles.newOpportunityCardHeader}>
                           <View style={styles.newOpportunityHeaderLeft}>
                             {requirement.hospital?.logo_url ? (
@@ -1257,62 +1452,37 @@ export default function DoctorHome() {
                               </Text>
                             </View>
                           </View>
-                          {/* Urgent Badge - Only if posted today */}
-                          {isPostedToday && (
-                            <View style={styles.urgentBadge}>
-                              <AlertCircle size={12} color="#EF4444" />
-                              <Text style={styles.urgentBadgeText}>Urgent</Text>
-                            </View>
-                          )}
                         </View>
                         
-                        {/* Posted Time */}
-                        {postedTime && (
-                          <View style={styles.postedTimeRow}>
-                            <Clock size={12} color={ModernColors.text.secondary} />
-                            <Text style={styles.postedTimeText}>
-                              Posted {isPostedToday ? `today at ${postedTime}` : `on ${postedDateStr} at ${postedTime}`}
-                            </Text>
-                          </View>
-                        )}
-                        
-                        {/* Details */}
+                        {/* Details - Compact like application card */}
                         <View style={styles.newOpportunityDetailsContainer}>
                           <View style={styles.newOpportunityDetailRow}>
-                            <MapPin size={14} color={ModernColors.text.secondary} />
-                            <Text style={styles.newOpportunityDetailText} numberOfLines={1}>{location}</Text>
+                            <Calendar size={12} color={ModernColors.text.secondary} />
+                            <Text style={styles.newOpportunityDetailText} numberOfLines={1}>{workDate}</Text>
                           </View>
-                          
                           <View style={styles.newOpportunityDetailRow}>
-                            <Calendar size={14} color={ModernColors.text.secondary} />
-                            <Text style={styles.newOpportunityDetailText}>{workDate}</Text>
-                          </View>
-                          
-                          <View style={styles.newOpportunityDetailRow}>
-                            <Clock size={14} color={ModernColors.text.secondary} />
-                            <Text style={styles.newOpportunityDetailText}>
+                            <Clock size={12} color={ModernColors.text.secondary} />
+                            <Text style={styles.newOpportunityDetailText} numberOfLines={1}>
                               {startTime}{endTime ? ` - ${endTime}` : ''}
                             </Text>
                           </View>
-                        </View>
-                        
-                        {/* Payment Details */}
-                        <View style={styles.newOpportunityPaymentContainer}>
-                          <View style={styles.newOpportunityPaymentRow}>
-                            <Coins size={16} color={ModernColors.primary.main} />
-                            <Text style={styles.newOpportunityPaymentLabel}>Payment:</Text>
-                            <Text style={styles.newOpportunityPaymentAmount}>
-                              ₹{Number(paymentAmount).toLocaleString('en-IN')}
+                          <View style={styles.newOpportunityDetailRow}>
+                            <MapPin size={12} color={ModernColors.text.secondary} />
+                            <Text style={styles.newOpportunityDetailText} numberOfLines={1}>{location}</Text>
+                          </View>
+                          <View style={styles.newOpportunityDetailRow}>
+                            <Text style={{ fontSize: 12, fontWeight: '600', color: ModernColors.primary.main }}>₹</Text>
+                            <Text style={[styles.newOpportunityDetailText, { color: ModernColors.primary.main, fontWeight: '600' }]} numberOfLines={1}>
+                              {paymentAmount}
                             </Text>
                           </View>
                         </View>
-
                         
-                        {/* Apply Button */}
+                        {/* Apply Button - Similar style to application card */}
                         {!hasApplied && !isExpired && (
                           requirement.is_filled ? (
                             <View style={[styles.newOpportunityApplyButton, { backgroundColor: ModernColors.neutral.gray200, opacity: 0.7 }]}>
-                              <Text style={[styles.newOpportunityApplyButtonText, { color: ModernColors.text.secondary }]}>Position Already Filled</Text>
+                              <Text style={[styles.newOpportunityApplyButtonText, { color: ModernColors.text.secondary }]}>Position Filled</Text>
                             </View>
                           ) : (
                             <TouchableOpacity
@@ -1616,111 +1786,6 @@ export default function DoctorHome() {
             </View>
           )}
 
-          {/* Active Sessions Section */}
-          {activeSessions.length > 0 && (
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <View style={styles.sectionTitleContainer}>
-                  <View style={styles.activeIndicator} />
-                  <Text style={styles.sectionTitle}>Active Sessions</Text>
-                </View>
-              </View>
-
-              <View style={styles.activeSessionsContainer}>
-                {activeSessions.map((session: any) => {
-                  const application = myApplications.find(
-                    (app: any) => app.job_session?.id === session.id
-                  );
-                  const hospital = session.job_requirement?.hospital || session.jobRequirement?.hospital;
-                  const checkInTime = session.check_in_time 
-                    ? new Date(session.check_in_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
-                    : null;
-                  const sessionDate = session.session_date 
-                    ? new Date(session.session_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
-                    : 'Date TBD';
-                  const startTime = session.job_requirement?.start_time || session.jobRequirement?.start_time
-                    ? new Date(`2000-01-01 ${session.job_requirement?.start_time || session.jobRequirement?.start_time}`).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
-                    : 'Time TBD';
-                  const location = session.job_requirement?.location_name || session.job_requirement?.address || hospital?.address || 'Location TBD';
-                  const paymentAmount = session.payment_amount || session.job_requirement?.payment_amount || 0;
-
-                  return (
-                    <ModernCard key={session.id} variant="elevated" padding="md" style={styles.activeSessionCard}>
-                      <View style={styles.activeSessionHeader}>
-                        <View style={styles.activeSessionHeaderLeft}>
-                          <View style={styles.activeSessionLiveDot} />
-                          <Text style={styles.activeSessionHospitalName}>{hospital?.name || 'Hospital'}</Text>
-                        </View>
-                        <Text style={styles.activeSessionStatus}>Live</Text>
-                      </View>
-
-                      <Text style={styles.activeSessionDepartment}>{session.job_requirement?.department || session.jobRequirement?.department || 'Department'}</Text>
-
-                      <View style={styles.activeSessionDetails}>
-                        <View style={styles.activeSessionDetailRow}>
-                          <MapPin size={14} color={ModernColors.text.secondary} />
-                          <Text style={styles.activeSessionDetailText} numberOfLines={1}>{location}</Text>
-                        </View>
-                        <View style={styles.activeSessionDetailRow}>
-                          <Calendar size={14} color={ModernColors.text.secondary} />
-                          <Text style={styles.activeSessionDetailText}>{sessionDate}</Text>
-                        </View>
-                        <View style={styles.activeSessionDetailRow}>
-                          <Clock size={14} color={ModernColors.text.secondary} />
-                          <Text style={styles.activeSessionDetailText}>
-                            {startTime}
-                            {checkInTime && ` • Check-in: ${checkInTime}`}
-                          </Text>
-                        </View>
-                        <View style={styles.activeSessionDetailRow}>
-                          <DollarSign size={14} color={ModernColors.text.secondary} />
-                          <Text style={styles.activeSessionDetailText}>
-                            ₹{Number(paymentAmount).toLocaleString('en-IN')} for this job
-                          </Text>
-                        </View>
-                      </View>
-
-                      {/* Process Steps */}
-                      <View style={styles.processStepsContainer}>
-                        <View style={[styles.processStep, checkInTime && styles.processStepCompleted]}>
-                          <View style={[styles.processStepDot, checkInTime && { backgroundColor: ModernColors.success.main }]} />
-                          <Text style={[styles.processStepText, checkInTime && { color: ModernColors.success.main }]}>
-                            Check-in {checkInTime ? `✓ ${checkInTime}` : 'Pending'}
-                          </Text>
-                        </View>
-                        <View style={[styles.processStep, session.status === 'in_progress' && styles.processStepCompleted]}>
-                          <View style={[styles.processStepDot, session.status === 'in_progress' && { backgroundColor: ModernColors.success.main }]} />
-                          <Text style={[styles.processStepText, session.status === 'in_progress' && { color: ModernColors.success.main }]}>
-                            Session Active {session.status === 'in_progress' ? '✓' : 'Pending'}
-                          </Text>
-                        </View>
-                        <View style={[styles.processStep, session.attendance?.check_out_time && styles.processStepCompleted]}>
-                          <View style={[styles.processStepDot, session.attendance?.check_out_time && { backgroundColor: ModernColors.success.main }]} />
-                          <Text style={[styles.processStepText, session.attendance?.check_out_time && { color: ModernColors.success.main }]}>
-                            Check-out {session.attendance?.check_out_time ? '✓' : 'Pending'}
-                          </Text>
-                        </View>
-                      </View>
-
-                      <TouchableOpacity
-                        style={styles.activeSessionViewButton}
-                        onPress={() => {
-                          if (application) {
-                            router.push(`/(tabs)/job-detail/${application.id}`);
-                          }
-                        }}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={styles.activeSessionViewButtonText}>View Details</Text>
-                        <ArrowRight size={16} color={ModernColors.primary.main} />
-                      </TouchableOpacity>
-                    </ModernCard>
-                  );
-                })}
-              </View>
-            </View>
-          )}
-
           {/* Upcoming Tasks */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
@@ -1968,17 +2033,27 @@ export default function DoctorHome() {
                         return (
                             <View style={{gap: 12}}>
                                 {dateSessions.map((session: any, idx) => {
-                                    // Calculate if session is late (check-in time passed but no check-in)
+                                    // Late is shown ONLY after scheduled check-in time has passed (session_date + start_time),
+                                    // and only if check-in hasn't happened yet.
                                     const now = new Date();
-                                    let sessionDateTime = new Date(session.session_date);
-                                    if (session.job_requirement?.start_time) {
-                                        const [hours, minutes] = session.job_requirement.start_time.split(':');
-                                        sessionDateTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-                                    }
-                                    
-                                    // Only show late if check-in time has passed AND no check-in yet
-                                    const isLate = sessionDateTime < now && !session.check_in_time;
-                                    const lateMinutes = isLate ? Math.floor((now.getTime() - sessionDateTime.getTime()) / (1000 * 60)) : 0;
+                                    const scheduled = (() => {
+                                        if (!session?.session_date) return null;
+                                        const dt = new Date(session.session_date);
+                                        const startTime = session?.job_requirement?.start_time;
+                                        if (startTime) {
+                                            const [hh, mm] = String(startTime).split(':');
+                                            const hours = parseInt(hh, 10);
+                                            const minutes = parseInt(mm, 10);
+                                            if (!Number.isNaN(hours) && !Number.isNaN(minutes)) {
+                                                dt.setHours(hours, minutes, 0, 0);
+                                            }
+                                        }
+                                        return dt;
+                                    })();
+                                    const isLate = !!(scheduled && now > scheduled && !session.check_in_time);
+                                    const lateMinutes = isLate && scheduled
+                                        ? Math.max(0, Math.floor((now.getTime() - scheduled.getTime()) / (1000 * 60)))
+                                        : 0;
                                     
                                     return (
                                         <TouchableOpacity 
@@ -2072,8 +2147,8 @@ const styles = StyleSheet.create({
     backgroundColor: ModernColors.background.secondary,
   },
   headerGradient: {
-    paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + 20 : 50,
-    paddingBottom: Spacing.xl,
+    paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + 12 : 40,
+    paddingBottom: Spacing.lg,
     paddingHorizontal: Spacing.lg,
     borderBottomLeftRadius: BorderRadius.xl,
     borderBottomRightRadius: BorderRadius.xl,
@@ -2093,9 +2168,9 @@ const styles = StyleSheet.create({
     marginRight: Spacing.md,
   },
   profileImage: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: ModernColors.primary.dark,
     borderWidth: 3,
     borderColor: '#fff',
@@ -2105,9 +2180,9 @@ const styles = StyleSheet.create({
     bottom: 0,
     right: 0,
     backgroundColor: '#16A34A', // Green for verified
-    borderRadius: 12,
-    width: 24,
-    height: 24,
+    borderRadius: 10,
+    width: 20,
+    height: 20,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
@@ -2118,9 +2193,9 @@ const styles = StyleSheet.create({
     bottom: 0,
     right: 0,
     backgroundColor: '#F59E0B', // Amber for unverified
-    borderRadius: 12,
-    width: 24,
-    height: 24,
+    borderRadius: 10,
+    width: 20,
+    height: 20,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
@@ -2129,15 +2204,10 @@ const styles = StyleSheet.create({
   profileInfo: {
     flex: 1,
   },
-  greetingText: {
-    ...Typography.caption,
-    color: 'rgba(255, 255, 255, 0.9)',
-    marginBottom: 4,
-  },
   doctorName: {
     ...Typography.h3,
     color: '#fff',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   starsContainer: {
     flexDirection: 'row',
@@ -2151,9 +2221,9 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   notificationButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -2182,15 +2252,14 @@ const styles = StyleSheet.create({
     // paddingBottom is now set dynamically using safeBottomPadding
   },
   statsContainer: {
+    // Analytics cards: 4 squares (2x2) like previous
     flexDirection: 'row',
-    flexWrap: isLargeTablet ? 'nowrap' : 'wrap',
+    flexWrap: 'wrap',
     gap: Spacing.md,
     marginBottom: Spacing.xl,
   },
   statCardWrapper: {
-    width: isLargeTablet 
-      ? (width - Spacing.lg * 2 - Spacing.md * 3) / 4  // 4 cards in one row for 10+ inch screens
-      : (width - Spacing.lg * 2 - Spacing.md) / 2,      // 2 cards per row for smaller screens
+    width: (width - Spacing.lg * 2 - Spacing.md) / 2, // 2 cards per row
     aspectRatio: 1,
     flexShrink: 0,
   },
@@ -2355,13 +2424,13 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   openingCard: {
-    width: isTablet ? (width - Spacing.lg * 3) / 2 : width * 0.92, // Wider cards - 2 per row on tablet, 92% width on mobile
-    minWidth: isTablet ? 350 : 340, // Increased minimum width for landscape feel
+    // Full width card (promo section unchanged; this is openings cards)
+    width: '100%',
     backgroundColor: '#FFFFFF',
     borderRadius: 12, // Slightly more rounded for modern look
     overflow: 'hidden',
-    marginRight: isTablet ? Spacing.md : 16,
-    marginBottom: isTablet ? Spacing.md : 16,
+    marginRight: 0,
+    marginBottom: Spacing.md,
     borderWidth: 1,
     borderColor: '#E5E7EB',
     shadowColor: '#000',
@@ -2371,12 +2440,15 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   newOpportunityCard: {
-    width: isTablet ? (width - Spacing.lg * 3) / 2 : width * 0.85,
-    minWidth: isTablet ? 350 : 320,
+    // Full width card (one card per screen width)
+    width: width - Spacing.lg * 2,
+    // Prevent overflow on larger screens / inside horizontal containers
+    maxWidth: width - Spacing.sm * 2,
+    alignSelf: 'center',
     marginBottom: Spacing.sm,
     position: 'relative',
     overflow: 'hidden',
-    marginRight: isTablet ? Spacing.md : 16,
+    marginRight: 0,
   },
   newOpportunityImageBackground: {
     position: 'absolute',
@@ -2400,13 +2472,14 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.75)',
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
   },
   newOpportunityContentWrapper: {
     flex: 1,
     position: 'relative',
     zIndex: 1,
     paddingRight: '42%', // Space for 40% image + 2% margin
+    paddingVertical: 2,
   },
   newOpportunityContentWrapperFull: {
     flex: 1,
@@ -2415,9 +2488,8 @@ const styles = StyleSheet.create({
   },
   newOpportunityCardHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: Spacing.sm,
+    marginBottom: 4,
     gap: Spacing.sm,
   },
   newOpportunityHeaderLeft: {
@@ -2445,11 +2517,13 @@ const styles = StyleSheet.create({
   newOpportunityHospitalName: {
     ...Typography.bodyBold,
     color: ModernColors.text.primary,
-    marginBottom: 2,
+    marginBottom: 3,
+    fontSize: 15,
   },
   newOpportunityDepartment: {
     ...Typography.caption,
     color: ModernColors.text.secondary,
+    fontSize: 12,
   },
   urgentBadge: {
     flexDirection: 'row',
@@ -2463,12 +2537,54 @@ const styles = StyleSheet.create({
     borderColor: '#EF4444',
     flexShrink: 0,
   },
+  urgentBadgeOverlay: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: '#EF4444',
+    zIndex: 2,
+  },
   urgentBadgeText: {
     fontSize: 10,
     fontWeight: '700',
     color: '#EF4444',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  newOpportunityStatusBadgeContainer: {
+    marginBottom: 12,
+    alignSelf: 'flex-start',
+  },
+  newOpportunityStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 6,
+    borderWidth: 1,
+    flexShrink: 0,
+    maxWidth: '100%',
+  },
+  newOpportunityStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  newOpportunityStatusText: {
+    fontSize: 10,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+    letterSpacing: 0.2,
+    flexShrink: 1,
   },
   postedTimeRow: {
     flexDirection: 'row',
@@ -2482,25 +2598,29 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   newOpportunityDetailsContainer: {
-    marginBottom: Spacing.sm,
-    gap: 6,
+    gap: 2,
+    marginBottom: 4,
+    position: 'relative',
+    zIndex: 1,
   },
   newOpportunityDetailRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
+    gap: 4,
   },
   newOpportunityDetailText: {
     ...Typography.caption,
     color: ModernColors.text.secondary,
     flex: 1,
+    fontSize: 11,
   },
   newOpportunityPaymentContainer: {
-    backgroundColor: ModernColors.primary.light + '20',
-    padding: Spacing.sm,
-    borderRadius: 8,
-    marginBottom: Spacing.sm,
+    backgroundColor: ModernColors.primary.light + '25',
+    padding: Spacing.sm + 2,
+    borderRadius: 10,
+    marginBottom: Spacing.sm + 2,
+    borderWidth: 1,
+    borderColor: ModernColors.primary.light + '40',
   },
   newOpportunityPaymentRow: {
     flexDirection: 'row',
@@ -2511,27 +2631,31 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     color: ModernColors.text.secondary,
     fontWeight: '600',
+    fontSize: 12,
   },
   newOpportunityPaymentAmount: {
     ...Typography.bodyBold,
     color: ModernColors.primary.main,
-    fontSize: 16,
+    fontSize: 18,
+    fontWeight: '700',
   },
   newOpportunityApplyButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: ModernColors.primary.main,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
     borderRadius: 8,
-    gap: Spacing.xs,
-    marginTop: Spacing.xs,
+    gap: 4,
+    marginTop: 4,
+    minHeight: 28,
   },
   newOpportunityApplyButtonText: {
-    ...Typography.bodyBold,
+    ...Typography.captionBold,
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 12,
+    fontWeight: '700',
   },
   hospitalImageContainer: {
     width: '100%',
@@ -2562,7 +2686,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: 4,
   },
-  ratingText: {
+  ratingBadgeText: {
     fontSize: 13,
     fontWeight: '700',
     color: '#FFFFFF',
@@ -2686,25 +2810,6 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     color: ModernColors.text.secondary,
     flex: 1,
-  },
-  applyButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.md,
-    gap: Spacing.xs,
-  },
-  appliedButton: {
-    backgroundColor: ModernColors.neutral.gray200,
-  },
-  applyButtonText: {
-    ...Typography.captionBold,
-    color: '#fff',
-  },
-  appliedButtonText: {
-    ...Typography.captionBold,
-    color: ModernColors.text.secondary,
   },
   expiredBadge: {
     backgroundColor: ModernColors.error.main,
@@ -2850,44 +2955,72 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   activeSessionCard: {
-    borderLeftWidth: 3,
-    borderLeftColor: ModernColors.success.main,
+    borderWidth: 1,
+    borderColor: ModernColors.border.light,
   },
-  activeSessionHeader: {
+  activeSessionTopRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    justifyContent: 'space-between',
+    marginBottom: 10,
   },
-  activeSessionHeaderLeft: {
+  activeSessionTopLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  activeSessionLiveDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: ModernColors.success.main,
+  activeSessionDeptBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: ModernColors.neutral.gray100,
+    maxWidth: 180,
   },
-  activeSessionHospitalName: {
-    fontSize: 16,
+  activeSessionDeptText: {
+    fontSize: 12,
     fontWeight: '700',
     color: ModernColors.text.primary,
   },
-  activeSessionStatus: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: ModernColors.success.main,
-    backgroundColor: ModernColors.success.light,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+  activeSessionStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
   },
-  activeSessionDepartment: {
-    fontSize: 14,
-    color: ModernColors.text.secondary,
-    marginBottom: 12,
+  activeSessionStatusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  activeSessionStatusText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  activeSessionPayBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+  },
+  activeSessionPayText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: ModernColors.success.main,
+  },
+  activeSessionHospitalName: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: ModernColors.text.primary,
+    marginBottom: 8,
   },
   activeSessionDetails: {
     gap: 8,
@@ -3328,8 +3461,8 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
     position: 'relative',
     overflow: 'hidden',
-    width: width * 0.85, // 85% of screen width for horizontal scroll
-    minWidth: 320,
+    // One card per screen width (inside horizontal scroll)
+    width: width - Spacing.lg * 2,
   },
   applicationImageBackground: {
     position: 'absolute',

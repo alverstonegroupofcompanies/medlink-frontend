@@ -6,10 +6,14 @@ import { BASE_BACKEND_URL } from '@/config/api';
  * @returns The full URL or a placeholder if path is missing
  */
 export const getFullImageUrl = (path?: string | null): string => {
-    console.log('🖼️ [getFullImageUrl] Input path:', path);
+    if (__DEV__) {
+        console.log('🖼️ [getFullImageUrl] Input path:', path);
+    }
 
     if (!path) {
-        console.log('🖼️ [getFullImageUrl] No path provided, returning placeholder');
+        if (__DEV__) {
+            console.log('🖼️ [getFullImageUrl] No path provided, returning placeholder');
+        }
         return 'https://i.pravatar.cc/150?img=12'; // Default placeholder
     }
 
@@ -20,7 +24,9 @@ export const getFullImageUrl = (path?: string | null): string => {
         // This happens if backend blindly wraps an existing URL
         const lastProtocolIndex = path.lastIndexOf('http');
         if (lastProtocolIndex > 0) {
-            console.log('[getFullImageUrl] ⚠️ Detected double-wrapped URL, fixing:', path);
+            if (__DEV__) {
+                console.log('[getFullImageUrl] ⚠️ Detected double-wrapped URL, fixing:', path);
+            }
             const fixedPath = path.substring(lastProtocolIndex);
             // Recursively verify the fixed path in case it needs localhost adjustment
             return getFullImageUrl(fixedPath);
@@ -38,36 +44,56 @@ export const getFullImageUrl = (path?: string | null): string => {
                     originalUrlObj.hostname = backendUrlObj.hostname;
                     originalUrlObj.port = backendUrlObj.port;
                     originalUrlObj.protocol = backendUrlObj.protocol;
-                    console.log(`Fixing localhost URL: ${path} -> ${originalUrlObj.toString()}`);
-                    return originalUrlObj.toString();
+                    const swapped = originalUrlObj.toString();
+                    if (__DEV__) {
+                        console.log(`Fixing localhost URL: ${path} -> ${swapped}`);
+                    }
+                    return getFullImageUrl(swapped);
                 }
             } catch (e) {
                 console.warn('Error fixing localhost URL:', e);
             }
         }
 
-        // Replace /storage/ with /app/ if present in the URL
-        const fixedPath = path.replace('/storage/', '/app/');
-        console.log('🖼️ [getFullImageUrl] Already full URL:', fixedPath);
+        // Normalize common path issues
+        // - Our backend serves public files under /app (Hostinger-style), so map /storage → /app
+        // - Collapse accidental double-underscores in filenames
+        // - Fix accidental "/logoo/" directory typo if it appears
+        const fixedPath = path
+            .replace('/storage/', '/app/')
+            .replace('/logoo/', '/logo/')
+            .replace(/__+/g, '_');
+
+        if (__DEV__) {
+            console.log('🖼️ [getFullImageUrl] Already full URL:', fixedPath);
+        }
         return fixedPath;
     }
 
     // Clean path (remove leading slash if exists)
     let cleanPath = path.startsWith('/') ? path.substring(1) : path;
-    console.log('🖼️ [getFullImageUrl] Cleaned path:', cleanPath);
+    if (__DEV__) {
+        console.log('🖼️ [getFullImageUrl] Cleaned path:', cleanPath);
+    }
 
     // Fix for missing app prefix in uploads path (common issue)
     if (cleanPath.startsWith('uploads/')) {
         cleanPath = `app/${cleanPath}`;
-        console.log('🖼️ [getFullImageUrl] Added app prefix:', cleanPath);
+        if (__DEV__) {
+            console.log('🖼️ [getFullImageUrl] Added app prefix:', cleanPath);
+        }
     }
 
     // Ensure base URL ends with slash
     const baseUrl = BASE_BACKEND_URL.endsWith('/') ? BASE_BACKEND_URL : `${BASE_BACKEND_URL}/`;
-    console.log('🖼️ [getFullImageUrl] Base URL:', baseUrl);
+    if (__DEV__) {
+        console.log('🖼️ [getFullImageUrl] Base URL:', baseUrl);
+    }
 
-    const fullUrl = `${baseUrl}${cleanPath}`;
-    console.log('🖼️ [getFullImageUrl] ✅ Final URL:', fullUrl);
+    const fullUrl = `${baseUrl}${cleanPath}`.replace('/logoo/', '/logo/').replace(/__+/g, '_');
+    if (__DEV__) {
+        console.log('🖼️ [getFullImageUrl] ✅ Final URL:', fullUrl);
+    }
 
     // Validate URL format
     /*

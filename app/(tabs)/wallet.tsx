@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, ScrollView, StyleSheet, RefreshControl, TouchableOpacity, Alert, TextInput, ActivityIndicator, StatusBar, Platform } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DoctorPrimaryColors as PrimaryColors } from '@/constants/doctor-theme';
@@ -60,6 +60,7 @@ interface BankingDetails {
 export default function WalletScreen() {
   const insets = useSafeAreaInsets();
   const safeBottomPadding = useSafeBottomPadding();
+  const params = useLocalSearchParams<{ openBanking?: string }>();
   const [wallet, setWallet] = useState<WalletData | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [bankingDetails, setBankingDetails] = useState<BankingDetails | null>(null);
@@ -71,6 +72,13 @@ export default function WalletScreen() {
   const [withdrawing, setWithdrawing] = useState(false);
   const [transactionFilter, setTransactionFilter] = useState<'all' | 'pending' | 'completed' | 'withdrawals'>('all');
   const [expandedTransactionId, setExpandedTransactionId] = useState<number | null>(null);
+
+  // If navigated here specifically to add banking details (e.g. from Apply flow)
+  useEffect(() => {
+    if (params?.openBanking === '1' || params?.openBanking === 'true') {
+      setShowBankingForm(true);
+    }
+  }, [params?.openBanking]);
 
   // Ensure status bar stays blue always - CRITICAL
   useFocusEffect(

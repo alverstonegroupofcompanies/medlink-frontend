@@ -49,6 +49,8 @@ import { ModernCard } from '@/components/modern-card';
 import { ScreenSafeArea, useSafeBottomPadding } from '@/components/screen-safe-area';
 
 const { width } = Dimensions.get('window');
+const IS_TABLET = width >= 768;
+const CONTENT_MAX_WIDTH = 720;
 
 export default function ProfileScreen() {
   const [doctor, setDoctor] = useState<any>(null);
@@ -1415,6 +1417,9 @@ const styles = StyleSheet.create({
   content: {
     padding: Spacing.lg,
     paddingTop: Spacing.xl,
+    width: '100%',
+    maxWidth: IS_TABLET ? CONTENT_MAX_WIDTH : '100%',
+    alignSelf: 'center',
     // paddingBottom is now set dynamically using safeBottomPadding
   },
   profileCard: {
