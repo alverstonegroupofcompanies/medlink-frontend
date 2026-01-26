@@ -85,7 +85,7 @@ export default function HospitalTabLayout() {
                 width: 36,
                 height: 36,
                 borderRadius: 18,
-                backgroundColor: focused ? 'rgba(123, 97, 255, 0.1)' : 'transparent',
+                backgroundColor: focused ? 'rgba(37, 99, 235, 0.1)' : 'transparent',
               }}
             >
               <Home size={24} color={color} fill={focused ? color : 'transparent'} />
@@ -105,7 +105,7 @@ export default function HospitalTabLayout() {
                 width: 36,
                 height: 36,
                 borderRadius: 18,
-                backgroundColor: focused ? 'rgba(123, 97, 255, 0.1)' : 'transparent',
+                backgroundColor: focused ? 'rgba(37, 99, 235, 0.1)' : 'transparent',
               }}
             >
               <MapPin size={24} color={color} fill={focused ? color : 'transparent'} />
@@ -125,7 +125,7 @@ export default function HospitalTabLayout() {
                 width: 36,
                 height: 36,
                 borderRadius: 18,
-                backgroundColor: focused ? 'rgba(123, 97, 255, 0.1)' : 'transparent',
+                backgroundColor: focused ? 'rgba(37, 99, 235, 0.1)' : 'transparent',
               }}
             >
               <CreditCard size={24} color={color} fill={focused ? color : 'transparent'} />
@@ -152,7 +152,7 @@ export default function HospitalTabLayout() {
                 width: 36,
                 height: 36,
                 borderRadius: 18,
-                backgroundColor: focused ? 'rgba(123, 97, 255, 0.1)' : 'transparent',
+                backgroundColor: focused ? 'rgba(37, 99, 235, 0.1)' : 'transparent',
               }}
             >
               <User size={24} color={color} fill={focused ? color : 'transparent'} />
@@ -172,7 +172,7 @@ export default function HospitalTabLayout() {
                 width: 36,
                 height: 36,
                 borderRadius: 18,
-                backgroundColor: focused ? 'rgba(123, 97, 255, 0.1)' : 'transparent',
+                backgroundColor: focused ? 'rgba(37, 99, 235, 0.1)' : 'transparent',
               }}
             >
               <MaterialIcons name="settings" size={24} color={color} />
@@ -231,19 +231,9 @@ export default function HospitalTabLayout() {
           href: null,
         }}
       />
-      <Tabs.Screen
-        name="dispute"
-        options={{
-          tabBarButton: () => null, // Completely hide from tab bar
-        }}
-      />
-      {/* Hide dynamic dispute route that was showing in bottom bar */}
-      <Tabs.Screen
-        name="dispute/[sessionId]"
-        options={{
-          href: null,
-        }}
-      />
+      <Tabs.Screen name="dispute" options={{ tabBarButton: () => null }} />
+      <Tabs.Screen name="dispute/[sessionId]" options={{ href: null }} />
+      <Tabs.Screen name="dispute/detail/[disputeId]" options={{ href: null }} />
     </Tabs>
   );
 }

@@ -68,6 +68,12 @@ export const getUserFriendlyError = (error: any): string => {
       errorCode === 'NETWORK_ERROR' ||
       errorCode === 'ERR_NETWORK'
     ) {
+      // In dev, when calling a local IP, hint at --host=0.0.0.0
+      const url = (typeof __DEV__ !== 'undefined' && __DEV__ && error?.config?.baseURL) ? error.config.baseURL : '';
+      const isLocalIp = /(192\.168\.|10\.)/.test(url);
+      if (typeof __DEV__ !== 'undefined' && __DEV__ && isLocalIp) {
+        return 'Cannot reach backend. Run: php artisan serve --host=0.0.0.0 --port=8000 (or .\\serve-mobile.ps1). Phone and PC must be on same WiFi.';
+      }
       return 'Unable to connect. Please check your internet connection and try again.';
     }
     
@@ -185,8 +191,15 @@ export const getUserFriendlyError = (error: any): string => {
     return 'The requested information could not be found.';
   }
 
-  // Server Error (500)
+  // Service Unavailable (503) - e.g. payment gateway not configured
+  if (status === 503 && data?.message) {
+    return data.message;
+  }
+
+  // Server Error (500) - prefer backend message when it is user-facing (e.g. Payment system configuration error)
   if (status >= 500) {
+    if (data?.message && !String(data.message).includes('SQLSTATE') && !String(data.message).includes('Exception'))
+      return data.message;
     return 'Server error occurred. Please try again in a moment.';
   }
 

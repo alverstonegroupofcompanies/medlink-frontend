@@ -318,12 +318,12 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#0066FF',
+    backgroundColor: '#2563EB',
     width: 100,
   },
   circle: {
     position: 'absolute',
-    backgroundColor: '#0066FF',
+    backgroundColor: '#2563EB',
     borderRadius: 1000,
   },
   circle1: {
@@ -346,7 +346,7 @@ const styles = StyleSheet.create({
   },
   particle: {
     position: 'absolute',
-    backgroundColor: '#0066FF',
+    backgroundColor: '#2563EB',
     borderRadius: 50,
   },
   particle1: {

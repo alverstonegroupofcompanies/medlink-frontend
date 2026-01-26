@@ -50,12 +50,8 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
-    // Set default blue status bar for all pages
+    // Status bar: no forced background color on splash
     StatusBar.setBarStyle('light-content', true);
-    if (Platform.OS === 'android') {
-      StatusBar.setBackgroundColor('#2563EB', true);
-      StatusBar.setTranslucent(false);
-    }
     
     let timeoutId: any;
     
@@ -105,13 +101,14 @@ export default function RootLayout() {
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="index" />
               <Stack.Screen name="login" />
+              <Stack.Screen name="forgot-password" />
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
             </Stack>
-            {/* Global default blue status bar - applies to all pages */}
-            <ExpoStatusBar style="light" backgroundColor="#2563EB" />
+            {/* Global status bar - no forced background color */}
+            <ExpoStatusBar style="auto" />
             {Platform.OS === 'android' && (
-              <StatusBar barStyle="light-content" backgroundColor="#2563EB" translucent={false} />
+              <StatusBar barStyle="default" />
             )}
           </ThemeProvider>
         </SafeAreaProvider>

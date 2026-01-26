@@ -21,6 +21,7 @@ import { DoctorPrimaryColors as PrimaryColors } from '@/constants/doctor-theme';
 import { MultiDepartmentPicker } from '@/components/multi-department-picker';
 import { FileUploadButton } from '@/components/file-upload-button';
 import { ImageCropPicker } from '@/components/ImageCropPicker';
+import { validatePassword, PASSWORD_RULES_TEXT } from '@/utils/passwordValidation';
 
 export default function DoctorDetailsScreen() {
   const [loading, setLoading] = useState(false);
@@ -101,8 +102,9 @@ export default function DoctorDetailsScreen() {
       return;
     }
 
-    if (formData.password.length < 6) {
-      Alert.alert('Validation Error', 'Password must be at least 6 characters');
+    const pwCheck = validatePassword(formData.password);
+    if (!pwCheck.valid) {
+      Alert.alert('Validation Error', pwCheck.message);
       return;
     }
 
@@ -393,7 +395,7 @@ export default function DoctorDetailsScreen() {
               label="Password *"
               value={formData.password}
               onChangeText={(text) => handleInputChange('password', text)}
-              placeholder="Minimum 6 characters"
+              placeholder={PASSWORD_RULES_TEXT}
               secureTextEntry
             />
             <InputField

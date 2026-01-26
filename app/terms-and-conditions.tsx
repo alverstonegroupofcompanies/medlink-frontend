@@ -16,7 +16,7 @@ export default function TermsAndConditionsScreen() {
   return (
     <ScreenSafeArea backgroundColor={NeutralColors.background}>
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
+        <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
         
         {/* Header */}
         <View style={styles.header}>

@@ -516,7 +516,7 @@ export default function JobDetailScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar style="light" backgroundColor="#0066FF" />
+      <StatusBar style="light" backgroundColor="#2563EB" />
       {/* Header */}
       <LinearGradient
           colors={ModernColors.primary.gradient as [string, string]}

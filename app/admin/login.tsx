@@ -22,8 +22,9 @@ import { API_BASE_URL } from '../../config/api';
 export default function AdminLogin() {
   const router = useRouter();
   const [email, setEmail] = useState('admin@medlink.com');
-  const [password, setPassword] = useState('Admin@MedLink2024!');
+  const [password, setPassword] = useState('Admin@123');
   const [loading, setLoading] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isTablet = width >= 900;
@@ -66,18 +67,39 @@ export default function AdminLogin() {
         router.replace('/admin/dashboard');
       }
     } catch (error: any) {
-      Alert.alert(
-        'Login Failed',
-        error.response?.data?.message || 'Invalid email or password'
-      );
+      const msg = !error.response
+        ? (error.message || 'Cannot connect to server. Check that the backend is running.')
+        : (error.response?.data?.message || 'Invalid email or password');
+      Alert.alert('Login Failed', msg);
     } finally {
       setLoading(false);
     }
   };
 
+  const handleResetDefault = async () => {
+    setResetting(true);
+    try {
+      const response = await axios.post(`${API_BASE_URL}/admin/reset-default`);
+      if (response.data?.status) {
+        setEmail(response.data.email ?? 'admin@medlink.com');
+        setPassword(response.data.password ?? 'Admin@123');
+        Alert.alert('Reset Done', 'Admin reset to default. You can login now.');
+      } else {
+        Alert.alert('Reset Failed', response.data?.message || 'Reset not available.');
+      }
+    } catch (e: any) {
+      Alert.alert(
+        'Reset Failed',
+        e.response?.data?.message || 'Reset is only available in development. Run: php artisan db:seed --class=AdminSeeder'
+      );
+    } finally {
+      setResetting(false);
+    }
+  };
+
   return (
     <SafeAreaView style={safeAreaStyle} edges={['top', 'right', 'left']}>
-      <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
+      <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
@@ -106,7 +128,7 @@ export default function AdminLogin() {
               <Text style={styles.label}>Password</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Enter password"
+                placeholder="Admin@123"
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
@@ -126,11 +148,23 @@ export default function AdminLogin() {
               )}
             </TouchableOpacity>
 
+            <TouchableOpacity
+              style={[styles.resetButton, resetting && styles.resetButtonDisabled]}
+              onPress={handleResetDefault}
+              disabled={resetting || loading}
+            >
+              {resetting ? (
+                <ActivityIndicator color="#64748b" size="small" />
+              ) : (
+                <Text style={styles.resetButtonText}>Reset to default admin</Text>
+              )}
+            </TouchableOpacity>
+
             <View style={styles.credentialsInfo}>
               <Text style={styles.credentialsTitle}>Default Credentials</Text>
               <Text style={styles.credentialsText}>
                 Email: admin@medlink.com{'\n'}
-                Password: Admin@MedLink2024!
+                Password: Admin@123
               </Text>
             </View>
           </View>
@@ -216,6 +250,19 @@ const styles = StyleSheet.create({
   },
   loginButtonDisabled: {
     opacity: 0.6,
+  },
+  resetButton: {
+    marginTop: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  resetButtonDisabled: {
+    opacity: 0.6,
+  },
+  resetButtonText: {
+    fontSize: 14,
+    color: '#64748b',
+    textDecorationLine: 'underline',
   },
   loginButtonText: {
     color: '#fff',

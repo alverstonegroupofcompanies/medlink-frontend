@@ -172,6 +172,7 @@ export default function HospitalSettingsScreen() {
       </View>
 
       <ScrollView
+        style={styles.scrollView}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: safeBottomPadding + 20 }]}
         showsVerticalScrollIndicator={false}
       >
@@ -288,6 +289,10 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.8)',
     marginTop: 4,
     fontWeight: '400',
+  },
+  scrollView: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
   },
   scrollContent: {
     paddingTop: 16,

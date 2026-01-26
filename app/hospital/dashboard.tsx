@@ -23,7 +23,7 @@ import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as Neutra
 import API from '../api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, useFocusEffect } from 'expo-router';
-import { Plus, MapPin, Building2, Clock, X, Navigation, Bell, LogOut, CreditCard, Users, CheckCircle2, FileText, XCircle, Calendar, User, DollarSign, Star, ArrowRight, Heart, Stethoscope, Baby, Eye, Brain, Activity, Pill, Shield, ChevronDown, Sparkles } from 'lucide-react-native';
+import { Plus, MapPin, Building2, Clock, X, Navigation, Bell, LogOut, CreditCard, Users, CheckCircle2, FileText, XCircle, Calendar, User, DollarSign, Star, ArrowRight, Heart, Stethoscope, Baby, Eye, Brain, Activity, Pill, Shield, ChevronDown, Sparkles, Lock } from 'lucide-react-native';
 import { ScreenSafeArea, useSafeBottomPadding } from '@/components/screen-safe-area';
 import { StatusBarHandler } from '@/components/StatusBarHandler';
 import * as Location from 'expo-location';
@@ -39,6 +39,9 @@ import { LocationPickerMap } from '@/components/LocationPickerMap';
 
 // --- Memoized Components to Prevent Flickering ---
 
+const CARD_WIDTH = 300;
+const SESSION_CARD_WIDTH = 320; // Slightly wider so doctor name is readable; same visual weight as Posted Requirements
+
 const RequirementItem = React.memo(({ req, onDelete }: { req: any, onDelete: (id: number) => void }) => {
   // Animation for press effect
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -52,6 +55,9 @@ const RequirementItem = React.memo(({ req, onDelete }: { req: any, onDelete: (id
 
   // Determine overall status
   const getRequirementStatus = () => {
+    if (req.job_closed) {
+      return { text: 'Job Closed', color: StatusColors.success, icon: Lock };
+    }
     if (req.is_expired) {
       return { text: 'Expired', color: StatusColors.error, icon: XCircle };
     }
@@ -245,13 +251,19 @@ const RequirementItem = React.memo(({ req, onDelete }: { req: any, onDelete: (id
     </TouchableOpacity>
   );
 }, (prev, next) => {
-    // Custom comparison to prevent re-renders
+    // Custom comparison to prevent re-renders (must detect application status changes e.g. pending→selected)
+    const sel = (r: any) => (r.applications?.filter((a: any) => a.status === 'selected').length || 0);
+    const pen = (r: any) => (r.applications?.filter((a: any) => a.status === 'pending' || !a.status).length || 0);
+    const rej = (r: any) => (r.applications?.filter((a: any) => a.status === 'rejected').length || 0);
     return (
         prev.req.id === next.req.id &&
         prev.req.updated_at === next.req.updated_at &&
         prev.req.applications?.length === next.req.applications?.length &&
         prev.req.status === next.req.status &&
-        prev.req.is_expired === next.req.is_expired
+        prev.req.is_expired === next.req.is_expired &&
+        sel(prev.req) === sel(next.req) &&
+        pen(prev.req) === pen(next.req) &&
+        rej(prev.req) === rej(next.req)
     );
 });
 
@@ -433,6 +445,7 @@ const SessionItem = React.memo(({ session }: { session: any }) => {
             <Animated.View
                 style={[
                     styles.requirementCard,
+                    styles.sessionCardHorizontal,
                     session.status === 'completed' && session.hospital_confirmed ? styles.sessionCardGreen :
                     session.status === 'completed' && !session.hospital_confirmed ? styles.sessionCardOrange :
                     session.status === 'in_progress' ? styles.sessionCardBlue :
@@ -442,88 +455,56 @@ const SessionItem = React.memo(({ session }: { session: any }) => {
                     }
                 ]}
             >
-                {/* Header Section with Doctor Profile */}
-                <View style={styles.cardHeader}>
-                    <View style={styles.headerLeft}>
-                        {/* Doctor Profile Picture */}
-                        <View style={styles.doctorAvatarContainer}>
+                {/* Header: row 1 = avatar + dept + status; row 2 = doctor name (prominent, like Posted Requirements main line) */}
+                <View style={[styles.cardHeader, styles.sessionCardHeaderRow]}>
+                    <View style={[styles.headerLeft, styles.sessionCardHeaderLeft]}>
+                        <View style={styles.sessionCardAvatarWrap}>
                             {doctor?.profile_photo || doctor?.profile_photo_url ? (
                                 <Avatar.Image
-                                    size={48}
+                                    size={36}
                                     source={{ uri: getFullImageUrl(doctor.profile_photo || doctor.profile_photo_url) }}
                                     style={{ backgroundColor: 'rgba(255, 255, 255, 0.2)' }}
                                 />
                             ) : (
                                 <Avatar.Text
-                                    size={48}
+                                    size={36}
                                     label={doctor?.name?.charAt(0)?.toUpperCase() || 'D'}
                                     style={{ backgroundColor: 'rgba(255, 255, 255, 0.2)' }}
-                                    labelStyle={{ color: '#FFFFFF', fontWeight: '700', fontSize: 20 }}
+                                    labelStyle={{ color: '#FFFFFF', fontWeight: '700', fontSize: 16 }}
                                 />
                             )}
                         </View>
-                        
-                        <View style={styles.doctorInfoSection}>
-                            <View style={styles.doctorNameRow}>
-                                <Text style={[styles.doctorNameCard, { color: '#FFFFFF' }]}>
-                                    Dr. {doctor?.name || 'Doctor'}
-                                </Text>
-                                {doctor?.average_rating && doctor.average_rating > 0 && (
-                                    <View style={styles.ratingRow}>
-                                        <Star size={12} color="#FFD700" fill="#FFD700" />
-                                        <Text style={[styles.ratingText, { color: '#FFFFFF' }]}>
-                                            {parseFloat(doctor.average_rating).toFixed(1)}
-                                        </Text>
-                                        {doctor.total_ratings && doctor.total_ratings > 0 && (
-                                            <Text style={[styles.ratingCountText, { color: 'rgba(255, 255, 255, 0.7)' }]}>
-                                                ({doctor.total_ratings})
-                                            </Text>
-                                        )}
-                                    </View>
-                                )}
-                            </View>
-                            {(doctor?.completed_sessions_count !== undefined || doctor?.completed_sessions !== undefined) && (
-                                <Text style={[styles.completedWorkText, { color: 'rgba(255, 255, 255, 0.85)' }]}>
-                                    {doctor.completed_sessions_count || doctor.completed_sessions || 0} completed {doctor.completed_sessions_count === 1 || doctor.completed_sessions === 1 ? 'session' : 'sessions'}
-                                </Text>
-                            )}
-                        </View>
-                    </View>
-                    <View style={styles.badgeContainerTop}>
                         <View style={[styles.deptBadge, { backgroundColor: 'rgba(255, 255, 255, 0.25)' }]}>
-                            <Building2 size={14} color="#FFFFFF" />
-                            <Text style={[styles.deptText, { color: '#FFFFFF' }]}>
-                                {requirement?.department || 'Department'}
+                            <Building2 size={12} color="#FFFFFF" />
+                            <Text style={[styles.deptText, { color: '#FFFFFF' }]} numberOfLines={1}>
+                                {requirement?.department || 'Dept'}
                             </Text>
                         </View>
                         <View style={[styles.statusBadge, { backgroundColor: 'rgba(255, 255, 255, 0.25)', borderColor: '#FFFFFF' }]}>
-                            <StatusIcon size={12} color="#FFFFFF" />
-                            <Text style={[styles.statusText, { color: '#FFFFFF' }]}>
+                            <StatusIcon size={10} color="#FFFFFF" />
+                            <Text style={[styles.statusText, { color: '#FFFFFF' }]} numberOfLines={1}>
                                 {status.text}
                             </Text>
                         </View>
                     </View>
                 </View>
+                <Text style={[styles.sessionCardDoctorName, { color: '#FFFFFF', marginTop: 6, marginBottom: 8 }]} numberOfLines={1}>
+                    Dr. {doctor?.name || 'Doctor'}
+                    {doctor?.average_rating > 0 ? ` • ★${parseFloat(doctor.average_rating).toFixed(1)}` : ''}
+                </Text>
 
-                {/* Date - Inline */}
-                <View style={styles.compactDateRow}>
-                    <Calendar size={13} color="#FFFFFF" />
-                    <Text style={[styles.compactDateText, { color: '#FFFFFF' }]}>
+                {/* Date & Time - one row (like Posted Requirements compactDateRow) */}
+                <View style={[styles.compactDateRow, { marginBottom: 8 }]}>
+                    <Calendar size={13} color="rgba(255, 255, 255, 0.95)" />
+                    <Text style={[styles.compactDateText, { color: 'rgba(255, 255, 255, 0.95)' }]} numberOfLines={1}>
                         {formatISTDateOnly(session.session_date)}
+                        {requirement?.start_time && requirement?.end_time
+                            ? ` • ${formatTime(requirement.start_time)} – ${formatTime(requirement.end_time)}`
+                            : ''}
                     </Text>
                 </View>
 
-                {/* Scheduled Times - Show job requirement start_time and end_time */}
-                {requirement?.start_time && requirement?.end_time && (
-                    <View style={styles.compactTimeRow}>
-                        <Clock size={12} color="rgba(255, 255, 255, 0.9)" />
-                        <Text style={[styles.compactTimeText, { color: 'rgba(255, 255, 255, 0.9)' }]}>
-                            {formatTime(requirement.start_time)} - {formatTime(requirement.end_time)}
-                        </Text>
-                    </View>
-                )}
-
-                {/* Session Status - Compact */}
+                {/* Status + Payment - compact bar (like Posted Requirements compactStatusBar) */}
                 <View style={[styles.compactStatusBar, { borderTopColor: 'rgba(255, 255, 255, 0.3)' }]}>
                     <View style={styles.compactStatusStats}>
                         {session.status === 'completed' && !session.hospital_confirmed && (
@@ -550,14 +531,14 @@ const SessionItem = React.memo(({ session }: { session: any }) => {
                                 <Text style={[styles.compactStatText, { color: '#FFFFFF' }]}>Scheduled</Text>
                             </View>
                         )}
-                        {session.payment_amount && (
+                        {session.payment_amount ? (
                             <View style={[styles.compactPaymentBadge, { backgroundColor: 'rgba(255, 255, 255, 0.25)' }]}>
                                 <DollarSign size={12} color="#FFFFFF" />
                                 <Text style={[styles.compactPaymentBadgeText, { color: '#FFFFFF' }]}>
                                     ₹{parseFloat(session.payment_amount || 0).toFixed(0)}
                                 </Text>
                             </View>
-                        )}
+                        ) : null}
                     </View>
                 </View>
             </Animated.View>
@@ -783,6 +764,14 @@ export default function HospitalDashboard() {
     };
   }, []);
 
+  // Listen for session/approval updates (e.g. from review-session) so "Completed" count updates
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener('REFRESH_HOSPITAL_SESSIONS', () => {
+      loadSessions(true);
+    });
+    return () => sub.remove();
+  }, []);
+
   // Poll for verification status changes more frequently (every 5 seconds)
   useEffect(() => {
     if (!hospital) return;
@@ -905,14 +894,20 @@ export default function HospitalDashboard() {
       setRequirements(prev => {
         if (prev.length !== newData.length) return newData;
         
-        // Optimized comparison for requirements
+        // Optimized comparison for requirements (must detect application status changes e.g. pending→selected)
+        const getSelected = (r: any) => (r.applications?.filter((a: any) => a.status === 'selected').length || 0);
+        const getPending = (r: any) => (r.applications?.filter((a: any) => a.status === 'pending' || !a.status).length || 0);
+        const getRejected = (r: any) => (r.applications?.filter((a: any) => a.status === 'rejected').length || 0);
         const isDifferent = newData.some((item: any, index: number) => {
              const prevItem = prev[index];
-             // Compare essential fields
+             if (!prevItem) return true;
              if (item.id !== prevItem.id) return true;
              if (item.updated_at !== prevItem.updated_at) return true;
-             if (item.status !== prevItem.status) return true; 
+             if (item.status !== prevItem.status) return true;
              if ((item.applications?.length || 0) !== (prevItem.applications?.length || 0)) return true;
+             if (getSelected(item) !== getSelected(prevItem)) return true;
+             if (getPending(item) !== getPending(prevItem)) return true;
+             if (getRejected(item) !== getRejected(prevItem)) return true;
              return false;
         });
         
@@ -1546,27 +1541,18 @@ export default function HospitalDashboard() {
                   }}
                 >
                   <View style={[styles.actionCardContent, styles.actionCardBlue]}>
-                    {/* Header Section */}
-                    <View style={styles.cardHeader}>
-                      <View style={styles.headerLeft}>
-                        <View style={[styles.deptBadge, styles.deptBadgeLight]}>
-                          <Plus size={14} color="#FFFFFF" />
-                          <Text style={[styles.deptText, { color: '#FFFFFF' }]}>New Job</Text>
-                        </View>
+                    <View style={styles.actionCardTop}>
+                      <View style={[styles.deptBadge, styles.deptBadgeLight]}>
+                        <Plus size={16} color="#FFFFFF" />
+                        <Text style={[styles.deptText, { color: '#FFFFFF', fontSize: 14 }]}>New Job</Text>
                       </View>
                     </View>
-
-                    {/* Info Row */}
-                    <View style={styles.compactInfoRow}>
-                      <View style={styles.compactInfoItem}>
-                        <FileText size={14} color="rgba(255, 255, 255, 0.9)" />
-                        <Text style={[styles.compactInfoText, { color: 'rgba(255, 255, 255, 0.9)' }]}>Create Requirement</Text>
+                    <View style={styles.actionCardBottom}>
+                      <View style={styles.actionCardSubtitleRow}>
+                        <FileText size={16} color="rgba(255, 255, 255, 0.95)" />
+                        <Text style={styles.actionCardSubtitle}>Create Requirement</Text>
                       </View>
-                    </View>
-
-                    {/* Description */}
-                    <View style={styles.compactDateRow}>
-                      <Text style={[styles.actionCardDescription, { color: 'rgba(255, 255, 255, 0.8)' }]}>
+                      <Text style={styles.actionCardDescription}>
                         Post a new job requirement for doctors
                       </Text>
                     </View>
@@ -1579,27 +1565,18 @@ export default function HospitalDashboard() {
                   onPress={() => router.push('/hospital/live-tracking')}
                 >
                   <View style={[styles.actionCardContent, styles.actionCardGreen]}>
-                    {/* Header Section */}
-                    <View style={styles.cardHeader}>
-                      <View style={styles.headerLeft}>
-                        <View style={[styles.deptBadge, styles.deptBadgeLight]}>
-                          <Navigation size={14} color="#FFFFFF" />
-                          <Text style={[styles.deptText, { color: '#FFFFFF' }]}>Live Tracking</Text>
-                        </View>
+                    <View style={styles.actionCardTop}>
+                      <View style={[styles.deptBadge, styles.deptBadgeLight]}>
+                        <Navigation size={16} color="#FFFFFF" />
+                        <Text style={[styles.deptText, { color: '#FFFFFF', fontSize: 14 }]}>Live Tracking</Text>
                       </View>
                     </View>
-
-                    {/* Info Row */}
-                    <View style={styles.compactInfoRow}>
-                      <View style={styles.compactInfoItem}>
-                        <Clock size={14} color="rgba(255, 255, 255, 0.9)" />
-                        <Text style={[styles.compactInfoText, { color: 'rgba(255, 255, 255, 0.9)' }]}>Real-time Location</Text>
+                    <View style={styles.actionCardBottom}>
+                      <View style={styles.actionCardSubtitleRow}>
+                        <Clock size={16} color="rgba(255, 255, 255, 0.95)" />
+                        <Text style={styles.actionCardSubtitle}>Real-time Location</Text>
                       </View>
-                    </View>
-
-                    {/* Description */}
-                    <View style={styles.compactDateRow}>
-                      <Text style={[styles.actionCardDescription, { color: 'rgba(255, 255, 255, 0.8)' }]}>
+                      <Text style={styles.actionCardDescription}>
                         Track doctors in real-time
                       </Text>
                     </View>
@@ -1617,13 +1594,19 @@ export default function HospitalDashboard() {
                     <Text style={styles.sectionTitle}>Active Sessions</Text>
                   </View>
                 </View>
-                <View style={styles.activeSessionsContainer}>
+                <ScrollView 
+                  horizontal 
+                  showsHorizontalScrollIndicator={false} 
+                  contentContainerStyle={{ paddingHorizontal: 16, paddingRight: 16, gap: 14 }}
+                >
                   {sessions
                     .filter((s: any) => s.status === 'in_progress')
                     .map((session: any) => (
-                      <ActiveSessionCard key={session.id} session={session} />
+                      <View key={session.id} style={{ width: CARD_WIDTH, flexShrink: 0 }}>
+                        <ActiveSessionCard session={session} />
+                      </View>
                     ))}
-                </View>
+                </ScrollView>
               </View>
             )}
 
@@ -1654,11 +1637,17 @@ export default function HospitalDashboard() {
                     </View>
                   </View>
               ) : (
-                  <View style={styles.sessionsContainer}>
+                  <ScrollView 
+                    horizontal 
+                    showsHorizontalScrollIndicator={false} 
+                    contentContainerStyle={{ paddingHorizontal: 16, paddingRight: 16, gap: 14 }}
+                  >
                     {sessions.slice(0, 5).map((session: any) => (
-                        <SessionItem key={session.id} session={session} />
+                        <View key={session.id} style={{ width: SESSION_CARD_WIDTH, flexShrink: 0 }}>
+                          <SessionItem session={session} />
+                        </View>
                     ))}
-                  </View>
+                  </ScrollView>
               )}
             </View>
 
@@ -1703,9 +1692,17 @@ export default function HospitalDashboard() {
                   </Card.Content>
                 </Card>
               ) : (
-                requirements.map((req) => (
-                  <RequirementItem key={req.id} req={req} onDelete={handleDelete} />
-                ))
+                <ScrollView 
+                  horizontal 
+                  showsHorizontalScrollIndicator={false} 
+                  contentContainerStyle={{ paddingHorizontal: 16, paddingRight: 16, gap: 14 }}
+                >
+                  {requirements.map((req) => (
+                    <View key={req.id} style={{ width: CARD_WIDTH, flexShrink: 0 }}>
+                      <RequirementItem req={req} onDelete={handleDelete} />
+                    </View>
+                  ))}
+                </ScrollView>
               )}
             </View>
 
@@ -2194,16 +2191,18 @@ export default function HospitalDashboard() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#EFF6FF' },
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
   scrollView: { flex: 1 },
   content: { 
     paddingBottom: 24,
+    paddingTop: 0,
   },
   headerGradient: {
     backgroundColor: '#2563EB',
     paddingTop: Platform.OS === 'ios' ? 60 : 50,
-    paddingBottom: 24,
+    paddingBottom: 28,
     paddingHorizontal: 16,
+    marginBottom: 0,
   },
   headerContent: {
     flexDirection: 'row',
@@ -2270,33 +2269,34 @@ const styles = StyleSheet.create({
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 12,
     paddingHorizontal: 16,
-    marginTop: 16,
-    marginBottom: 16,
+    marginTop: 20,
+    marginBottom: 20,
     justifyContent: 'space-between',
   },
   statCard: {
     width: '47%',
-    borderRadius: 12,
+    borderRadius: 16,
     backgroundColor: '#FFFFFF',
-    padding: 12,
+    padding: 16,
     borderWidth: 1,
-    borderColor: NeutralColors.border,
+    borderColor: '#E5E7EB',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
     alignItems: 'flex-start',
+    minHeight: 100,
   },
   statIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
+    width: 40,
+    height: 40,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
     alignSelf: 'flex-start',
   },
   statIcon1: {
@@ -2343,25 +2343,27 @@ const styles = StyleSheet.create({
   },
   statTextContainer: {
     width: '100%',
-    marginTop: 4,
+    marginTop: 0,
   },
   statValue: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: '800',
     color: NeutralColors.textPrimary,
-    marginBottom: 2,
-    letterSpacing: -0.3,
+    marginBottom: 4,
+    letterSpacing: -0.5,
+    lineHeight: 28,
   },
   statLabel: {
-    fontSize: 10,
+    fontSize: 12,
     color: NeutralColors.textSecondary,
     fontWeight: '600',
-    letterSpacing: 0.2,
+    letterSpacing: 0.1,
+    lineHeight: 16,
   },
   actionsSection: {
     paddingHorizontal: 16,
-    marginTop: 8,
-    marginBottom: 20,
+    marginTop: 4,
+    marginBottom: 24,
   },
   actionsRow: {
     flexDirection: 'row',
@@ -2376,20 +2378,38 @@ const styles = StyleSheet.create({
   actionCardContent: {
     backgroundColor: NeutralColors.cardBackground,
     borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: NeutralColors.border,
+    padding: 16,
+    borderWidth: 0,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-    minHeight: 120,
-    height: 120,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 4,
+    minHeight: 140,
+    justifyContent: 'space-between',
+  },
+  actionCardTop: {
+    marginBottom: 12,
+  },
+  actionCardBottom: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  actionCardSubtitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  actionCardSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.95)',
+    fontWeight: '600',
+    lineHeight: 18,
   },
   actionCardDescription: {
     fontSize: 12,
-    color: NeutralColors.textSecondary,
+    color: 'rgba(255, 255, 255, 0.85)',
     fontWeight: '400',
     lineHeight: 16,
   },
@@ -2417,6 +2437,26 @@ const styles = StyleSheet.create({
     backgroundColor: '#8B5CF6',
     borderColor: '#7C3AED',
   },
+  sessionCardHorizontal: {
+    minHeight: 140,
+  },
+  sessionCardHeaderRow: {
+    alignItems: 'center',
+    marginBottom: 0,
+  },
+  sessionCardHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  sessionCardAvatarWrap: {
+    marginRight: 8,
+  },
+  sessionCardDoctorName: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
   requirementCardBlue: {
     backgroundColor: '#FFFFFF',
     borderColor: '#93C5FD',
@@ -2442,111 +2482,124 @@ const styles = StyleSheet.create({
   },
   section: {
     paddingHorizontal: 16,
-    marginTop: 24,
-    marginBottom: 24,
+    marginTop: 28,
+    marginBottom: 28,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 16,
+    paddingHorizontal: 0,
   },
   sectionTitleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '700',
     color: '#111827',
+    letterSpacing: -0.3,
   },
   viewAllButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
     backgroundColor: `${PrimaryColors.main}10`,
   },
   viewAllText: {
     color: PrimaryColors.main,
     fontWeight: '600',
     fontSize: 14,
+    letterSpacing: 0.1,
   },
   sessionsContainer: {
-    marginTop: 8,
-    gap: 12,
+    marginTop: 12,
+    gap: 14,
   },
   emptySessionsContainer: {
-    marginTop: 8,
+    marginTop: 12,
   },
   emptySessionsCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 32,
+    padding: 40,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: NeutralColors.border,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
     borderStyle: 'dashed',
   },
   emptyIconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: `${NeutralColors.textTertiary}10`,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: `${NeutralColors.textTertiary}08`,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
   },
   emptySessionsTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: NeutralColors.textPrimary,
-    marginBottom: 8,
+    marginBottom: 10,
+    letterSpacing: -0.2,
   },
   emptySessionsSubtitle: {
     fontSize: 14,
     color: NeutralColors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
+    paddingHorizontal: 20,
+    letterSpacing: 0.1,
   },
   countChip: {
     backgroundColor: '#EFF6FF',
-    minHeight: 28,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    minHeight: 32,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
   },
   countChipText: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
     color: '#2563EB',
-    lineHeight: 18,
+    lineHeight: 20,
+    letterSpacing: 0.1,
   },
   emptyCard: {
-    borderRadius: 12,
-    marginTop: 8,
+    borderRadius: 16,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   emptyContent: {
     alignItems: 'center',
-    paddingVertical: 40,
-    paddingHorizontal: 20,
+    paddingVertical: 48,
+    paddingHorizontal: 24,
   },
   emptyTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#111827',
-    marginTop: 16,
-    marginBottom: 8,
+    marginTop: 20,
+    marginBottom: 10,
+    letterSpacing: -0.2,
   },
   emptySubtitle: {
     fontSize: 14,
     color: '#6B7280',
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: 28,
     fontWeight: '400',
     lineHeight: 20,
+    paddingHorizontal: 16,
+    letterSpacing: 0.1,
   },
   emptyButton: {
     borderRadius: 10,
@@ -2554,30 +2607,31 @@ const styles = StyleSheet.create({
   requirementCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
+    padding: 18,
+    marginBottom: 14,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
     borderWidth: 1,
-    borderColor: NeutralColors.border,
-    minHeight: 140,
+    borderColor: '#E5E7EB',
+    minHeight: 160,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 12,
+    marginBottom: 14,
     gap: 12,
   },
   headerLeft: {
     flex: 1,
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
+    alignItems: 'center',
+    gap: 8,
     minWidth: 0,
+    flexWrap: 'wrap',
   },
   doctorAvatarContainer: {
     marginRight: 4,
@@ -2624,11 +2678,11 @@ const styles = StyleSheet.create({
   deptBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 6,
     backgroundColor: `${PrimaryColors.main}15`,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
     alignSelf: 'flex-start',
     flexShrink: 0,
   },
@@ -2637,61 +2691,66 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: PrimaryColors.main,
     flexShrink: 1,
+    letterSpacing: 0.1,
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 8,
-    borderWidth: 1,
+    borderWidth: 1.5,
     alignSelf: 'flex-start',
     flexShrink: 0,
   },
   statusText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     flexShrink: 1,
+    letterSpacing: 0.1,
   },
   deleteButton: {
-    padding: 6,
-    borderRadius: 6,
+    padding: 8,
+    borderRadius: 8,
     flexShrink: 0,
     marginLeft: 4,
+    backgroundColor: '#F3F4F6',
   },
   compactInfoRow: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 10,
+    gap: 16,
+    marginBottom: 12,
     flexWrap: 'wrap',
   },
   compactInfoItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 6,
     flex: 1,
     minWidth: 0,
   },
   compactInfoText: {
-    fontSize: 12,
+    fontSize: 13,
     color: NeutralColors.textSecondary,
     fontWeight: '500',
     flexShrink: 1,
+    letterSpacing: 0.1,
   },
   compactDateRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 8,
+    gap: 8,
+    marginBottom: 10,
     minWidth: 0,
   },
   compactDateText: {
-    fontSize: 12,
+    fontSize: 13,
     color: NeutralColors.textSecondary,
     fontWeight: '500',
     flex: 1,
     flexShrink: 1,
+    letterSpacing: 0.1,
   },
   compactTimeRow: {
     flexDirection: 'row',
@@ -2708,23 +2767,26 @@ const styles = StyleSheet.create({
   },
   compactLocationRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 12,
+    alignItems: 'flex-start',
+    gap: 8,
+    marginBottom: 14,
     minWidth: 0,
   },
   compactLocationText: {
-    fontSize: 12,
+    fontSize: 13,
     color: NeutralColors.textSecondary,
     flex: 1,
     flexShrink: 1,
+    lineHeight: 18,
+    letterSpacing: 0.1,
   },
   compactStatusBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 10,
+    paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: NeutralColors.border,
+    borderTopColor: '#E5E7EB',
+    marginTop: 4,
   },
   compactStatusStats: {
     flexDirection: 'row',

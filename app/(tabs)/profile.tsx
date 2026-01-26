@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -36,6 +36,11 @@ import {
   Eye,
   AlertCircle,
   Check,
+  Landmark,
+  CreditCard,
+  Star,
+  Wallet,
+  ChevronRight,
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -47,6 +52,7 @@ import { ModernColors, Spacing, BorderRadius, Shadows, Typography } from '@/cons
 import { getDoctorInfo, saveDoctorAuth, getProfilePhotoUrl } from '@/utils/auth';
 import { ModernCard } from '@/components/modern-card';
 import { ScreenSafeArea, useSafeBottomPadding } from '@/components/screen-safe-area';
+import { BankingDetailsForm } from '@/components/BankingDetailsForm';
 
 const { width } = Dimensions.get('window');
 const IS_TABLET = width >= 768;
@@ -68,20 +74,43 @@ export default function ProfileScreen() {
     id_proof?: { uri: string; name: string; type: string };
     medical_registration_certificate?: { uri: string; name: string; type: string };
   }>({});
+  const [bankingDetails, setBankingDetails] = useState<{
+    bank_account_holder_name?: string;
+    bank_account_number?: string;
+    bank_ifsc_code?: string;
+    bank_name?: string;
+    bank_branch?: string;
+    upi_id?: string;
+    has_banking_details?: boolean;
+  } | null>(null);
+  const [showBankingForm, setShowBankingForm] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+  const [sectionY, setSectionY] = useState<Record<string, number>>({});
 
   useEffect(() => {
     loadDoctor();
     loadDepartments();
+    loadBanking();
   }, []);
 
   // Reload profile when screen comes into focus to get fresh data (including profile photo updates)
   useFocusEffect(
     React.useCallback(() => {
       console.log('🔄 Profile screen focused - reloading doctor data');
-      // Force reload to get latest profile photo if updated by admin
       loadDoctor();
+      loadBanking();
     }, [])
   );
+
+  const loadBanking = async () => {
+    try {
+      const r = await API.get('/doctor/banking-details');
+      setBankingDetails(r.data?.banking_details ?? null);
+    } catch (e) {
+      console.error('Error loading banking details:', e);
+      setBankingDetails(null);
+    }
+  };
 
   const loadDepartments = async () => {
     try {
@@ -606,6 +635,31 @@ export default function ProfileScreen() {
     setShowDepartmentModal(false);
   };
 
+  // Safe layout handler to prevent null reference errors
+  const handleSectionLayout = (key: string) => (e: any) => {
+    if (!e || !e.nativeEvent || !e.nativeEvent.layout) {
+      return;
+    }
+    try {
+      const y = e.nativeEvent.layout.y;
+      if (typeof y === 'number' && !isNaN(y) && isFinite(y)) {
+        setSectionY((prev) => ({ ...prev, [key]: y }));
+      }
+    } catch (error) {
+      // Silently ignore layout errors
+      if (__DEV__) {
+        console.warn('Layout error for section:', key, error);
+      }
+    }
+  };
+
+  const scrollToSection = (key: string) => {
+    const y = sectionY[key];
+    if (y != null && scrollRef.current) {
+      scrollRef.current.scrollTo({ y: Math.max(0, y - 12), animated: true });
+    }
+  };
+
   const profileCompletion = doctor ? Math.round(calculateProfileCompletion(doctor) * 100) : 0;
 
   return (
@@ -616,14 +670,10 @@ export default function ProfileScreen() {
     >
       <View style={styles.container}>
         
-        {/* Modern Header with Gradient */}
-        <LinearGradient
-          colors={ModernColors.primary.gradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.headerGradient}
-        >
+        {/* Uber-style Header: solid blue, name+rating left, photo right, Edit/Cancel top-right */}
+        <View style={[styles.headerGradient, styles.headerSolid]}>
           <View style={styles.headerContent}>
+            <View />
             <View style={styles.headerActions}>
               {!isEditing ? (
                 <TouchableOpacity
@@ -644,102 +694,141 @@ export default function ProfileScreen() {
               )}
             </View>
           </View>
-        </LinearGradient>
+          <View style={styles.headerProfileRow}>
+            <View style={styles.headerLeft}>
+              <Text style={styles.headerName}>{doctor?.name || 'Doctor Name'}</Text>
+              <View style={styles.ratingRow}>
+                <Star size={16} color="#fff" fill="#fff" />
+                <Text style={styles.ratingText}>
+                  {doctor?.average_rating != null ? Number(doctor.average_rating).toFixed(2) : '—'}
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              onPress={isEditing ? handlePickImage : undefined}
+              style={styles.headerPhotoWrap}
+              activeOpacity={isEditing ? 0.8 : 1}
+              disabled={!isEditing}
+            >
+              <Image
+                key={`profile-${doctor?.id || 'unknown'}-${profilePhotoUri || getProfilePhotoUrl(doctor)}-${Date.now()}`}
+                source={{
+                  uri: profilePhotoUri
+                    ? (profilePhotoUri.includes('?') ? profilePhotoUri : `${profilePhotoUri}?t=${Date.now()}`)
+                    : `${getProfilePhotoUrl(doctor)}?t=${Date.now()}`,
+                }}
+                style={styles.headerPhoto}
+                onError={(e) => {
+                  console.error('Image load error:', e.nativeEvent.error);
+                }}
+              />
+              {isEditing && (
+                <View style={styles.cameraIconOverlay}>
+                  <Camera size={16} color="#fff" />
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
 
         <ScrollView
+          ref={scrollRef}
           style={styles.scrollView}
           contentContainerStyle={[styles.content, { paddingBottom: safeBottomPadding }]}
           showsVerticalScrollIndicator={false}
         >
-          {/* Profile Card */}
-          <ModernCard variant="elevated" style={styles.profileCard}>
-            <View style={styles.profileImageSection}>
-              <View style={styles.profileImageContainer}>
-                <Image
-                  key={`profile-${doctor?.id || 'unknown'}-${profilePhotoUri || getProfilePhotoUrl(doctor)}-${Date.now()}`}
-                  source={{
-                    uri: profilePhotoUri 
-                      ? (profilePhotoUri.includes('?') ? profilePhotoUri : `${profilePhotoUri}?t=${Date.now()}`)
-                      : `${getProfilePhotoUrl(doctor)}?t=${Date.now()}`,
-                  }}
-                  style={styles.profileImage}
-                  onError={(e) => {
-                    console.error('Image load error:', e.nativeEvent.error);
-                  }}
-                />
-                {isEditing && (
-                  <TouchableOpacity
-                    style={styles.cameraIconButton}
-                    onPress={handlePickImage}
-                  >
-                    <Camera size={18} color="#fff" />
-                  </TouchableOpacity>
-                )}
-              </View>
-              <View style={styles.profileInfo}>
-                <Text style={styles.profileName}>
-                  {doctor?.name || 'Doctor Name'}
-                </Text>
-                
-                {/* Verification Badge */}
-                <View style={[
-                  styles.verificationBadge, 
-                  { 
-                    backgroundColor: doctor?.verification_status === 'approved' 
-                      ? '#DCFCE7' // Green
-                      : '#FEF3C7' // Amber
-                  } 
-                ]}>
-                  {doctor?.verification_status === 'approved' ? (
-                     <CheckCircle size={14} color="#16A34A" />
-                  ) : (
-                     <AlertCircle size={14} color="#D97706" />
-                  )}
-                  <Text style={[
-                    styles.verificationText,
-                    { 
-                      color: doctor?.verification_status === 'approved' 
-                        ? '#16A34A' 
-                        : '#D97706' 
-                    }
-                  ]}>
-                    {doctor?.verification_status === 'approved' ? 'Verified' : 'Unverified'}
-                  </Text>
-                </View>
+          {/* Quick access grid: Wallet, Banking, Documents */}
+          <View style={styles.quickGrid}>
+            <TouchableOpacity style={styles.quickGridItem} onPress={() => router.push('/(tabs)/wallet')} activeOpacity={0.7}>
+              <Wallet size={22} color={ModernColors.primary.main} />
+              <Text style={styles.quickGridLabel}>Wallet</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.quickGridItem} onPress={() => setShowBankingForm(true)} activeOpacity={0.7}>
+              <Landmark size={22} color={ModernColors.primary.main} />
+              <Text style={styles.quickGridLabel}>Banking</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.quickGridItem} onPress={() => scrollToSection('documents')} activeOpacity={0.7}>
+              <FileText size={22} color={ModernColors.primary.main} />
+              <Text style={styles.quickGridLabel}>Documents</Text>
+            </TouchableOpacity>
+          </View>
 
-                {doctor?.current_location && (
-                  <View style={styles.locationRow}>
-                    <MapPin size={14} color={ModernColors.text.secondary} />
-                    <Text style={styles.locationText}>
-                      {doctor.current_location}
-                    </Text>
-                  </View>
-                )}
-              </View>
+          {/* Informational cards: Profile Completion, Verification */}
+          <View style={styles.infoCard}>
+            <View style={styles.infoCardContent}>
+              <Text style={styles.infoCardTitle}>Profile Completion</Text>
+              <Text style={styles.infoCardDesc}>{profileCompletion}% complete</Text>
             </View>
+            <View style={styles.infoCardIcon}>
+              <CheckCircle size={28} color={ModernColors.primary.main} />
+            </View>
+          </View>
+          <View style={styles.infoCard}>
+            <View style={styles.infoCardContent}>
+              <Text style={styles.infoCardTitle}>Verification</Text>
+              <Text style={styles.infoCardDesc}>
+                {doctor?.verification_status === 'approved' ? 'Verified' : 'Pending verification'}
+              </Text>
+            </View>
+            <View style={styles.infoCardIcon}>
+              {doctor?.verification_status === 'approved' ? (
+                <CheckCircle size={28} color={ModernColors.primary.main} />
+              ) : (
+                <AlertCircle size={28} color={ModernColors.primary.main} />
+              )}
+            </View>
+          </View>
 
-            {/* Profile Completion */}
-            <View style={styles.completionSection}>
-              <View style={styles.completionHeader}>
-                <Text style={styles.completionLabel}>Profile Completion</Text>
-                <Text style={styles.completionPercentage}>{profileCompletion}%</Text>
+          {/* Options list: scroll to Contact, Banking, Professional, Documents */}
+          <View style={styles.optionsList}>
+            <TouchableOpacity style={styles.optionRow} onPress={() => scrollToSection('contact')} activeOpacity={0.7}>
+              <View style={styles.optionIconWrap}>
+                <User size={20} color={ModernColors.primary.main} />
               </View>
-              <View style={styles.progressBar}>
-                <View 
-                  style={[
-                    styles.progressFill, 
-                    { width: `${profileCompletion}%` }
-                  ]} 
-                />
+              <View style={styles.optionText}>
+                <Text style={styles.optionTitle}>Contact Information</Text>
+                <Text style={styles.optionSubtitle}>Email, phone, location</Text>
               </View>
-            </View>
-          </ModernCard>
+              <ChevronRight size={20} color={ModernColors.text.tertiary} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.optionRow} onPress={() => { scrollToSection('banking'); setShowBankingForm(true); }} activeOpacity={0.7}>
+              <View style={styles.optionIconWrap}>
+                <Landmark size={20} color={ModernColors.primary.main} />
+              </View>
+              <View style={styles.optionText}>
+                <Text style={styles.optionTitle}>Banking Details</Text>
+                <Text style={styles.optionSubtitle}>Bank account, UPI</Text>
+              </View>
+              <ChevronRight size={20} color={ModernColors.text.tertiary} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.optionRow} onPress={() => scrollToSection('professional')} activeOpacity={0.7}>
+              <View style={styles.optionIconWrap}>
+                <Briefcase size={20} color={ModernColors.primary.main} />
+              </View>
+              <View style={styles.optionText}>
+                <Text style={styles.optionTitle}>Professional Details</Text>
+                <Text style={styles.optionSubtitle}>Qualifications, experience</Text>
+              </View>
+              <ChevronRight size={20} color={ModernColors.text.tertiary} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.optionRow} onPress={() => scrollToSection('documents')} activeOpacity={0.7}>
+              <View style={styles.optionIconWrap}>
+                <FileText size={20} color={ModernColors.primary.main} />
+              </View>
+              <View style={styles.optionText}>
+                <Text style={styles.optionTitle}>Documents</Text>
+                <Text style={styles.optionSubtitle}>Degree, ID, registration</Text>
+              </View>
+              <ChevronRight size={20} color={ModernColors.text.tertiary} />
+            </TouchableOpacity>
+          </View>
 
           {!isEditing ? (
             /* View Mode */
             <>
               {/* Contact Information */}
-              <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
+              <View onLayout={handleSectionLayout('contact')}>
+                <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
                 <View style={styles.sectionHeader}>
                   <View style={styles.sectionIconContainer}>
                     <User size={20} color={ModernColors.primary.main} />
@@ -774,8 +863,90 @@ export default function ProfileScreen() {
                   </View>
                 </View>
               </ModernCard>
+              </View>
+
+              {/* Banking Details */}
+              <View onLayout={handleSectionLayout('banking')}>
+              <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
+                <View style={styles.sectionHeader}>
+                  <View style={styles.sectionIconContainer}>
+                    <Landmark size={20} color={ModernColors.primary.main} />
+                  </View>
+                  <Text style={styles.sectionTitle}>Banking Details</Text>
+                </View>
+                {bankingDetails?.has_banking_details ? (
+                  <>
+                    <View style={styles.detailRow}>
+                      <View style={styles.iconWrapper}>
+                        <CreditCard size={18} color={ModernColors.primary.main} />
+                      </View>
+                      <View style={styles.detailContent}>
+                        <Text style={styles.detailLabel}>Account Holder</Text>
+                        <Text style={styles.detailValue}>{bankingDetails.bank_account_holder_name || '—'}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.detailRow}>
+                      <View style={styles.iconWrapper}>
+                        <CreditCard size={18} color={ModernColors.primary.main} />
+                      </View>
+                      <View style={styles.detailContent}>
+                        <Text style={styles.detailLabel}>Account Number</Text>
+                        <Text style={styles.detailValue}>
+                          {bankingDetails.bank_account_number
+                            ? '****' + bankingDetails.bank_account_number.slice(-4)
+                            : '—'}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.detailRow}>
+                      <View style={styles.iconWrapper}>
+                        <CreditCard size={18} color={ModernColors.primary.main} />
+                      </View>
+                      <View style={styles.detailContent}>
+                        <Text style={styles.detailLabel}>IFSC Code</Text>
+                        <Text style={styles.detailValue}>{bankingDetails.bank_ifsc_code || '—'}</Text>
+                      </View>
+                    </View>
+                    {(bankingDetails.bank_name || bankingDetails.bank_branch) && (
+                      <View style={styles.detailRow}>
+                        <View style={styles.iconWrapper}>
+                          <Building2 size={18} color={ModernColors.primary.main} />
+                        </View>
+                        <View style={styles.detailContent}>
+                          <Text style={styles.detailLabel}>Bank / Branch</Text>
+                          <Text style={styles.detailValue}>
+                            {[bankingDetails.bank_name, bankingDetails.bank_branch].filter(Boolean).join(' • ') || '—'}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+                    <TouchableOpacity
+                      style={[styles.editButton, { alignSelf: 'flex-start', marginTop: Spacing.sm }]}
+                      onPress={() => setShowBankingForm(true)}
+                    >
+                      <Edit2 size={18} color={ModernColors.primary.main} />
+                      <Text style={styles.editButtonText}>Edit</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <View style={{ paddingVertical: Spacing.md }}>
+                    <Text style={[styles.detailValue, { marginBottom: Spacing.md, color: ModernColors.text.secondary }]}>
+                      No banking details. Add them to receive payments.
+                    </Text>
+                    <TouchableOpacity
+                      style={[styles.editButton, { alignSelf: 'flex-start' }]}
+                      onPress={() => setShowBankingForm(true)}
+                    >
+                      <CreditCard size={18} color={ModernColors.primary.main} />
+                      <Text style={styles.editButtonText}>Add Banking Details</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </ModernCard>
+              </View>
 
               {/* Professional Details */}
+              <View onLayout={handleSectionLayout('professional')}>
               <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
                 <View style={styles.sectionHeader}>
                   <View style={styles.sectionIconContainer}>
@@ -846,8 +1017,10 @@ export default function ProfileScreen() {
                   </View>
                 )}
               </ModernCard>
+              </View>
 
               {/* Documents */}
+              <View onLayout={handleSectionLayout('documents')}>
               <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
                 <View style={styles.sectionHeader}>
                   <View style={styles.sectionIconContainer}>
@@ -858,9 +1031,9 @@ export default function ProfileScreen() {
                 <View style={styles.documentList}>
                   {doctor?.degree_certificate ? (
                     <View style={styles.documentItem}>
-                      <FileText size={16} color={ModernColors.success.main} />
+                      <FileText size={16} color={ModernColors.primary.main} />
                       <Text style={styles.documentText}>Degree Certificate</Text>
-                      <CheckCircle size={16} color={ModernColors.success.main} />
+                      <CheckCircle size={16} color={ModernColors.primary.main} />
                     </View>
                   ) : (
                     <View style={styles.documentItem}>
@@ -870,9 +1043,9 @@ export default function ProfileScreen() {
                   )}
                   {doctor?.id_proof ? (
                     <View style={styles.documentItem}>
-                      <FileText size={16} color={ModernColors.success.main} />
+                      <FileText size={16} color={ModernColors.primary.main} />
                       <Text style={styles.documentText}>ID Proof</Text>
-                      <CheckCircle size={16} color={ModernColors.success.main} />
+                      <CheckCircle size={16} color={ModernColors.primary.main} />
                     </View>
                   ) : (
                     <View style={styles.documentItem}>
@@ -882,9 +1055,9 @@ export default function ProfileScreen() {
                   )}
                   {doctor?.medical_registration_certificate ? (
                     <View style={styles.documentItem}>
-                      <FileText size={16} color={ModernColors.success.main} />
+                      <FileText size={16} color={ModernColors.primary.main} />
                       <Text style={styles.documentText}>Medical Registration</Text>
-                      <CheckCircle size={16} color={ModernColors.success.main} />
+                      <CheckCircle size={16} color={ModernColors.primary.main} />
                     </View>
                   ) : (
                     <View style={styles.documentItem}>
@@ -894,11 +1067,13 @@ export default function ProfileScreen() {
                   )}
                 </View>
               </ModernCard>
+              </View>
             </>
           ) : (
             /* Edit Mode */
             <>
               {/* Basic Details */}
+              <View onLayout={handleSectionLayout('contact')}>
               <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
                 <Text style={styles.editSectionTitle}>Basic Information</Text>
                 <View style={styles.inputGroup}>
@@ -944,8 +1119,90 @@ export default function ProfileScreen() {
                   />
                 </View>
               </ModernCard>
+              </View>
+
+              {/* Banking Details (edit mode) */}
+              <View onLayout={handleSectionLayout('banking')}>
+              <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
+                <View style={styles.sectionHeader}>
+                  <View style={styles.sectionIconContainer}>
+                    <Landmark size={20} color={ModernColors.primary.main} />
+                  </View>
+                  <Text style={styles.sectionTitle}>Banking Details</Text>
+                </View>
+                {bankingDetails?.has_banking_details ? (
+                  <>
+                    <View style={styles.detailRow}>
+                      <View style={styles.iconWrapper}>
+                        <CreditCard size={18} color={ModernColors.primary.main} />
+                      </View>
+                      <View style={styles.detailContent}>
+                        <Text style={styles.detailLabel}>Account Holder</Text>
+                        <Text style={styles.detailValue}>{bankingDetails.bank_account_holder_name || '—'}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.detailRow}>
+                      <View style={styles.iconWrapper}>
+                        <CreditCard size={18} color={ModernColors.primary.main} />
+                      </View>
+                      <View style={styles.detailContent}>
+                        <Text style={styles.detailLabel}>Account Number</Text>
+                        <Text style={styles.detailValue}>
+                          {bankingDetails.bank_account_number
+                            ? '****' + bankingDetails.bank_account_number.slice(-4)
+                            : '—'}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.detailRow}>
+                      <View style={styles.iconWrapper}>
+                        <CreditCard size={18} color={ModernColors.primary.main} />
+                      </View>
+                      <View style={styles.detailContent}>
+                        <Text style={styles.detailLabel}>IFSC Code</Text>
+                        <Text style={styles.detailValue}>{bankingDetails.bank_ifsc_code || '—'}</Text>
+                      </View>
+                    </View>
+                    {(bankingDetails.bank_name || bankingDetails.bank_branch) && (
+                      <View style={styles.detailRow}>
+                        <View style={styles.iconWrapper}>
+                          <Building2 size={18} color={ModernColors.primary.main} />
+                        </View>
+                        <View style={styles.detailContent}>
+                          <Text style={styles.detailLabel}>Bank / Branch</Text>
+                          <Text style={styles.detailValue}>
+                            {[bankingDetails.bank_name, bankingDetails.bank_branch].filter(Boolean).join(' • ') || '—'}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+                    <TouchableOpacity
+                      style={[styles.editButton, { alignSelf: 'flex-start', marginTop: Spacing.sm }]}
+                      onPress={() => setShowBankingForm(true)}
+                    >
+                      <Edit2 size={18} color={ModernColors.primary.main} />
+                      <Text style={styles.editButtonText}>Edit</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <View style={{ paddingVertical: Spacing.md }}>
+                    <Text style={[styles.detailValue, { marginBottom: Spacing.md, color: ModernColors.text.secondary }]}>
+                      No banking details. Add them to receive payments.
+                    </Text>
+                    <TouchableOpacity
+                      style={[styles.editButton, { alignSelf: 'flex-start' }]}
+                      onPress={() => setShowBankingForm(true)}
+                    >
+                      <CreditCard size={18} color={ModernColors.primary.main} />
+                      <Text style={styles.editButtonText}>Add Banking Details</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </ModernCard>
+              </View>
 
               {/* Professional Details */}
+              <View onLayout={handleSectionLayout('professional')}>
               <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
                 <Text style={styles.editSectionTitle}>Professional Information</Text>
                 <View style={styles.inputGroup}>
@@ -1046,8 +1303,10 @@ export default function ProfileScreen() {
                   />
                 </View>
               </ModernCard>
+              </View>
 
               {/* Documents */}
+              <View onLayout={handleSectionLayout('documents')}>
               <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
                 <Text style={styles.editSectionTitle}>Documents</Text>
                 
@@ -1057,7 +1316,7 @@ export default function ProfileScreen() {
                   {(documents.degree_certificate || doctor?.degree_certificate) ? (
                     <View style={styles.documentPreview}>
                       <View style={styles.documentPreviewInfo}>
-                        <FileText size={20} color={ModernColors.success.main} />
+                        <FileText size={20} color={ModernColors.primary.main} />
                         <View style={styles.documentPreviewText}>
                           <Text style={styles.documentPreviewName}>
                             {documents.degree_certificate?.name || 'Degree Certificate.pdf'}
@@ -1110,7 +1369,7 @@ export default function ProfileScreen() {
                   {(documents.id_proof || doctor?.id_proof) ? (
                     <View style={styles.documentPreview}>
                       <View style={styles.documentPreviewInfo}>
-                        <FileText size={20} color={ModernColors.success.main} />
+                        <FileText size={20} color={ModernColors.primary.main} />
                         <View style={styles.documentPreviewText}>
                           <Text style={styles.documentPreviewName}>
                             {documents.id_proof?.name || 'ID Proof.pdf'}
@@ -1162,7 +1421,7 @@ export default function ProfileScreen() {
                   {(documents.medical_registration_certificate || doctor?.medical_registration_certificate) ? (
                     <View style={styles.documentPreview}>
                       <View style={styles.documentPreviewInfo}>
-                        <FileText size={20} color={ModernColors.success.main} />
+                        <FileText size={20} color={ModernColors.primary.main} />
                         <View style={styles.documentPreviewText}>
                           <Text style={styles.documentPreviewName}>
                             {documents.medical_registration_certificate?.name || 'Medical Registration.pdf'}
@@ -1212,6 +1471,7 @@ export default function ProfileScreen() {
                   Maximum file size: 5MB (PDF, JPEG, PNG)
                 </Text>
               </ModernCard>
+              </View>
 
               {/* Save Button */}
               <TouchableOpacity
@@ -1236,6 +1496,13 @@ export default function ProfileScreen() {
           )}
         </ScrollView>
       </View>
+
+      <BankingDetailsForm
+        visible={showBankingForm}
+        onClose={() => setShowBankingForm(false)}
+        onSuccess={async () => { await loadBanking(); }}
+        initialData={bankingDetails || undefined}
+      />
 
       {/* Department Selection Modal */}
       <Modal
@@ -1374,10 +1641,64 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: BorderRadius.xl,
     borderBottomRightRadius: BorderRadius.xl,
   },
+  headerSolid: {
+    backgroundColor: '#2563EB',
+  },
   headerContent: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 12,
+  },
+  headerProfileRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  headerLeft: {
+    flex: 1,
+  },
+  headerName: {
+    fontSize: 26,
+    fontWeight: '700',
+    color: '#fff',
+    letterSpacing: -0.5,
+    marginBottom: 4,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  ratingText: {
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.9)',
+    fontWeight: '600',
+  },
+  headerPhotoWrap: {
+    position: 'relative',
+    marginLeft: 16,
+  },
+  headerPhoto: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.5)',
+  },
+  cameraIconOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#2563EB',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
   },
   headerActions: {
     flexDirection: 'row',
@@ -1413,6 +1734,86 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+  },
+  quickGrid: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  quickGridItem: {
+    flex: 1,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickGridLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: ModernColors.text.primary,
+    marginTop: 8,
+  },
+  infoCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  infoCardContent: {
+    flex: 1,
+  },
+  infoCardTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: ModernColors.text.primary,
+    marginBottom: 4,
+  },
+  infoCardDesc: {
+    fontSize: 14,
+    color: ModernColors.text.secondary,
+  },
+  infoCardIcon: {
+    marginLeft: 12,
+  },
+  optionsList: {
+    marginBottom: 20,
+  },
+  optionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  optionIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: `${ModernColors.primary.main}15`,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  optionText: {
+    flex: 1,
+  },
+  optionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: ModernColors.text.primary,
+    marginBottom: 2,
+  },
+  optionSubtitle: {
+    fontSize: 13,
+    color: ModernColors.text.secondary,
   },
   content: {
     padding: Spacing.lg,
@@ -1641,9 +2042,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: ModernColors.success.light || '#F0FDF4',
+    backgroundColor: ModernColors.primary.light || '#DBEAFE',
     borderWidth: 1,
-    borderColor: ModernColors.success.main,
+    borderColor: ModernColors.primary.main,
     borderRadius: BorderRadius.md,
     padding: Spacing.md,
     minHeight: 56,
@@ -1665,7 +2066,7 @@ const styles = StyleSheet.create({
   },
   documentPreviewStatus: {
     ...Typography.caption,
-    color: ModernColors.success.main,
+    color: ModernColors.primary.main,
     fontWeight: '500',
   },
   documentActions: {

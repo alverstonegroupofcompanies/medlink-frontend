@@ -79,7 +79,7 @@ export default function AdminDashboard() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
+      <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Admin Dashboard</Text>
         <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>

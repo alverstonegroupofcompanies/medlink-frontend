@@ -241,9 +241,9 @@ export default function DisputeDetailScreen() {
             </Card.Content>
           </Card>
 
-          {/* Messages Section */}
+          {/* Chat / Messages Section */}
           <View style={styles.messagesSection}>
-            <Text style={styles.messagesSectionTitle}>Messages</Text>
+            <Text style={styles.messagesSectionTitle}>Chat</Text>
             
             {messages.length === 0 ? (
               <Card style={styles.noMessagesCard}>
@@ -252,7 +252,8 @@ export default function DisputeDetailScreen() {
                 </Card.Content>
               </Card>
             ) : (
-              messages.map((message: any, index: number) => {
+              <ScrollView style={styles.messagesList} nestedScrollEnabled showsVerticalScrollIndicator>
+              {messages.map((message: any, index: number) => {
                 const isAdmin = message.sender_type === 'admin';
                 const isDoctor = message.sender_type === 'doctor';
                 
@@ -292,7 +293,8 @@ export default function DisputeDetailScreen() {
                     </Text>
                   </View>
                 );
-              })
+              })}
+              </ScrollView>
             )}
           </View>
 
@@ -453,6 +455,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: ModernColors.text.primary,
     marginBottom: 12,
+  },
+  messagesList: {
+    maxHeight: 260,
   },
   noMessagesCard: {
     backgroundColor: '#fff',

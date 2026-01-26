@@ -168,7 +168,7 @@ export default function TabLayout() {
           left: 0,
           right: 0,
         },
-        tabBarActiveTintColor: '#0066FF',
+        tabBarActiveTintColor: '#2563EB',
         tabBarInactiveTintColor: '#9CA3AF',
         tabBarLabelStyle: {
           fontSize: 11,
@@ -194,7 +194,7 @@ export default function TabLayout() {
                 width: 36,
                 height: 36,
                 borderRadius: 18,
-                backgroundColor: focused ? 'rgba(0, 102, 255, 0.1)' : 'transparent',
+                backgroundColor: focused ? 'rgba(37, 99, 235, 0.1)' : 'transparent',
               }}
             >
               <Home size={24} color={color} fill={focused ? color : 'transparent'} />
@@ -214,7 +214,7 @@ export default function TabLayout() {
                 width: 36,
                 height: 36,
                 borderRadius: 18,
-                backgroundColor: focused ? 'rgba(0, 102, 255, 0.1)' : 'transparent',
+                backgroundColor: focused ? 'rgba(37, 99, 235, 0.1)' : 'transparent',
               }}
             >
               <User size={24} color={color} fill={focused ? color : 'transparent'} />
@@ -234,7 +234,7 @@ export default function TabLayout() {
                 width: 36,
                 height: 36,
                 borderRadius: 18,
-                backgroundColor: focused ? 'rgba(0, 102, 255, 0.1)' : 'transparent',
+                backgroundColor: focused ? 'rgba(37, 99, 235, 0.1)' : 'transparent',
               }}
             >
               <Briefcase size={24} color={color} fill={focused ? color : 'transparent'} />
@@ -254,7 +254,7 @@ export default function TabLayout() {
                 width: 36,
                 height: 36,
                 borderRadius: 18,
-                backgroundColor: focused ? 'rgba(0, 102, 255, 0.1)' : 'transparent',
+                backgroundColor: focused ? 'rgba(37, 99, 235, 0.1)' : 'transparent',
               }}
             >
               <MaterialIcons name="account-balance-wallet" size={24} color={color} />
@@ -274,7 +274,7 @@ export default function TabLayout() {
                 width: 36,
                 height: 36,
                 borderRadius: 18,
-                backgroundColor: focused ? 'rgba(0, 102, 255, 0.1)' : 'transparent',
+                backgroundColor: focused ? 'rgba(37, 99, 235, 0.1)' : 'transparent',
               }}
             >
               <MaterialIcons name="settings" size={24} color={color} />
@@ -314,19 +314,10 @@ export default function TabLayout() {
           tabBarStyle: { display: 'flex' } // Explicitly ensure it shows
         }}
       />
-      <Tabs.Screen
-        name="dispute"
-        options={{
-          tabBarButton: () => null, // Completely hide from tab bar
-        }}
-      />
-      {/* Hide dynamic dispute route that was showing as "dispute/[sess...]" in bottom bar */}
-      <Tabs.Screen
-        name="dispute/[sessionId]"
-        options={{
-          href: null,
-        }}
-      />
+      <Tabs.Screen name="disputes" options={{ href: null }} />
+      <Tabs.Screen name="dispute" options={{ tabBarButton: () => null }} />
+      <Tabs.Screen name="dispute/[sessionId]" options={{ href: null }} />
+      <Tabs.Screen name="dispute/detail/[disputeId]" options={{ href: null }} />
     </Tabs>
   );
 }

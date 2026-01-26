@@ -11,7 +11,6 @@ import {
   StyleSheet, 
   TouchableOpacity, 
   View, 
-  StatusBar, 
   useWindowDimensions,
   TextInput,
   Image
@@ -100,18 +99,15 @@ export default function LoginScreen() {
     } catch (error: any) {
       console.log('Login error:', error.response?.data || error.message);
       let message = 'Login failed. Please try again.';
-      
-      // Handle network errors
-      if (error.message?.includes('Network') || error.message?.includes('connect')) {
-        message = 'Cannot connect to server. Please check your internet connection.';
+      // Use error.message for network errors (includes dev hint: serve --host=0.0.0.0 when unreachable)
+      if (!error.response) {
+        message = error.message || 'Cannot connect to server. Please check your internet connection.';
       } else if (error.response?.data?.message) {
         message = error.response.data.message;
       } else if (error.response?.data?.errors) {
-        // Handle validation errors
         const errors = error.response.data.errors;
         message = Object.values(errors).flat().join('\n');
       }
-      
       Alert.alert('Login Error', message);
     } finally {
       setLoading(false);
@@ -119,13 +115,11 @@ export default function LoginScreen() {
   };
 
   const handleForgotPassword = () => {
-    Alert.alert('Forgot Password', 'Feature not implemented yet.');
+    router.push(`/forgot-password?type=${userType}`);
   };
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
-      
       {/* Full-screen background app icon */}
       <Image
         source={require('@/assets/images/icon.png')}

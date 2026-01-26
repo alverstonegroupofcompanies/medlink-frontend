@@ -4,12 +4,12 @@
  */
 
 export const ModernColors = {
-  // Primary Colors - Modern Blue
+  // Primary Colors - Unified blue (matches Hospital, status bar blend)
   primary: {
-    main: '#0066FF',        // Vibrant blue
-    light: '#E6F2FF',       // Light blue background
-    dark: '#0052CC',        // Dark blue
-    gradient: ['#0066FF', '#0052CC'], // Gradient
+    main: '#2563EB',
+    light: '#DBEAFE',
+    dark: '#1E40AF',
+    gradient: ['#2563EB', '#1E40AF'],
   },
   
   // Secondary Colors - Modern Purple

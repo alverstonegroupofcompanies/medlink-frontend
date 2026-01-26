@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,17 +6,14 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
-  ImageBackground,
   Dimensions,
   ActivityIndicator,
   StatusBar,
   RefreshControl,
   Alert,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
 import {
-  ArrowLeft,
   Edit,
   Building2,
   Mail,
@@ -28,17 +25,21 @@ import {
   Clock,
   Shield,
   Lock,
-  Calendar,
   User,
   Eye,
+  CreditCard,
+  Settings,
+  ChevronRight,
+  Camera,
 } from 'lucide-react-native';
-import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors, HospitalStatusColors as StatusColors } from '@/constants/hospital-theme';
+import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors } from '@/constants/hospital-theme';
 import API from '../api';
 import { ScreenSafeArea, useSafeBottomPadding } from '@/components/screen-safe-area';
 import { BASE_BACKEND_URL } from '@/config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isDoctorLoggedIn } from '@/utils/auth';
 import { ModernCard } from '@/components/modern-card';
+import { getFullImageUrl } from '@/utils/url-helper';
 
 const HOSPITAL_INFO_KEY = 'hospitalInfo';
 const CONTENT_MAX_WIDTH = 720;
@@ -50,6 +51,39 @@ export default function HospitalProfileScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [hasDoctorAccess, setHasDoctorAccess] = useState(false);
   const safeBottomPadding = useSafeBottomPadding();
+  const scrollRef = useRef<ScrollView>(null);
+  const [sectionY, setSectionY] = useState<Record<string, number>>({});
+
+  // Safe layout handler to prevent null reference errors
+  const handleSectionLayout = (key: string) => (e: any) => {
+    // Persist event to prevent nullification
+    if (e && typeof e.persist === 'function') {
+      e.persist();
+    }
+    
+    // Extract layout value immediately and synchronously
+    let layoutY: number | null = null;
+    try {
+      if (e?.nativeEvent?.layout?.y != null) {
+        layoutY = e.nativeEvent.layout.y;
+      }
+    } catch (error) {
+      // Event already nullified, ignore
+      return;
+    }
+    
+    // Validate and update state with extracted value
+    if (layoutY != null && typeof layoutY === 'number' && !isNaN(layoutY) && isFinite(layoutY)) {
+      setSectionY((prev) => ({ ...prev, [key]: layoutY }));
+    }
+  };
+
+  const scrollToSection = (key: string) => {
+    const y = sectionY[key];
+    if (y != null && scrollRef.current) {
+      scrollRef.current.scrollTo({ y: Math.max(0, y - 12), animated: true });
+    }
+  };
 
   useEffect(() => {
     checkDoctorAccess();
@@ -67,6 +101,13 @@ export default function HospitalProfileScreen() {
       const response = await API.get('/hospital/profile');
       const hospitalData = response.data.hospital;
       setHospital(hospitalData);
+      
+      // Debug: Log image URLs
+      if (__DEV__) {
+        console.log('🏥 Hospital Profile Loaded:');
+        console.log('  Cover Image URL:', hospitalData.hospital_picture_url || hospitalData.hospital_picture);
+        console.log('  Logo URL:', hospitalData.logo_url || hospitalData.logo_path);
+      }
       
       // Update stored hospital info
       await AsyncStorage.setItem(HOSPITAL_INFO_KEY, JSON.stringify(hospitalData));
@@ -140,11 +181,11 @@ export default function HospitalProfileScreen() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'approved':
-        return StatusColors.success;
+        return PrimaryColors.main;
       case 'pending':
-        return StatusColors.warning;
+        return PrimaryColors.light;
       case 'rejected':
-        return StatusColors.error;
+        return NeutralColors.textSecondary;
       default:
         return NeutralColors.textSecondary;
     }
@@ -153,11 +194,11 @@ export default function HospitalProfileScreen() {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'approved':
-        return <CheckCircle size={20} color={StatusColors.success} />;
+        return <CheckCircle size={20} color={PrimaryColors.main} />;
       case 'pending':
-        return <Clock size={20} color={StatusColors.warning} />;
+        return <Clock size={20} color={PrimaryColors.light} />;
       case 'rejected':
-        return <XCircle size={20} color={StatusColors.error} />;
+        return <XCircle size={20} color={NeutralColors.textSecondary} />;
       default:
         return <Clock size={20} color={NeutralColors.textSecondary} />;
     }
@@ -191,127 +232,206 @@ export default function HospitalProfileScreen() {
   return (
     <ScreenSafeArea backgroundColor={PrimaryColors.dark} statusBarStyle="light-content">
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
+        <StatusBar barStyle="light-content" backgroundColor={PrimaryColors.dark} />
         
-        {/* Cover Header (Hospital Image) */}
-        <View style={styles.headerGradient}>
-          {hospital.hospital_picture_url || hospital.hospital_picture ? (
-            <ImageBackground
-              source={{
-                uri:
-                  hospital.hospital_picture_url ||
-                  `${BASE_BACKEND_URL}/app/${hospital.hospital_picture}`,
-              }}
-              style={styles.coverImage}
-              resizeMode="cover"
-            >
-              <LinearGradient
-                colors={['rgba(0,0,0,0.45)', 'rgba(0,0,0,0.16)', 'rgba(0,0,0,0.6)']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 0, y: 1 }}
-                style={styles.coverDim}
+        {/* LinkedIn-style Header: Cover image with profile picture overlay */}
+        <View style={styles.linkedInHeader}>
+          {/* Cover Image */}
+          <View style={styles.coverImageContainer}>
+            {hospital.hospital_picture_url || hospital.hospital_picture ? (
+              <Image
+                key={`cover-${hospital.id}-${hospital.hospital_picture_url || hospital.hospital_picture}`}
+                source={{ 
+                  uri: (() => {
+                    const rawSrc = hospital.hospital_picture_url || hospital.hospital_picture;
+                    const fullUrl = getFullImageUrl(rawSrc);
+                    // Add cache busting
+                    return fullUrl.includes('?') ? `${fullUrl}&t=${Date.now()}` : `${fullUrl}?t=${Date.now()}`;
+                  })()
+                }}
+                style={styles.coverImage}
+                resizeMode="cover"
+                onError={(e) => {
+                  console.error('❌ Cover image load error:', e.nativeEvent.error);
+                  const rawSrc = hospital.hospital_picture_url || hospital.hospital_picture;
+                  console.error('   Raw source:', rawSrc);
+                  console.error('   Full URL:', getFullImageUrl(rawSrc));
+                }}
+                onLoad={() => {
+                  if (__DEV__) {
+                    console.log('✅ Cover image loaded successfully');
+                  }
+                }}
               />
-            </ImageBackground>
-          ) : (
-            <LinearGradient
-              colors={[PrimaryColors.dark, PrimaryColors.main]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.coverImage}
-            />
-          )}
-
-          <View style={styles.headerContent}>
-            <Text style={styles.headerTitle}>Profile</Text>
-            <TouchableOpacity onPress={() => router.push('/hospital/profile/edit')} style={styles.editButton}>
-              <Edit size={20} color={PrimaryColors.main} />
-              <Text style={styles.editButtonText}>Edit</Text>
+            ) : (
+              <View style={[styles.coverImage, styles.coverImagePlaceholder]}>
+                <Building2 size={48} color={PrimaryColors.main} />
+              </View>
+            )}
+            {/* Edit cover button - top right */}
+            <TouchableOpacity 
+              style={styles.editCoverButton}
+              onPress={() => router.push('/hospital/profile/edit')}
+              activeOpacity={0.8}
+            >
+              <Camera size={18} color="#fff" />
+              <Text style={styles.editCoverButtonText}>Edit Cover</Text>
             </TouchableOpacity>
+          </View>
+          
+          {/* Profile Picture Overlay - bottom left */}
+          <View style={styles.profilePictureContainer}>
+            <View style={styles.profilePictureWrapper}>
+              {hospital.logo_url || hospital.logo_path ? (
+                <Image
+                  key={`logo-${hospital.id}-${hospital.logo_url || hospital.logo_path}`}
+                  source={{ 
+                    uri: (() => {
+                      const rawSrc = hospital.logo_url || hospital.logo_path;
+                      const fullUrl = getFullImageUrl(rawSrc);
+                      // Add cache busting
+                      return fullUrl.includes('?') ? `${fullUrl}&t=${Date.now()}` : `${fullUrl}?t=${Date.now()}`;
+                    })()
+                  }}
+                  style={styles.profilePicture}
+                  resizeMode="cover"
+                  onError={(e) => {
+                    console.error('❌ Profile picture load error:', e.nativeEvent.error);
+                    const rawSrc = hospital.logo_url || hospital.logo_path;
+                    console.error('   Raw source:', rawSrc);
+                    console.error('   Full URL:', getFullImageUrl(rawSrc));
+                  }}
+                  onLoad={() => {
+                    if (__DEV__) {
+                      console.log('✅ Profile picture loaded successfully');
+                    }
+                  }}
+                />
+              ) : (
+                <View style={[styles.profilePicture, styles.profilePicturePlaceholder]}>
+                  <Building2 size={40} color={PrimaryColors.main} />
+                </View>
+              )}
+              {/* Edit profile picture button - bottom right corner */}
+              <TouchableOpacity
+                style={styles.editProfileButton}
+                onPress={() => router.push('/hospital/profile/edit')}
+                activeOpacity={0.8}
+              >
+                <Camera size={14} color="#fff" />
+              </TouchableOpacity>
+            </View>
+            {/* Hospital Name */}
+            <Text style={styles.hospitalName}>{hospital.name || 'Hospital Name'}</Text>
           </View>
         </View>
 
-        <ScrollView 
+        <ScrollView
+          ref={scrollRef}
           style={styles.scrollView}
-          contentContainerStyle={[styles.content, { paddingBottom: safeBottomPadding + 20 }]}
+          contentContainerStyle={[styles.content, { paddingBottom: safeBottomPadding + 20, paddingTop: 16 }]}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
           showsVerticalScrollIndicator={false}
         >
-          {/* Uploaded Images */}
-          <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionIconContainer}>
+          {/* Quick access grid: Payments, Settings, Edit */}
+          <View style={styles.quickGrid}>
+            <TouchableOpacity style={styles.quickGridItem} onPress={() => router.push('/hospital/payments')} activeOpacity={0.7}>
+              <CreditCard size={22} color={PrimaryColors.main} />
+              <Text style={styles.quickGridLabel}>Payments</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.quickGridItem} onPress={() => router.push('/hospital/settings')} activeOpacity={0.7}>
+              <Settings size={22} color={PrimaryColors.main} />
+              <Text style={styles.quickGridLabel}>Settings</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.quickGridItem} onPress={() => router.push('/hospital/profile/edit')} activeOpacity={0.7}>
+              <Edit size={22} color={PrimaryColors.main} />
+              <Text style={styles.quickGridLabel}>Edit</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Informational cards: Verification */}
+          <View style={styles.infoCard}>
+            <View style={styles.infoCardContent}>
+              <Text style={styles.infoCardTitle}>Verification</Text>
+              <Text style={styles.infoCardDesc}>
+                {hospital.verification_status === 'approved' ? 'Verified' : 
+                 hospital.verification_status === 'rejected' ? 'Rejected' : 'Pending Verification'}
+              </Text>
+            </View>
+            <View style={styles.infoCardIcon}>
+              {hospital.verification_status === 'approved' ? (
+                <CheckCircle size={28} color={PrimaryColors.main} />
+              ) : hospital.verification_status === 'rejected' ? (
+                <XCircle size={28} color={NeutralColors.textSecondary} />
+              ) : (
+                <Clock size={28} color={PrimaryColors.light} />
+              )}
+            </View>
+          </View>
+
+          {/* Options list */}
+          <View style={styles.optionsList}>
+            <TouchableOpacity style={styles.optionRow} onPress={() => scrollToSection('basic')} activeOpacity={0.7}>
+              <View style={styles.optionIconWrap}>
                 <Building2 size={20} color={PrimaryColors.main} />
               </View>
-              <Text style={styles.sectionTitle}>Images</Text>
-            </View>
-
-            <View style={styles.imagesRow}>
-              <View style={styles.imageItem}>
-                <Text style={styles.imageLabel}>Logo / Profile</Text>
-                {hospital.logo_url || hospital.logo_path ? (
-                  <Image
-                    source={{ uri: hospital.logo_url || `${BASE_BACKEND_URL}/app/${hospital.logo_path}` }}
-                    style={styles.thumbCircle}
-                  />
-                ) : (
-                  <View style={[styles.thumbCircle, styles.thumbPlaceholder]}>
-                    <Building2 size={22} color={PrimaryColors.main} />
-                  </View>
-                )}
+              <View style={styles.optionText}>
+                <Text style={styles.optionTitle}>Basic Information</Text>
+                <Text style={styles.optionSubtitle}>Name, email, phone, address</Text>
               </View>
-
-              <View style={styles.imageItem}>
-                <Text style={styles.imageLabel}>Cover</Text>
-                {hospital.hospital_picture_url || hospital.hospital_picture ? (
-                  <Image
-                    source={{ uri: hospital.hospital_picture_url || `${BASE_BACKEND_URL}/app/${hospital.hospital_picture}` }}
-                    style={styles.thumbCover}
-                  />
-                ) : (
-                  <View style={[styles.thumbCover, styles.thumbPlaceholder]}>
-                    <Building2 size={22} color={PrimaryColors.main} />
-                  </View>
-                )}
-              </View>
-            </View>
-          </ModernCard>
-
-          {/* Profile Card with Modern Design */}
-          <ModernCard variant="elevated" style={styles.profileCard}>
-            <View style={styles.profileHeader}>
-              <View style={styles.logoContainer}>
-                {hospital.logo_url || hospital.logo_path ? (
-                  <Image
-                    source={{
-                      uri: hospital.logo_url || `${BASE_BACKEND_URL}/app/${hospital.logo_path}`,
-                    }}
-                    style={styles.logo}
-                  />
-                ) : (
-                  <View style={styles.logoPlaceholder}>
-                    <Building2 size={48} color={PrimaryColors.main} />
-                  </View>
-                )}
-              </View>
-              <View style={styles.profileInfo}>
-                <Text style={styles.hospitalName}>{hospital.name || 'Hospital Name'}</Text>
-                <Text style={styles.hospitalEmail}>{hospital.email || 'No email'}</Text>
-                
-                {/* Verification Status Badge */}
-                <View style={[styles.statusBadge, { backgroundColor: `${getStatusColor(hospital.verification_status || 'pending')}15` }]}>
-                  {getStatusIcon(hospital.verification_status || 'pending')}
-                  <Text style={[styles.statusText, { color: getStatusColor(hospital.verification_status || 'pending') }]}>
-                    {hospital.verification_status === 'approved' ? 'Verified' : 
-                     hospital.verification_status === 'rejected' ? 'Rejected' : 'Pending Verification'}
-                  </Text>
+              <ChevronRight size={20} color={NeutralColors.textTertiary} />
+            </TouchableOpacity>
+            {(hospital.license_number || hospital.license_status) && (
+              <TouchableOpacity style={styles.optionRow} onPress={() => scrollToSection('license')} activeOpacity={0.7}>
+                <View style={styles.optionIconWrap}>
+                  <Shield size={20} color={PrimaryColors.main} />
                 </View>
+                <View style={styles.optionText}>
+                  <Text style={styles.optionTitle}>License Information</Text>
+                  <Text style={styles.optionSubtitle}>License number and status</Text>
+                </View>
+                <ChevronRight size={20} color={NeutralColors.textTertiary} />
+              </TouchableOpacity>
+            )}
+            {hasDoctorAccess && (
+              <TouchableOpacity style={styles.optionRow} onPress={handleSwitchToDoctor} activeOpacity={0.7}>
+                <View style={styles.optionIconWrap}>
+                  <User size={20} color={PrimaryColors.main} />
+                </View>
+                <View style={styles.optionText}>
+                  <Text style={styles.optionTitle}>Switch Account</Text>
+                  <Text style={styles.optionSubtitle}>Switch to Doctor</Text>
+                </View>
+                <ChevronRight size={20} color={NeutralColors.textTertiary} />
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={styles.optionRow} onPress={() => scrollToSection('security')} activeOpacity={0.7}>
+              <View style={styles.optionIconWrap}>
+                <Lock size={20} color={PrimaryColors.main} />
               </View>
-            </View>
-          </ModernCard>
+              <View style={styles.optionText}>
+                <Text style={styles.optionTitle}>Security</Text>
+                <Text style={styles.optionSubtitle}>Change password</Text>
+              </View>
+              <ChevronRight size={20} color={NeutralColors.textTertiary} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.optionRow} onPress={() => scrollToSection('support')} activeOpacity={0.7}>
+              <View style={styles.optionIconWrap}>
+                <Phone size={20} color={PrimaryColors.main} />
+              </View>
+              <View style={styles.optionText}>
+                <Text style={styles.optionTitle}>Support</Text>
+                <Text style={styles.optionSubtitle}>Email and phone</Text>
+              </View>
+              <ChevronRight size={20} color={NeutralColors.textTertiary} />
+            </TouchableOpacity>
+          </View>
+
 
           {/* Basic Information */}
+          <View onLayout={(e) => setSectionY((prev) => ({ ...prev, basic: e.nativeEvent.layout.y }))}>
           <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
             <View style={styles.sectionHeader}>
               <View style={styles.sectionIconContainer}>
@@ -366,9 +486,11 @@ export default function HospitalProfileScreen() {
 
             {/* Coordinates intentionally hidden (show address only) */}
           </ModernCard>
+          </View>
 
           {/* License Information */}
           {(hospital.license_number || hospital.license_status) && (
+            <View onLayout={handleSectionLayout('license')}>
             <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
               <View style={styles.sectionHeader}>
                 <View style={styles.sectionIconContainer}>
@@ -408,10 +530,12 @@ export default function HospitalProfileScreen() {
                 </TouchableOpacity>
               ) : null}
             </ModernCard>
+            </View>
           )}
 
           {/* Switch Account Section */}
           {hasDoctorAccess && (
+            <View onLayout={handleSectionLayout('switch')}>
             <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
               <View style={styles.sectionHeader}>
                 <View style={styles.sectionIconContainer}>
@@ -425,16 +549,18 @@ export default function HospitalProfileScreen() {
                 onPress={handleSwitchToDoctor}
                 activeOpacity={0.8}
               >
-                <User size={18} color="#0066FF" />
+                <User size={18} color="#2563EB" />
                 <Text style={styles.switchButtonText}>Switch to Doctor Portal</Text>
               </TouchableOpacity>
               <Text style={styles.switchHint}>
                 Access your doctor dashboard and view job opportunities.
               </Text>
             </ModernCard>
+            </View>
           )}
 
           {/* Security Section */}
+          <View onLayout={handleSectionLayout('security')}>
           <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
             <View style={styles.sectionHeader}>
               <View style={styles.sectionIconContainer}>
@@ -452,12 +578,14 @@ export default function HospitalProfileScreen() {
               <Text style={styles.actionButtonText}>Change Password</Text>
             </TouchableOpacity>
           </ModernCard>
+          </View>
 
-          {/* Support Section - Modern Design */}
+          {/* Support Section - blue only */}
+          <View onLayout={handleSectionLayout('support')}>
           <ModernCard variant="elevated" padding="md" style={[styles.sectionCard, styles.supportCard]}>
             <View style={styles.sectionHeader}>
               <View style={[styles.sectionIconContainer, styles.supportIconContainer]}>
-                <Phone size={20} color="#10B981" />
+                <Phone size={20} color={PrimaryColors.main} />
               </View>
               <Text style={styles.sectionTitle}>Support</Text>
             </View>
@@ -468,7 +596,7 @@ export default function HospitalProfileScreen() {
             
             <View style={styles.supportRow}>
               <View style={styles.supportIconWrapper}>
-                <Mail size={20} color="#10B981" />
+                <Mail size={20} color={PrimaryColors.main} />
               </View>
               <View style={styles.supportContent}>
                 <Text style={styles.supportLabel}>Email</Text>
@@ -478,7 +606,7 @@ export default function HospitalProfileScreen() {
             
             <View style={[styles.supportRow, styles.lastDetailRow]}>
               <View style={styles.supportIconWrapper}>
-                <Phone size={20} color="#10B981" />
+                <Phone size={20} color={PrimaryColors.main} />
               </View>
               <View style={styles.supportContent}>
                 <Text style={styles.supportLabel}>Phone</Text>
@@ -486,6 +614,7 @@ export default function HospitalProfileScreen() {
               </View>
             </View>
           </ModernCard>
+          </View>
         </ScrollView>
       </View>
     </ScreenSafeArea>
@@ -522,25 +651,95 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: NeutralColors.textSecondary,
   },
-  headerGradient: {
-    paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + 20 : 50,
-    paddingBottom: 16,
-    paddingHorizontal: 16,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-    overflow: 'hidden',
-    minHeight: 180,
+  // LinkedIn-style header
+  linkedInHeader: {
+    marginTop: 0,
+    backgroundColor: '#fff',
+    marginBottom: 0,
   },
-  headerContent: {
+  coverImageContainer: {
+    width: '100%',
+    height: 200,
+    backgroundColor: PrimaryColors.light,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  coverImage: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: PrimaryColors.light,
+  },
+  coverImagePlaceholder: {
+    backgroundColor: PrimaryColors.light,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  editCoverButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 6,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    zIndex: 10,
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
+  editCoverButtonText: {
     color: '#fff',
-    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  profilePictureContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    paddingTop: 0,
+    marginTop: -60,
+  },
+  profilePictureWrapper: {
+    position: 'relative',
+    alignSelf: 'flex-start',
+    marginBottom: 12,
+  },
+  profilePicture: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 4,
+    borderColor: '#fff',
+    backgroundColor: '#fff',
+    overflow: 'hidden',
+  },
+  profilePicturePlaceholder: {
+    backgroundColor: PrimaryColors.light,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  editProfileButton: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: PrimaryColors.main,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  hospitalName: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: NeutralColors.textPrimary,
+    marginTop: 8,
   },
   editButton: {
     flexDirection: 'row',
@@ -571,84 +770,88 @@ const styles = StyleSheet.create({
     maxWidth: width >= 768 ? CONTENT_MAX_WIDTH : '100%',
     alignSelf: 'center',
   },
-  profileCard: {
-    marginBottom: 20,
-  },
-  imagesRow: {
+  quickGrid: {
     flexDirection: 'row',
-    gap: 14,
-  },
-  imageItem: {
-    flex: 1,
-    gap: 10,
-  },
-  imageLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: NeutralColors.textSecondary,
-  },
-  thumbCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    borderWidth: 2,
-    borderColor: '#e2e8f0',
-    backgroundColor: '#fff',
-  },
-  thumbCover: {
-    width: '100%',
-    height: 64,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    backgroundColor: '#fff',
-  },
-  thumbPlaceholder: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: `${PrimaryColors.main}10`,
-  },
-  profileHeader: {
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  logoContainer: {
+    gap: 12,
     marginBottom: 16,
   },
-  logo: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 4,
-    borderColor: PrimaryColors.main,
-    backgroundColor: NeutralColors.background,
-  },
-  logoPlaceholder: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: `${PrimaryColors.main}15`,
+  quickGridItem: {
+    flex: 1,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 4,
-    borderColor: PrimaryColors.main,
   },
-  profileInfo: {
-    alignItems: 'center',
-    width: '100%',
+  quickGridLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: NeutralColors.textPrimary,
+    marginTop: 8,
   },
-  hospitalName: {
-    fontSize: 24,
+  infoCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  infoCardContent: {
+    flex: 1,
+  },
+  infoCardTitle: {
+    fontSize: 16,
     fontWeight: '700',
     color: NeutralColors.textPrimary,
     marginBottom: 4,
-    textAlign: 'center',
   },
-  hospitalEmail: {
-    fontSize: 16,
+  infoCardDesc: {
+    fontSize: 14,
     color: NeutralColors.textSecondary,
-    marginBottom: 12,
-    textAlign: 'center',
+  },
+  infoCardIcon: {
+    marginLeft: 12,
+  },
+  optionsList: {
+    marginBottom: 20,
+  },
+  optionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  optionIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: `${PrimaryColors.main}15`,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  optionText: {
+    flex: 1,
+  },
+  optionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: NeutralColors.textPrimary,
+    marginBottom: 2,
+  },
+  optionSubtitle: {
+    fontSize: 13,
+    color: NeutralColors.textSecondary,
+  },
+  profileCard: {
+    marginBottom: 20,
   },
   statusBadge: {
     flexDirection: 'row',
@@ -763,7 +966,7 @@ const styles = StyleSheet.create({
     borderColor: '#E5E7EB',
   },
   switchButtonText: {
-    color: '#0066FF',
+    color: '#2563EB',
     fontSize: 16,
     fontWeight: '700',
   },
@@ -775,12 +978,12 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   supportCard: {
-    backgroundColor: '#F0FDF4',
+    backgroundColor: '#EFF6FF',
     borderWidth: 1,
-    borderColor: '#D1FAE5',
+    borderColor: '#DBEAFE',
   },
   supportIconContainer: {
-    backgroundColor: '#D1FAE5',
+    backgroundColor: '#DBEAFE',
   },
   supportDescription: {
     fontSize: 14,
@@ -794,13 +997,13 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#D1FAE5',
+    borderBottomColor: '#DBEAFE',
   },
   supportIconWrapper: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#D1FAE5',
+    backgroundColor: '#DBEAFE',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -815,7 +1018,7 @@ const styles = StyleSheet.create({
   },
   supportValue: {
     fontSize: 15,
-    color: '#059669',
+    color: PrimaryColors.main,
     fontWeight: '600',
   },
 });

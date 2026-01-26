@@ -20,6 +20,8 @@ interface WalletData {
   pending_balance: number;
   total_earned: number;
   total_withdrawn: number;
+  pending_description?: string;
+  balance_label?: string;
   pending_transactions?: Transaction[];
 }
 
@@ -343,7 +345,9 @@ export default function WalletScreen() {
                       >
                         ₹{wallet?.pending_balance.toFixed(2) || '0.00'}
                       </ThemedText>
-                      <ThemedText style={styles.balanceSplitHint}>Processing</ThemedText>
+                      <ThemedText style={styles.balanceSplitHint}>
+                        {wallet?.pending_description || 'After hospital & admin approval'}
+                      </ThemedText>
                     </View>
                   </View>
 

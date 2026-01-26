@@ -126,7 +126,7 @@ export default function UpcomingJobsScreen() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
+        <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
         <LinearGradient
             colors={ModernColors.primary.gradient as [string, string]}
             start={{ x: 0, y: 0 }}
@@ -149,7 +149,7 @@ export default function UpcomingJobsScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
+      <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
       <LinearGradient
           colors={ModernColors.primary.gradient as [string, string]}
           start={{ x: 0, y: 0 }}

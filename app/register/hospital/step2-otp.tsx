@@ -19,9 +19,8 @@ import { HospitalPrimaryColors as PrimaryColors } from '@/constants/hospital-the
 export default function HospitalOtpScreen() {
   const params = useLocalSearchParams();
   const email = (params.email as string) || '';
-  const devOtp = (params.otp as string) || '';
 
-  const [otp, setOtp] = useState(devOtp);
+  const [otp, setOtp] = useState(''); // Do not auto-fill from params or SMS
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const inputRefs = useRef<(TextInput | null)[]>([]);
@@ -111,8 +110,9 @@ export default function HospitalOtpScreen() {
     try {
       const response = await API.post('/hospital/registration/send-otp', { email });
       if (response.data.status) {
-        Alert.alert('Success', 'New OTP sent to your email');
-        setOtp(response.data.otp || '');
+        Alert.alert('Success', 'New OTP sent to your email. Please enter the code manually.');
+        setOtp(''); // Do not auto-fill: user must type the code
+        inputRefs.current[0]?.focus();
       } else {
         Alert.alert('Error', response.data.message || 'Failed to resend OTP');
       }
@@ -138,17 +138,19 @@ export default function HospitalOtpScreen() {
         </View>
 
         <View style={styles.content}>
-          <View style={styles.iconContainer}>
-            <Mail size={64} color={PrimaryColors.main} />
-          </View>
+          <View style={styles.card}>
+            <View style={styles.iconContainer}>
+              <Mail size={56} color={PrimaryColors.main} />
+            </View>
 
-          <Text style={styles.title}>Enter Verification Code</Text>
-          <Text style={styles.subtitle}>
-            We sent a 6-digit code to{'\n'}
-            <Text style={styles.emailText}>{email}</Text>
-          </Text>
+            <Text style={styles.title}>Enter verification code</Text>
+            <Text style={styles.subtitle}>
+              We sent a 6-digit code to{'\n'}
+              <Text style={styles.emailText}>{email}</Text>
+            </Text>
+            <Text style={styles.hint}>Code expires in 10 minutes. Enter it manually—do not paste from SMS.</Text>
 
-          <View style={styles.otpContainer}>
+            <View style={styles.otpContainer}>
             {[0, 1, 2, 3, 4, 5].map((index) => (
               <TextInput
                 key={index}
@@ -161,6 +163,8 @@ export default function HospitalOtpScreen() {
                 maxLength={1}
                 selectTextOnFocus
                 editable={!loading}
+                autoComplete="off"
+                textContentType="none"
               />
             ))}
           </View>
@@ -190,6 +194,7 @@ export default function HospitalOtpScreen() {
               </Text>
             )}
           </TouchableOpacity>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -226,9 +231,23 @@ const styles = StyleSheet.create({
     padding: 24,
     justifyContent: 'center',
   },
+  card: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 16,
+    padding: 28,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
   iconContainer: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 24,
+  },
+  hint: {
+    fontSize: 13,
+    color: '#64748b',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 18,
   },
   title: {
     fontSize: 28,

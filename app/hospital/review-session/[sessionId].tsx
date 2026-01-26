@@ -7,6 +7,7 @@ import {
   TextInput,
   Alert,
   Platform,
+  DeviceEventEmitter,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -73,9 +74,12 @@ export default function ReviewSessionScreen() {
       // 3. Reload session to get updated status
       await loadSession();
       
-      // Show appropriate message based on response
+      // Notify dashboard to refresh sessions so "Completed" count updates
+      DeviceEventEmitter.emit('REFRESH_HOSPITAL_SESSIONS');
+      
+      // Show appropriate message and go back to dashboard so counts refresh
       const message = confirmResponse.data?.message || 'Work approved successfully.';
-      Alert.alert('Success', message);
+      Alert.alert('Success', message, [{ text: 'OK', onPress: () => router.back() }]);
     } catch (error: any) {
       console.error('Approval failed:', error);
       const errorMessage = error.response?.data?.message || 'Failed to approve session';
@@ -123,7 +127,7 @@ export default function ReviewSessionScreen() {
 
   return (
     <ScreenSafeArea style={styles.container}>
-      <StatusBar style="light" backgroundColor="#0066FF" />
+      <StatusBar style="light" backgroundColor="#2563EB" />
       
       {/* Header */}
       <Surface style={styles.headerSurface} elevation={0}>

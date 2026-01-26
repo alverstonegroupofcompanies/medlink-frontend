@@ -14,7 +14,7 @@ import {
   DeviceEventEmitter,
   Modal,
 } from "react-native";
-import { Star, Bell, MapPin, Clock, TrendingUp, Award, Building2, CheckCircle, Check, ArrowRight, Calendar, AlertCircle, Phone, Navigation, LogOut, DollarSign, Coins, Wallet } from "lucide-react-native";
+import { Star, Bell, MapPin, Clock, TrendingUp, Award, Building2, CheckCircle, Check, ArrowRight, Calendar, AlertCircle, Phone, Navigation, LogOut, IndianRupee, Coins, Wallet } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
 import { ModernColors, Spacing, BorderRadius, Shadows, Typography } from "@/constants/modern-theme";
@@ -35,6 +35,7 @@ import { MinimalSessionCard } from "@/components/MinimalSessionCard";
 const { width } = Dimensions.get('window');
 const isTablet = width >= 768; // 11 inch tablet is typically 768px or more
 const isLargeTablet = width >= 1024; // 10 inch tablet is typically 1024px or more
+const CARD_WIDTH = 300;
 
 export default function DoctorHome() {
   const [doctor, setDoctor] = useState<any>(null);
@@ -58,6 +59,8 @@ export default function DoctorHome() {
   const [activeJobsCount, setActiveJobsCount] = useState(0);
   const [completedJobsCount, setCompletedJobsCount] = useState(0);
   const [notificationCount, setNotificationCount] = useState(0);
+  const [disputes, setDisputes] = useState<any[]>([]);
+  const [totalEarnings, setTotalEarnings] = useState<number | null>(null);
   const safeBottomPadding = useSafeBottomPadding();
   const { startTracking, stopTracking, isTracking, permissionDialog, closePermissionDialog } = useLocationTracking();
 
@@ -181,6 +184,26 @@ export default function DoctorHome() {
     }
   };
 
+  const loadDisputes = async () => {
+    try {
+      const response = await API.get('/disputes');
+      setDisputes(response.data.disputes || []);
+    } catch (error: any) {
+      if (__DEV__) console.error('Error loading disputes:', error);
+      setDisputes([]);
+    }
+  };
+
+  const loadWalletSummary = async () => {
+    try {
+      const response = await API.get('/doctor/wallet');
+      const earned = response.data?.wallet?.total_earned;
+      setTotalEarnings(typeof earned === 'number' ? earned : 0);
+    } catch (_) {
+      setTotalEarnings(0);
+    }
+  };
+
   const loadJobSessions = async (silent = false) => {
     if (!silent && !hasLoaded.current) setLoadingSessions(true);
     try {
@@ -229,20 +252,41 @@ export default function DoctorHome() {
         return;
       }
 
-      // Check if banking details exist before applying
-      const bankingResponse = await API.get('/doctor/banking-details');
-      const hasBankingDetails = bankingResponse.data.banking_details?.has_banking_details;
+      // Check verification first (backend blocks here too; show this before "add bank details")
+      if (doctor?.verification_status === 'pending') {
+        Alert.alert(
+          'Verification Pending',
+          'Your account is pending verification. Please wait for admin approval before applying to jobs.'
+        );
+        return;
+      }
+      if (doctor?.verification_status === 'rejected') {
+        Alert.alert(
+          'Verification Rejected',
+          'Your account verification has been rejected. Please contact admin for more information.'
+        );
+        return;
+      }
 
+      // Check if banking details exist before applying (from /doctor/banking-details; fallback to /doctor/profile if bank was saved at registration)
+      let hasBankingDetails = false;
+      try {
+        const bankingResponse = await API.get('/doctor/banking-details');
+        hasBankingDetails = !!bankingResponse.data?.banking_details?.has_banking_details;
+      } catch (_) { /* ignore */ }
+      if (!hasBankingDetails) {
+        try {
+          const profileRes = await API.get('/doctor/profile');
+          hasBankingDetails = !!profileRes.data?.doctor?.has_banking_details;
+        } catch (_) { /* ignore */ }
+      }
       if (!hasBankingDetails) {
         Alert.alert(
           'Banking Details Required',
           'Please add your banking details before applying for jobs. This is required to receive payments.',
           [
             { text: 'Cancel', style: 'cancel' },
-            { 
-              text: 'Add Now', 
-              onPress: () => router.push('/(tabs)/wallet?openBanking=1')
-            },
+            { text: 'Add Now', onPress: () => router.push('/(tabs)/wallet?openBanking=1') },
           ]
         );
         return;
@@ -256,7 +300,23 @@ export default function DoctorHome() {
       const message = error.response?.data?.message || 'Failed to submit application';
       const normalized = String(message || '').toLowerCase();
 
-      // If backend ever blocks due to missing banking details, guide user to fix it.
+      // If backend returns verification error, show that instead of banking or generic
+      if (normalized.includes('verification') && normalized.includes('pending')) {
+        Alert.alert(
+          'Verification Pending',
+          'Your account is pending verification. Please wait for admin approval before applying to jobs.'
+        );
+        return;
+      }
+      if (normalized.includes('verification') && normalized.includes('rejected')) {
+        Alert.alert(
+          'Verification Rejected',
+          'Your account verification has been rejected. Please contact admin for more information.'
+        );
+        return;
+      }
+
+      // If backend blocks due to missing banking details, guide user to fix it
       if (normalized.includes('bank') || normalized.includes('ifsc') || normalized.includes('account')) {
         Alert.alert(
           'Banking Details Required',
@@ -270,9 +330,8 @@ export default function DoctorHome() {
       }
 
       // Check if error is about position being filled
-      if (message.toLowerCase().includes('filled') || message.toLowerCase().includes('already')) {
+      if (normalized.includes('filled') || normalized.includes('already')) {
         Alert.alert('Position Filled', 'This position has already been filled. Please look for other opportunities.');
-        // Reload requirements to update the UI
         loadJobRequirements();
       } else {
         Alert.alert('Error', message);
@@ -364,19 +423,8 @@ export default function DoctorHome() {
     return sessionDate.getTime() === today.getTime();
   });
 
-  // Calculate issues: late check-ins, missing check-outs, etc.
-  const issuesCount = jobSessions.filter((session: any) => {
-    const now = new Date();
-    const sessionDate = session.session_date ? new Date(session.session_date) : null;
-    
-    // Late check-in: session date/time passed but no check_in_time
-    if (sessionDate && sessionDate < now && !session.check_in_time && session.status === 'scheduled') {
-      return true;
-    }
-    
-    // Missing check-out: status is in_progress for more than expected duration
-    return false;
-  }).length;
+  // Open disputes (open or under_review) – used to show Issues card with no count; on tap opens disputes list
+  const openDisputes = disputes.filter((d: any) => ['open', 'under_review'].includes(d.status || ''));
 
   useEffect(() => {
     loadDoctor();
@@ -384,6 +432,8 @@ export default function DoctorHome() {
     loadMyApplications();
     loadNotifications();
     loadJobSessions();
+    loadDisputes();
+    loadWalletSummary();
     generateWeekDates();
     
 
@@ -399,6 +449,7 @@ export default function DoctorHome() {
         loadNotifications();
         loadJobRequirements();
         loadJobSessions();
+        loadDisputes();
     });
 
     // Listen for application status updates to change status immediately without refresh
@@ -560,7 +611,9 @@ export default function DoctorHome() {
           loadJobRequirements(silent),
           loadMyApplications(silent),
           loadNotifications(),
-          loadJobSessions(silent)
+          loadJobSessions(silent),
+          loadDisputes(),
+          loadWalletSummary(),
         ]);
         
         hasLoaded.current = true;
@@ -669,15 +722,16 @@ export default function DoctorHome() {
       accentColor: ModernColors.secondary.main,
       navigate: '/upcoming-jobs'
     },
-    { 
-      label: "Issues", 
-      value: issuesCount.toString(), 
-      icon: AlertCircle, 
+    // Issues: only when there are open disputes; no count; tap opens disputes list
+    ...(openDisputes.length > 0 ? [{
+      label: "Issues",
+      value: "—",
+      icon: AlertCircle,
       iconColor: ModernColors.error.main,
       iconBg: ModernColors.error.light,
       accentColor: ModernColors.error.main,
-      navigate: null
-    },
+      navigate: '/(tabs)/disputes'
+    }] : []),
   ];
 
   const trackingIndicator = isTracking ? (
@@ -699,11 +753,11 @@ export default function DoctorHome() {
     </View>
   ) : null;
 
-  // Ensure status bar is always blue
+  // Ensure status bar blends with header (unified blue #2563EB)
   useFocusEffect(
     React.useCallback(() => {
       if (Platform.OS === 'android') {
-        StatusBar.setBackgroundColor('#0066FF', true);
+        StatusBar.setBackgroundColor('#2563EB', true);
         StatusBar.setBarStyle('light-content', true);
         StatusBar.setTranslucent(false);
       }
@@ -717,7 +771,7 @@ export default function DoctorHome() {
       statusBarStyle="light-content"
     >
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor="#0066FF" translucent={false} />
+        <StatusBar barStyle="light-content" backgroundColor="#2563EB" translucent={false} />
 
         <Portal>
           <Dialog visible={permissionDialog.visible} onDismiss={closePermissionDialog}>
@@ -787,9 +841,47 @@ export default function DoctorHome() {
         </LinearGradient>
 
         <ScrollView
-          contentContainerStyle={[styles.scrollContainer, { paddingBottom: safeBottomPadding }]}
+          contentContainerStyle={[
+            styles.scrollContainer,
+            { paddingBottom: safeBottomPadding },
+            isTablet && { maxWidth: 720, alignSelf: 'center', width: '100%' },
+          ]}
           showsVerticalScrollIndicator={false}
         >
+          {/* Quick Reveal: Completed, Disputes, Upcomings, Total Earnings */}
+          <View style={styles.quickRevealGrid}>
+            <TouchableOpacity style={styles.quickRevealItem} onPress={() => router.push('/(tabs)/history')} activeOpacity={0.7}>
+              <CheckCircle size={18} color={ModernColors.success.main} />
+              <View style={styles.quickRevealText}>
+                <Text style={styles.quickRevealValue}>{completedJobsCount}</Text>
+                <Text style={styles.quickRevealLabel}>Completed</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.quickRevealItem} onPress={() => router.push('/(tabs)/disputes')} activeOpacity={0.7}>
+              <AlertCircle size={18} color={openDisputes.length > 0 ? ModernColors.error.main : ModernColors.text.tertiary} />
+              <View style={styles.quickRevealText}>
+                <Text style={styles.quickRevealValue}>{openDisputes.length}</Text>
+                <Text style={styles.quickRevealLabel}>Disputes</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.quickRevealItem} onPress={() => router.push('/(tabs)/upcoming-jobs')} activeOpacity={0.7}>
+              <Clock size={18} color={ModernColors.secondary.main} />
+              <View style={styles.quickRevealText}>
+                <Text style={styles.quickRevealValue}>{upcomingApplications.length}</Text>
+                <Text style={styles.quickRevealLabel}>Upcomings</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.quickRevealItem} onPress={() => router.push('/(tabs)/wallet')} activeOpacity={0.7}>
+              <IndianRupee size={18} color={ModernColors.primary.main} />
+              <View style={styles.quickRevealText}>
+                <Text style={styles.quickRevealValue} numberOfLines={1}>
+                  {totalEarnings === null ? '—' : `₹${(totalEarnings || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
+                </Text>
+                <Text style={styles.quickRevealLabel}>Total Earnings</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+
           {/* Calendar Week View */}
           <View style={styles.calendarSection}>
             <View style={styles.calendarHeader}>
@@ -850,50 +942,7 @@ export default function DoctorHome() {
             </ScrollView>
           </View>
 
-          {/* Modern Stats Grid - 2x2 Layout */}
-          <View style={styles.statsContainer}>
-            {stats.map((stat, index) => {
-              const IconComponent = stat.icon;
-              const isClickable = stat.navigate !== null;
-              
-              const StatContent = (
-                <ModernCard variant="elevated" padding="none" style={styles.statCard}>
-                  <View style={styles.statCardContent}>
-                    <View style={[styles.statIconContainer, { backgroundColor: stat.iconBg }]}>
-                      <IconComponent size={22} color={stat.iconColor} />
-                    </View>
-                    <View style={styles.statTextContainer}>
-                      <Text style={[styles.statValue, { color: stat.accentColor }]}>{stat.value}</Text>
-                      <Text style={styles.statLabel}>{stat.label}</Text>
-                    </View>
-                    {stat.navigate && (
-                      <View style={[styles.statAccent, { backgroundColor: stat.accentColor }]} />
-                    )}
-                  </View>
-                </ModernCard>
-              );
-
-              if (isClickable) {
-                return (
-                  <TouchableOpacity
-                    key={index}
-                    onPress={() => router.push(stat.navigate as any)}
-                    activeOpacity={0.8}
-                    style={styles.statCardWrapper}
-                  >
-                    {StatContent}
-                  </TouchableOpacity>
-                );
-              }
-              
-              return (
-                <View key={index} style={styles.statCardWrapper}>
-                  {StatContent}
-                </View>
-              );
-            })}
-          </View>
-
+         
           {/* Attention Needed Section */}
           {/* Action Required Section */}
           {attentionNeeded.length > 0 && (
@@ -905,7 +954,7 @@ export default function DoctorHome() {
                 </View>
               </View>
               
-              <View style={styles.attentionContainer}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll} contentContainerStyle={styles.horizontalScrollContent}>
                 {attentionNeeded.map((session: any) => {
                   const now = new Date();
                   
@@ -921,7 +970,7 @@ export default function DoctorHome() {
                   const isUpcoming = sessionDateTime >= now;
                   
                   return (
-                    <ModernCard key={session.id} variant="elevated" padding="md" style={[styles.attentionCard, { borderColor: ModernColors.error.light, borderWidth: 1 }]}>
+                    <ModernCard key={session.id} variant="elevated" padding="md" style={[styles.attentionCard, { borderColor: ModernColors.error.light, borderWidth: 1, width: CARD_WIDTH, flexShrink: 0 }]}>
                       
                       {/* Minimal Header */}
                       <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12}}>
@@ -999,7 +1048,7 @@ export default function DoctorHome() {
                     </ModernCard>
                   );
                 })}
-              </View>
+              </ScrollView>
             </View>
           )}
 
@@ -1013,7 +1062,7 @@ export default function DoctorHome() {
                 </View>
               </View>
 
-              <View style={styles.activeSessionsContainer}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll} contentContainerStyle={styles.horizontalScrollContent}>
                 {activeSessions.map((session: any) => {
                   const application = myApplications.find(
                     (app: any) => app.job_session?.id === session.id
@@ -1038,7 +1087,7 @@ export default function DoctorHome() {
                   })();
 
                   return (
-                    <ModernCard key={session.id} variant="elevated" padding="md" style={styles.activeSessionCard}>
+                    <ModernCard key={session.id} variant="elevated" padding="md" style={[styles.activeSessionCard, { width: CARD_WIDTH, flexShrink: 0 }]}>
                       {/* Header (Hospital-style) */}
                       <View style={styles.activeSessionTopRow}>
                         <View style={styles.activeSessionTopLeft}>
@@ -1119,7 +1168,7 @@ export default function DoctorHome() {
                     </ModernCard>
                   );
                 })}
-              </View>
+              </ScrollView>
             </View>
           )}
 
@@ -1133,15 +1182,15 @@ export default function DoctorHome() {
                 </View>
               </View>
               
-              <View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll} contentContainerStyle={styles.horizontalScrollContent}>
                 {jobSessions
                   .filter(s => !activeSessions.some(active => active.id === s.id))
                   .slice(0, 5) // Limit to 5 recent
                   .map(session => {
                     const application = myApplications.find(app => app.job_session?.id === session.id);
                     return (
-                        <MinimalSessionCard 
-                            key={session.id} 
+                        <View key={session.id} style={{ width: CARD_WIDTH, flexShrink: 0 }}>
+                          <MinimalSessionCard 
                             session={session} 
                             onPress={() => {
                                 if (application) {
@@ -1151,11 +1200,12 @@ export default function DoctorHome() {
                                     // router.push(`/session/${session.id}`);
                                 }
                             }}
-                        />
+                          />
+                        </View>
                     );
                   })
                 }
-              </View>
+              </ScrollView>
             </View>
           )}
 
@@ -1201,7 +1251,7 @@ export default function DoctorHome() {
                 </View>
               </View>
             ) : isTablet ? (
-              <View style={styles.openingsGrid}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.openingsScroll} contentContainerStyle={styles.openingsScrollContent}>
                 {jobRequirements
                   .filter((req: any) => {
                     const isExpired = req.is_expired || false;
@@ -1246,7 +1296,7 @@ export default function DoctorHome() {
                     const location = requirement.location_name || requirement.address || requirement.hospital?.address || 'Location TBD';
                     
                     return (
-                      <ModernCard key={requirement.id} variant="elevated" padding="sm" style={styles.newOpportunityCard}>
+                      <ModernCard key={requirement.id} variant="elevated" padding="sm" style={[styles.newOpportunityCard, { width: CARD_WIDTH, flexShrink: 0 }]}>
                         {/* Hospital Image Background - Right Side */}
                         {hospitalPicture && (
                           <View style={styles.newOpportunityImageBackground}>
@@ -1341,7 +1391,7 @@ export default function DoctorHome() {
                       </ModernCard>
                     );
                   })}
-              </View>
+              </ScrollView>
             ) : (
               <ScrollView 
                   horizontal 
@@ -1404,7 +1454,7 @@ export default function DoctorHome() {
                   const paymentAmount = requirement.payment_amount || 0;
                   
                   return (
-                    <ModernCard key={requirement.id} variant="elevated" padding="sm" style={styles.newOpportunityCard}>
+                    <ModernCard key={requirement.id} variant="elevated" padding="sm" style={[styles.newOpportunityCard, { width: CARD_WIDTH, flexShrink: 0 }]}>
                       {/* Hospital Image Background - Right Side */}
                       {hospitalPicture && (
                         <View style={styles.newOpportunityImageBackground}>
@@ -1804,7 +1854,7 @@ export default function DoctorHome() {
                 <Text style={styles.emptyText}>No upcoming tasks scheduled</Text>
               </ModernCard>
             ) : (
-              <View style={styles.tasksContainer}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll} contentContainerStyle={styles.horizontalScrollContent}>
                 {upcomingApplications
                   .sort((a: any, b: any) => {
                     // Sort by date in ascending order (nearest date first)
@@ -1872,7 +1922,7 @@ export default function DoctorHome() {
                   const location = requirement?.location_name || requirement?.address || hospital?.address || 'Location TBD';
                   
                   return (
-                    <ModernCard key={app.id} variant="elevated" padding="md" style={styles.taskCard}>
+                    <ModernCard key={app.id} variant="elevated" padding="md" style={[styles.taskCard, { width: CARD_WIDTH, flexShrink: 0 }]}>
                       {/* Hospital Image Background - Full Right Side */}
                       {hospitalPicture && (
                         <View style={styles.taskImageBackground}>
@@ -1955,7 +2005,7 @@ export default function DoctorHome() {
                     </ModernCard>
                   );
                 })}
-              </View>
+              </ScrollView>
             )}
           </View>
 
@@ -2251,6 +2301,38 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.lg,
     // paddingBottom is now set dynamically using safeBottomPadding
   },
+  quickRevealGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+    marginBottom: Spacing.lg,
+  },
+  quickRevealItem: {
+    width: '48%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    backgroundColor: ModernColors.background.primary,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: ModernColors.border.light,
+  },
+  quickRevealText: {
+    flex: 1,
+  },
+  quickRevealValue: {
+    ...Typography.h3,
+    color: ModernColors.text.primary,
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  quickRevealLabel: {
+    fontSize: 11,
+    color: ModernColors.text.tertiary,
+    marginTop: 2,
+  },
   statsContainer: {
     // Analytics cards: 4 squares (2x2) like previous
     flexDirection: 'row',
@@ -2259,7 +2341,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xl,
   },
   statCardWrapper: {
-    width: (width - Spacing.lg * 2 - Spacing.md) / 2, // 2 cards per row
+    width: '48%', // 2 cards per row with gap; responsive for tablet/split view
     aspectRatio: 1,
     flexShrink: 0,
   },
@@ -2410,6 +2492,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  horizontalScroll: {
+    marginHorizontal: -Spacing.lg,
+  },
+  horizontalScrollContent: {
+    paddingHorizontal: Spacing.lg,
+    gap: Spacing.md,
+  },
   openingsScroll: {
     marginHorizontal: -Spacing.lg,
   },
@@ -2420,7 +2509,6 @@ const styles = StyleSheet.create({
   openingsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingHorizontal: Spacing.lg,
     gap: Spacing.md,
   },
   openingCard: {

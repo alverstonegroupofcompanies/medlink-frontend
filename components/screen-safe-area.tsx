@@ -19,12 +19,12 @@ export function ScreenSafeArea({
   excludeBottom = false,
   statusBarStyle = 'light-content',
 }: ScreenSafeAreaProps) {
-  // Configure Android status bar for proper visibility
+  // Keep status bar blue on all screen sizes (mobile + tablet) and both platforms
   useEffect(() => {
+    StatusBar.setBarStyle(statusBarStyle, true);
     if (Platform.OS === 'android') {
       StatusBar.setBackgroundColor(backgroundColor, true);
-      StatusBar.setTranslucent(false); // Changed to false for better control
-      StatusBar.setBarStyle(statusBarStyle, true);
+      StatusBar.setTranslucent(false);
     }
   }, [backgroundColor, statusBarStyle]);
 
@@ -35,8 +35,9 @@ export function ScreenSafeArea({
     ? (excludeBottom ? edges.filter(e => e !== 'bottom') : edges)
     : (excludeBottom ? defaultEdges.filter(e => e !== 'bottom') : defaultEdges);
 
+  // Prop backgroundColor must override style to avoid white status bar on mobile (style often has backgroundColor: '#F8FAFC')
   return (
-    <SafeAreaView style={[{ flex: 1, backgroundColor }, style]} edges={finalEdges}>
+    <SafeAreaView style={[style, { flex: 1, backgroundColor }]} edges={finalEdges}>
       {children}
     </SafeAreaView>
   );

@@ -76,6 +76,12 @@ async function getUserType(): Promise<string | undefined> {
  */
 async function sendError(errorData: ErrorLogData) {
   try {
+    // Skip sending network errors entirely - if there's a network error,
+    // the backend is clearly unreachable, so logging would fail anyway
+    if (errorData.error_type === 'network') {
+      return; // Don't try to log network errors - prevents error cascade
+    }
+    
     // Use a separate axios instance without interceptors to prevent loops
     const errorLogger = axios.create({
       baseURL: API_BASE_URL,
@@ -146,7 +152,9 @@ export async function logConsoleError(
     }
     
     // Skip if same error was logged recently (cooldown)
-    if (now - lastErrorTime < ERROR_LOG_COOLDOWN && errorType === 'api') {
+    // For network errors, use longer cooldown to prevent spam
+    const cooldown = errorType === 'network' ? ERROR_LOG_COOLDOWN * 2 : ERROR_LOG_COOLDOWN;
+    if (now - lastErrorTime < cooldown && (errorType === 'api' || errorType === 'network')) {
       return;
     }
     
@@ -154,6 +162,18 @@ export async function logConsoleError(
     const message = typeof error === 'string' ? error : error.message;
     if (message && additionalData?.endpoint?.includes('/error-logs')) {
       return; // Don't log errors about error logging
+    }
+    
+    // Skip all network error logging when backend is unreachable
+    // This prevents error cascades when backend is down
+    if (errorType === 'network') {
+      // Skip duplicate network error messages (already logged in api.js)
+      if (message?.includes('Network Error: Cannot connect') ||
+          message?.includes('Cannot reach backend') ||
+          message?.includes('ERR_NETWORK') ||
+          message?.includes('ECONNREFUSED')) {
+        return; // Don't log network errors - backend is unreachable anyway
+      }
     }
     
     const stack = typeof error === 'string' ? undefined : error.stack;
@@ -207,6 +227,15 @@ export function setupErrorHandlers() {
         return String(arg);
       }
     }).join(' ');
+    
+    // Skip logging network errors that are already handled by API interceptor
+    // These are already logged with full context in api.js
+    if (message.includes('NETWORK ERROR: Cannot connect to backend') ||
+        message.includes('Network Error: Cannot connect') ||
+        message.includes('ERR_NETWORK') ||
+        (message.includes('Network Error') && message.includes('Base URL'))) {
+      return; // Already logged in api.js with full context
+    }
     
     logConsoleError(message, 'console');
   };

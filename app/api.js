@@ -62,6 +62,10 @@ API.interceptors.request.use(
         '/doctor/register',
         '/hospital/login',
         '/hospital/register',
+        '/doctor/forgot-password',
+        '/doctor/reset-password',
+        '/hospital/forgot-password',
+        '/hospital/reset-password',
         '/send-otp',
         '/verify-otp',
         '/test',
@@ -160,9 +164,27 @@ API.interceptors.request.use(
       // Use the actual baseURL from config (which comes from env)
       const actualBaseURL = config.baseURL || API_BASE_URL;
       const fullUrl = `${actualBaseURL}${config.url?.startsWith('/') ? '' : '/'}${config.url}`;
-      console.log(`📤 ${config.method?.toUpperCase()} ${fullUrl}`);
-      console.log('   Base URL:', actualBaseURL);
-      console.log('   Headers:', config.headers);
+      
+      // Enhanced logging for dispute submissions
+      if (config.url?.includes('/disputes') && config.method?.toLowerCase() === 'post') {
+        console.log('═══════════════════════════════════════');
+        console.log('🚀 API INTERCEPTOR: Sending Dispute Request');
+        console.log('═══════════════════════════════════════');
+        console.log(`📤 ${config.method?.toUpperCase()} ${fullUrl}`);
+        console.log('   Base URL:', actualBaseURL);
+        console.log('   Has FormData:', config.data instanceof FormData);
+        console.log('   Has Auth Token:', !!config.headers?.Authorization);
+        console.log('   Content-Type:', config.headers?.['Content-Type'] || 'Will be set by axios');
+        console.log('   Timeout:', config.timeout || 'default');
+        console.log('✅ Request is being sent to network layer');
+        console.log('═══════════════════════════════════════');
+      } else {
+        console.log(`📤 ${config.method?.toUpperCase()} ${fullUrl}`);
+        console.log('   Base URL:', actualBaseURL);
+        if (config.data instanceof FormData) {
+          console.log('   📦 FormData detected');
+        }
+      }
       
       // Warn if using local IP (for development)
       if (actualBaseURL.includes('192.168.') || actualBaseURL.includes('localhost')) {
@@ -213,86 +235,31 @@ API.interceptors.response.use(
           ? `${error.config.baseURL}${relativePath.startsWith('/') ? '' : '/'}${relativePath}`
           : `${API_BASE_URL}${relativePath.startsWith('/') ? '' : '/'}${relativePath}`;
         
-        // Log detailed error information
-        console.error('═══════════════════════════════════════');
-        console.error('❌ NETWORK ERROR: Cannot connect to backend');
-        console.error('═══════════════════════════════════════');
-        console.error('📍 Error Code:', error.code);
-        console.error('📍 Error Message:', error.message);
-        console.error('📍 Relative Path:', relativePath);
-        console.error('🔗 Base URL:', error.config?.baseURL || API_BASE_URL);
-        console.error('🌐 Full URL Attempted:', fullUrl);
-        console.error('📦 Request Method:', error.config?.method?.toUpperCase());
-        console.error('📦 Request Data Type:', error.config?.data instanceof FormData ? 'FormData (file upload)' : 'JSON');
-        if (error.config?.data instanceof FormData) {
-          console.error('📦 FormData size: Large (file upload)');
-        }
-        
-        // Additional diagnostics
-        if (error.code === 'ERR_NETWORK') {
-          console.error('🔍 Possible Causes:');
-          console.error('   1. Server is down or unreachable');
-          console.error('   2. SSL certificate validation failed');
-          console.error('   3. DNS resolution failed');
-          console.error('   4. Network/firewall blocking connection');
-          console.error('   5. EAS secret not loaded (app needs rebuild)');
-          if (fullUrl.includes('https://')) {
-            console.error('   6. SSL/TLS handshake failed - check server certificate');
-          }
-        }
-        console.error('═══════════════════════════════════════');
-        
-        // Only log in development
+        // Consolidated error logging - single message to avoid cascade
         if (__DEV__) {
-          const relativePath = error.config?.url || 'Unknown';
-          const fullUrl = error.config?.baseURL 
-            ? `${error.config.baseURL}${relativePath.startsWith('/') ? '' : '/'}${relativePath}`
-            : `${API_BASE_URL}${relativePath.startsWith('/') ? '' : '/'}${relativePath}`;
+          // Build a single consolidated error message
+          let diagnosticMsg = `❌ Network Error: Cannot connect to backend\n`;
+          diagnosticMsg += `📍 Endpoint: ${relativePath}\n`;
+          diagnosticMsg += `📍 Method: ${error.config?.method?.toUpperCase() || 'GET'}\n`;
+          diagnosticMsg += `📍 Error: ${error.code || error.message}\n`;
           
-          console.warn('═══════════════════════════════════════');
-          console.warn('❌ NETWORK ERROR: Cannot connect to backend');
-          console.warn('═══════════════════════════════════════');
-          console.warn('📍 Relative Path:', relativePath);
-          console.warn('🔗 Base URL:', error.config?.baseURL || API_BASE_URL);
-          console.warn('🌐 Full URL Attempted:', fullUrl);
-          console.warn('═══════════════════════════════════════');
-          
-          // Log network errors (but skip if it's the error-logs endpoint to prevent loops)
-          if (relativePath && !relativePath.includes('/error-logs')) {
-            try {
-              const { logConsoleError } = require('@/utils/error-logger');
-              logConsoleError(
-                `Network Error: Cannot connect to ${fullUrl}`,
-                'network',
-                {
-                  endpoint: relativePath,
-                  method: error.config?.method?.toUpperCase(),
-                }
-              );
-            } catch (logError) {
-              // Silently fail
-            }
+          // Add helpful tips for local development
+          if (fullUrl.includes('192.168.') || fullUrl.includes('10.')) {
+            diagnosticMsg += `\n💡 Tips:\n`;
+            diagnosticMsg += `   • Ensure backend is running: php artisan serve --host=0.0.0.0 --port=8000\n`;
+            diagnosticMsg += `   • Check IP in .env matches: EXPO_PUBLIC_BACKEND_URL\n`;
+            diagnosticMsg += `   • Ensure phone and PC are on same WiFi`;
           }
+          
+          // Single console.error instead of multiple
+          console.error(diagnosticMsg);
         } else {
-          console.warn('❌ Request Error:', error.message);
-          
-          // Log other request errors (but skip if it's the error-logs endpoint to prevent loops)
-          if (error.config?.url && !error.config.url.includes('/error-logs')) {
-            try {
-              const { logConsoleError } = require('@/utils/error-logger');
-              logConsoleError(
-                error.message || 'Request Error',
-                'api',
-                {
-                  endpoint: error.config?.url,
-                  method: error.config?.method?.toUpperCase(),
-                }
-              );
-            } catch (logError) {
-              // Silently fail
-            }
-          }
+          // Production: Minimal logging
+          console.warn('❌ Network Error:', error.message);
         }
+        
+        // Skip logging network errors to backend to prevent error loops
+        // Network errors mean backend is unreachable, so logging would fail anyway
       } else if (error.response) {
         // Server responded with error status
         console.error(`❌ API Error ${error.response.status}:`, error.response.data);

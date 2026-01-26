@@ -1,7 +1,7 @@
 import { ThemedText } from '@/components/themed-text';
 import { Link, router } from 'expo-router';
 import { useState, useMemo } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TouchableOpacity, View, StatusBar, useWindowDimensions, TextInput } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TouchableOpacity, View, useWindowDimensions, TextInput } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors } from '@/constants/hospital-theme';
@@ -65,17 +65,15 @@ export default function HospitalLoginScreen() {
       setLoading(false);
       console.log('Login error:', error.response?.data || error.message);
       let message = 'Login failed. Please try again.';
-      
-      if (error.message?.includes('Network') || error.message?.includes('connect')) {
-        message = 'Cannot connect to server.\n\nTroubleshooting:\n\n1. Backend must be running:\n   php artisan serve --host=0.0.0.0 --port=8000\n\n2. Check IP address in .env file\n   Current: http://172.30.143.201:8000\n\n3. If using mobile hotspot:\n   - Laptop hotspot: Use laptop\'s Wi-Fi IP\n   - Phone hotspot: Use laptop\'s IP from phone\'s network\n\n4. Test in phone browser:\n   http://172.30.143.201:8000/api/test\n\n5. Firewall: Allow port 8000';
+      // Use error.message for network errors (includes dev hint when backend unreachable)
+      if (!error.response) {
+        message = error.message || 'Cannot connect to server. Please check your internet connection.';
       } else if (error.response?.data?.message) {
         message = error.response.data.message;
       } else if (error.response?.data?.errors) {
         const errors = error.response.data.errors;
         message = Object.values(errors).flat().join('\n');
       }
-      
-      // Show error alert
       Alert.alert('Login Error', message);
     }
   };
@@ -87,7 +85,6 @@ export default function HospitalLoginScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
       <SuccessModal
         visible={showSuccessModal}
         title="Welcome Back"
@@ -185,7 +182,7 @@ export default function HospitalLoginScreen() {
                     </TouchableOpacity>
                   </View>
                   
-                  <TouchableOpacity onPress={() => Alert.alert('Forgot Password', 'Please contact support to reset your password.')} style={styles.forgotBtn}>
+                  <TouchableOpacity onPress={() => router.push('/forgot-password?type=hospital')} style={styles.forgotBtn}>
                     <ThemedText style={styles.forgotText}>Forgot Password?</ThemedText>
                   </TouchableOpacity>
                 </View>

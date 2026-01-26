@@ -213,7 +213,7 @@ export default function MoreScreen() {
 
   return (
     <>
-      <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
+      <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
       {/* Custom Logout Confirmation Modal - appears on top of everything */}
       <Modal
         visible={showLogoutModal}

@@ -681,7 +681,7 @@ export default function HospitalProfileEditScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
-        <StatusBar barStyle="light-content" backgroundColor="#0066FF" />
+        <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
         
         {/* Modern Gradient Header */}
         <LinearGradient
