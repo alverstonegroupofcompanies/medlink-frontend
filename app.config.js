@@ -13,7 +13,7 @@ module.exports = {
     newArchEnabled: true,
     ios: {
       supportsTablet: true,
-      bundleIdentifier: "com.alverstonemedlink.app"
+      bundleIdentifier: "com.alverstones.medlink"
     },
     android: {
       adaptiveIcon: {
@@ -22,8 +22,8 @@ module.exports = {
         backgroundImage: "./assets/images/android-icon-background.png",
         monochromeImage: "./assets/images/android-icon-monochrome.png"
       },
-      package: "com.alverstonemedlink.app",
-      versionCode: 5,
+      package: "com.alverstones.medlink",
+      versionCode: 11,
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
       permissions: [
