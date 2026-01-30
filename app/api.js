@@ -56,6 +56,24 @@ API.interceptors.request.use(
       let token = null;
       const url = config.url || '';
       
+      // CRITICAL: Read X-User-Type header EARLY, before any processing
+      // This ensures we capture it even if axios modifies headers for FormData
+      let userTypeHeader = null;
+      if (config.headers) {
+        // Check all possible cases and locations for the header
+        userTypeHeader = config.headers['X-User-Type'] || 
+                        config.headers['x-user-type'] || 
+                        config.headers['X-USER-TYPE'];
+        
+        // Also check if header is in the config but with different casing
+        if (!userTypeHeader) {
+          const headerKey = Object.keys(config.headers).find(k => k.toLowerCase() === 'x-user-type');
+          if (headerKey) {
+            userTypeHeader = config.headers[headerKey];
+          }
+        }
+      }
+      
       // List of public routes that don't require authentication
       const publicRoutes = [
         '/doctor/login',
@@ -73,6 +91,7 @@ API.interceptors.request.use(
         '/blogs',
         '/blogs/',
         '/departments',
+        '/qualifications',
         '/doctor/registration/send-otp',
         '/doctor/registration/verify-otp',
         '/doctor/registration/register',
@@ -101,17 +120,86 @@ API.interceptors.request.use(
           console.log('👨‍⚕️ Using doctor token for:', url);
         }
       } else {
-        // Generic route (like /disputes, /notifications) - try both, prioritize what works
-        // This is critical for shared routes
-        const hToken = await AsyncStorage.getItem('hospitalToken');
-        const dToken = await AsyncStorage.getItem('doctorToken');
-        
-        // Use hospital token if we are likely a hospital (based on path or presence of only hospital token)
-        // or just use whichever one exists
-        token = hToken || dToken;
-        
-        if (__DEV__ && token) {
-          console.log(`${hToken ? '🏥' : '👨‍⚕️'} Using generic token for: ${url}`);
+        // Generic route (like /disputes, /notifications) - need context-aware token selection
+        // Special handling for /disputes route to determine correct token based on context
+        if (url === '/disputes' || url.startsWith('/disputes')) {
+          // Ensure headers object exists
+          if (!config.headers) {
+            config.headers = {};
+          }
+          
+          // Use the userTypeHeader we read earlier (before any processing)
+          // This ensures we get it even if axios modifies headers for FormData
+          
+          if (__DEV__) {
+            console.log('🔍 Dispute token selection:', {
+              url,
+              hasHeaders: !!config.headers,
+              headerKeys: config.headers ? Object.keys(config.headers) : [],
+              userTypeHeader,
+              method: config.method,
+            });
+          }
+          
+          if (userTypeHeader === 'hospital') {
+            token = await AsyncStorage.getItem('hospitalToken');
+            if (__DEV__ && token) {
+              console.log('🏥 Using hospital token for /disputes (X-User-Type: hospital header)');
+            } else if (__DEV__) {
+              console.warn('⚠️ X-User-Type header says hospital but no hospitalToken found');
+            }
+          } else if (userTypeHeader === 'doctor') {
+            token = await AsyncStorage.getItem('doctorToken');
+            if (__DEV__ && token) {
+              console.log('👨‍⚕️ Using doctor token for /disputes (X-User-Type: doctor header)');
+            } else if (__DEV__) {
+              console.warn('⚠️ X-User-Type header says doctor but no doctorToken found');
+            }
+          } else {
+            // Fallback: check stored user info to determine which token to use
+            const hospitalInfo = await AsyncStorage.getItem('hospitalInfo');
+            const doctorInfo = await AsyncStorage.getItem('doctorInfo');
+            
+            // Priority: Check which user info exists, then use corresponding token
+            if (hospitalInfo && !doctorInfo) {
+              token = await AsyncStorage.getItem('hospitalToken');
+              if (__DEV__ && token) {
+                console.log('🏥 Using hospital token for /disputes (hospitalInfo found)');
+              }
+            } else if (doctorInfo && !hospitalInfo) {
+              token = await AsyncStorage.getItem('doctorToken');
+              if (__DEV__ && token) {
+                console.log('👨‍⚕️ Using doctor token for /disputes (doctorInfo found)');
+              }
+            } else if (hospitalInfo && doctorInfo) {
+              // Both exist - prefer hospital token (hospitals more likely to have both)
+              token = await AsyncStorage.getItem('hospitalToken');
+              if (__DEV__ && token) {
+                console.log('🏥 Using hospital token for /disputes (both tokens exist, defaulting to hospital)');
+              }
+              // If hospital token doesn't work, fallback to doctor token will happen on 401
+            } else {
+              // Fallback: try both tokens
+              const hToken = await AsyncStorage.getItem('hospitalToken');
+              const dToken = await AsyncStorage.getItem('doctorToken');
+              token = hToken || dToken;
+              if (__DEV__ && token) {
+                console.log(`${hToken ? '🏥' : '👨‍⚕️'} Using generic token for /disputes (no user info found)`);
+              }
+            }
+          }
+        } else {
+          // Other generic routes - try both, prioritize what works
+          const hToken = await AsyncStorage.getItem('hospitalToken');
+          const dToken = await AsyncStorage.getItem('doctorToken');
+          
+          // Use hospital token if we are likely a hospital (based on path or presence of only hospital token)
+          // or just use whichever one exists
+          token = hToken || dToken;
+          
+          if (__DEV__ && token) {
+            console.log(`${hToken ? '🏥' : '👨‍⚕️'} Using generic token for: ${url}`);
+          }
         }
       }
       
@@ -119,7 +207,29 @@ API.interceptors.request.use(
         // Validate token format (should not be empty or just whitespace)
         const trimmedToken = token.trim();
         if (trimmedToken && trimmedToken.length > 0) {
+          // Ensure headers object exists before setting Authorization
+          if (!config.headers) {
+            config.headers = {};
+          }
           config.headers.Authorization = `Bearer ${trimmedToken}`;
+          
+          // CRITICAL: Preserve X-User-Type header for FormData requests
+          // Axios may remove custom headers when processing FormData, so we need to re-add it
+          if (userTypeHeader && (url === '/disputes' || url.startsWith('/disputes'))) {
+            config.headers['X-User-Type'] = userTypeHeader;
+            if (__DEV__) {
+              console.log('✅ Preserved X-User-Type header for FormData request:', userTypeHeader);
+            }
+          }
+          
+          if (__DEV__ && (url === '/disputes' || url.startsWith('/disputes'))) {
+            console.log('✅ Token attached to dispute request:', {
+              tokenLength: trimmedToken.length,
+              tokenPreview: trimmedToken.substring(0, 20) + '...',
+              hasAuthHeader: !!config.headers.Authorization,
+              userTypeHeader: userTypeHeader || 'not set',
+            });
+          }
         } else {
           // Invalid token format
           if (__DEV__ && !isPublicRoute) {
@@ -129,6 +239,9 @@ API.interceptors.request.use(
       } else if (__DEV__ && !isPublicRoute) {
         // Only warn if it's not a public route (login/register don't need tokens)
         console.warn('⚠️ No token found for route:', url);
+        if (url === '/disputes' || url.startsWith('/disputes')) {
+          console.warn('⚠️ CRITICAL: No token for dispute submission - request will fail!');
+        }
       }
     } catch (error) {
       // Silently handle token errors - don't log in production
@@ -141,6 +254,11 @@ API.interceptors.request.use(
     // Don't manually set it, as axios needs to add the boundary parameter
     // This is critical - manually setting Content-Type breaks FormData uploads
     if (config.data instanceof FormData) {
+      // Ensure headers object exists
+      if (!config.headers) {
+        config.headers = {};
+      }
+      
       // Remove Content-Type header to let axios set it with proper boundary
       delete config.headers['Content-Type'];
       delete config.headers['content-type'];
@@ -152,6 +270,15 @@ API.interceptors.request.use(
             delete config.headers[key];
           }
         });
+      }
+      
+      // CRITICAL: Re-preserve X-User-Type header after FormData processing
+      // This ensures it survives axios's FormData header manipulation
+      if (userTypeHeader && (url === '/disputes' || url.startsWith('/disputes'))) {
+        config.headers['X-User-Type'] = userTypeHeader;
+        if (__DEV__) {
+          console.log('📦 FormData detected - Preserved X-User-Type header:', userTypeHeader);
+        }
       }
       
       if (__DEV__) {
@@ -172,10 +299,20 @@ API.interceptors.request.use(
         console.log('═══════════════════════════════════════');
         console.log(`📤 ${config.method?.toUpperCase()} ${fullUrl}`);
         console.log('   Base URL:', actualBaseURL);
+        console.log('   API_BASE_URL from config:', API_BASE_URL);
         console.log('   Has FormData:', config.data instanceof FormData);
         console.log('   Has Auth Token:', !!config.headers?.Authorization);
+        console.log('   Token Preview:', config.headers?.Authorization ? config.headers.Authorization.substring(0, 30) + '...' : 'None');
+        console.log('   X-User-Type Header:', config.headers?.['X-User-Type'] || config.headers?.['x-user-type'] || 'Not set');
+        console.log('   All Headers:', config.headers ? Object.keys(config.headers) : 'None');
         console.log('   Content-Type:', config.headers?.['Content-Type'] || 'Will be set by axios');
         console.log('   Timeout:', config.timeout || 'default');
+        
+        // Verify backend URL is reachable
+        if (actualBaseURL.includes('192.168.') || actualBaseURL.includes('localhost') || actualBaseURL.includes('127.0.0.1')) {
+          console.log('   ⚠️ Using local backend - ensure backend is running and accessible');
+        }
+        
         console.log('✅ Request is being sent to network layer');
         console.log('═══════════════════════════════════════');
       } else {
@@ -251,18 +388,19 @@ API.interceptors.response.use(
             diagnosticMsg += `   • Ensure phone and PC are on same WiFi`;
           }
           
-          // Single console.error instead of multiple
+          // Single console.error instead of multiple (dev mode only)
           console.error(diagnosticMsg);
-        } else {
-          // Production: Minimal logging
-          console.warn('❌ Network Error:', error.message);
         }
+        // Production: No console logging - errors logged to backend only
         
         // Skip logging network errors to backend to prevent error loops
         // Network errors mean backend is unreachable, so logging would fail anyway
       } else if (error.response) {
         // Server responded with error status
-        console.error(`❌ API Error ${error.response.status}:`, error.response.data);
+        // Only log technical details in dev mode
+        if (__DEV__) {
+          console.error(`❌ API Error ${error.response.status}:`, error.response.data);
+        }
         
         // Log API errors to backend (but skip if it's the error-logs endpoint to prevent loops)
         if (error.config?.url && !error.config.url.includes('/error-logs')) {
@@ -287,7 +425,10 @@ API.interceptors.response.use(
           // Prevent multiple simultaneous auth error handlers
           if (!isHandlingAuthError) {
             isHandlingAuthError = true;
-            console.warn('⚠️ Unauthorized - clearing auth data');
+            // Only log in dev mode
+            if (__DEV__) {
+              console.warn('⚠️ Unauthorized - clearing auth data');
+            }
             
             try {
               const url = error.config?.url || '';
@@ -300,7 +441,10 @@ API.interceptors.response.use(
               
               if (url.includes('/hospital/')) {
                 await AsyncStorage.multiRemove(['hospitalToken', 'hospitalInfo']);
-                console.warn('🏥 Cleared hospital auth data');
+                // Only log in dev mode
+                if (__DEV__) {
+                  console.warn('🏥 Cleared hospital auth data');
+                }
                 // Redirect to hospital login
                 redirectTimeout = setTimeout(() => {
                   try {
@@ -310,17 +454,24 @@ API.interceptors.response.use(
                       isHandlingAuthError = false;
                     }, 1000);
                   } catch (navError) {
-                    console.error('Navigation error:', navError);
+                    // Only log in dev mode
+                    if (__DEV__) {
+                      console.error('Navigation error:', navError);
+                    }
                     isHandlingAuthError = false;
                   }
                 }, 100);
               } else if (url.includes('/admin/')) {
                 // Admin routes - don't clear here, let admin handle it
-                console.warn('🔐 Admin route 401 - admin should handle logout');
+                if (__DEV__) {
+                  console.warn('🔐 Admin route 401 - admin should handle logout');
+                }
                 isHandlingAuthError = false;
               } else {
                 await AsyncStorage.multiRemove(['doctorToken', 'doctorInfo']);
-                console.warn('👨‍⚕️ Cleared doctor auth data');
+                if (__DEV__) {
+                  console.warn('👨‍⚕️ Cleared doctor auth data');
+                }
                 // Redirect to doctor login
                 redirectTimeout = setTimeout(() => {
                   try {
@@ -330,29 +481,52 @@ API.interceptors.response.use(
                       isHandlingAuthError = false;
                     }, 1000);
                   } catch (navError) {
-                    console.error('Navigation error:', navError);
+                    if (__DEV__) {
+                      console.error('Navigation error:', navError);
+                    }
                     isHandlingAuthError = false;
                   }
                 }, 100);
               }
             } catch (clearError) {
-              console.error('Error clearing auth data:', clearError);
+              if (__DEV__) {
+                console.error('Error clearing auth data:', clearError);
+              }
               isHandlingAuthError = false;
             }
           } else {
             // Already handling auth error, just suppress this one
-            console.warn('⚠️ Multiple 401 errors detected - auth redirect already in progress');
+            if (__DEV__) {
+              console.warn('⚠️ Multiple 401 errors detected - auth redirect already in progress');
+            }
           }
         }
       }
     } else {
       // Production: Handle auth errors and redirect
       if (error.response?.status === 401) {
+        const url = error.config?.url || '';
+        
+        // CRITICAL: Don't redirect for login/register endpoints - let the component handle the error
+        // Login failures should show error message, not redirect
+        const isLoginOrRegisterEndpoint = 
+          url.includes('/login') || 
+          url.includes('/register') || 
+          url.includes('/forgot-password') ||
+          url.includes('/reset-password');
+        
+        if (isLoginOrRegisterEndpoint) {
+          // For login/register endpoints, just set the friendly message and let component handle it
+          // Don't redirect - the component will show the error modal
+          error.userFriendlyMessage = friendlyMessage;
+          return Promise.reject(error);
+        }
+        
+        // For other endpoints (authenticated routes), redirect to login
         // Prevent multiple simultaneous auth error handlers
         if (!isHandlingAuthError) {
           isHandlingAuthError = true;
           try {
-            const url = error.config?.url || '';
             const { router } = require('expo-router');
             
             // Clear existing redirect timeout if any

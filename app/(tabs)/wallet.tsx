@@ -32,6 +32,7 @@ interface Transaction {
   description: string;
   status: 'pending' | 'completed' | 'failed' | 'cancelled';
   created_at: string;
+  payment_id?: number | null;
   job_session?: {
     hospital?: {
       name: string;
@@ -135,6 +136,20 @@ export default function WalletScreen() {
 
             // Refresh wallet data immediately
             fetchWalletData();
+          })
+          .listen('.PaymentHeld', (e: any) => {
+            console.log('💰 Payment Held event received:', e);
+            
+            // Show notification
+            showNotificationFromData({
+              title: 'Payment Held in Escrow',
+              message: e.message || `Payment of ₹${e.amount} has been held in escrow`,
+              type: 'info',
+              data: { type: 'payment_held', amount: e.amount, paymentId: e.paymentId }
+            });
+
+            // Refresh wallet data immediately to show pending balance
+            fetchWalletData();
           });
       }
     };
@@ -160,7 +175,49 @@ export default function WalletScreen() {
       ]);
 
       setWallet(walletRes.data.wallet);
-      setTransactions(transactionsRes.data.transactions.data || transactionsRes.data.transactions);
+      
+      // Get transactions and deduplicate by payment_id
+      const rawTransactions = transactionsRes.data.transactions.data || transactionsRes.data.transactions || [];
+      
+      // Deduplicate: For transactions with the same payment_id, prefer completed over pending
+      // Group by payment_id (or use id if payment_id is null for withdrawals, etc.)
+      const transactionMap = new Map<number | string, Transaction>();
+      
+      rawTransactions.forEach((transaction: Transaction) => {
+        const key = transaction.payment_id ?? `unique_${transaction.id}`;
+        const existing = transactionMap.get(key);
+        
+        if (!existing) {
+          // No existing transaction for this payment_id, add it
+          transactionMap.set(key, transaction);
+        } else {
+          // Existing transaction found - prefer completed over pending
+          // If both are same status, prefer the most recent one
+          const existingIsCompleted = existing.status === 'completed';
+          const currentIsCompleted = transaction.status === 'completed';
+          
+          if (currentIsCompleted && !existingIsCompleted) {
+            // Current is completed, existing is not - replace
+            transactionMap.set(key, transaction);
+          } else if (!currentIsCompleted && existingIsCompleted) {
+            // Existing is completed, current is not - keep existing
+            // Do nothing
+          } else {
+            // Both same status - prefer most recent
+            const existingDate = new Date(existing.created_at).getTime();
+            const currentDate = new Date(transaction.created_at).getTime();
+            if (currentDate > existingDate) {
+              transactionMap.set(key, transaction);
+            }
+          }
+        }
+      });
+      
+      // Convert map values to array and sort by date (most recent first)
+      const deduplicatedTransactions = Array.from(transactionMap.values())
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      
+      setTransactions(deduplicatedTransactions);
       setBankingDetails(bankingRes.data.banking_details);
     } catch (error: any) {
       if (__DEV__) {

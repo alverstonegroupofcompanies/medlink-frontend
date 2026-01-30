@@ -5,22 +5,27 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  StatusBar,
+  Image,
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, Building2, Camera, MapPin } from 'lucide-react-native';
+import { ArrowLeft, Building2, MapPin, Upload, CheckCircle } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '@/config/api';
 import { HospitalPrimaryColors as PrimaryColors } from '@/constants/hospital-theme';
 import { LocationPickerMap } from '@/components/LocationPickerMap';
 import { ImageCropPicker } from '@/components/ImageCropPicker';
-import { validatePassword, PASSWORD_RULES_TEXT } from '@/utils/passwordValidation';
+import { validatePassword } from '@/utils/passwordValidation';
+import { ErrorModal } from '@/components/ErrorModal';
+import { SuccessModal } from '@/components/SuccessModal';
+import { PasswordRulesInline } from '@/components/PasswordRulesInline';
 
 export default function HospitalDetailsScreen() {
   const [loading, setLoading] = useState(false);
@@ -38,6 +43,11 @@ export default function HospitalDetailsScreen() {
   const [hospitalPictureUri, setHospitalPictureUri] = useState<string | null>(null);
   const [licenseDocument, setLicenseDocument] = useState<{ uri: string; name: string; type: string } | null>(null);
   const [registrationData, setRegistrationData] = useState<any>(null);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [isPasswordFocused, setIsPasswordFocused] = useState(false);
 
   useEffect(() => {
     loadRegistrationData();
@@ -52,15 +62,19 @@ export default function HospitalDetailsScreen() {
         if (data.email && data.otp) {
           // Data is valid, continue
         } else {
-          Alert.alert('Error', 'Registration session expired. Please start over.');
-          router.replace('/register/hospital/step1-email');
+          setErrorMessage('Registration session expired. Please start over.');
+          setShowErrorModal(true);
+          setTimeout(() => router.replace('/register/hospital/step1-email'), 2000);
         }
       } else {
-        Alert.alert('Error', 'Registration session missing. Please start over.');
-        router.replace('/register/hospital/step1-email');
+        setErrorMessage('Registration session missing. Please start over.');
+        setShowErrorModal(true);
+        setTimeout(() => router.replace('/register/hospital/step1-email'), 2000);
       }
     } catch (e) {
-      console.error('Failed to load registration data', e);
+      if (__DEV__) {
+        console.error('Failed to load registration data', e);
+      }
       router.replace('/register/hospital/step1-email');
     }
   };
@@ -97,7 +111,8 @@ export default function HospitalDetailsScreen() {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'We need camera roll permissions to upload documents');
+        setErrorMessage('We need camera roll permissions to upload documents');
+        setShowErrorModal(true);
         return;
       }
 
@@ -110,7 +125,8 @@ export default function HospitalDetailsScreen() {
       if (!result.canceled && result.assets[0]) {
         const fileSizeMB = (result.assets[0].fileSize || 0) / (1024 * 1024);
         if (fileSizeMB > 5) {
-          Alert.alert('File Too Large', 'Document must be less than 5MB. Please compress the file.');
+          setErrorMessage('Document must be less than 5MB. Please compress the file.');
+          setShowErrorModal(true);
           return;
         }
         const filename = result.assets[0].uri.split('/').pop() || 'license.pdf';
@@ -123,31 +139,72 @@ export default function HospitalDetailsScreen() {
         });
       }
     } catch (error: any) {
-      Alert.alert('Error', 'Failed to pick document: ' + error.message);
+      setErrorMessage('Failed to pick document: ' + error.message);
+      setShowErrorModal(true);
     }
   };
 
   const handleSubmit = async () => {
     // Validation
     if (!formData.name || !formData.password) {
-      Alert.alert('Validation Error', 'Hospital Name and Password are required');
+      setErrorMessage('Hospital Name and Password are required');
+      setShowErrorModal(true);
+      return;
+    }
+
+    if (!formData.phone_number) {
+      setErrorMessage('Phone Number is required');
+      setShowErrorModal(true);
+      return;
+    }
+
+    if (!formData.address) {
+      setErrorMessage('Address is required');
+      setShowErrorModal(true);
+      return;
+    }
+
+    if (!formData.latitude || !formData.longitude) {
+      setErrorMessage('Please select location on map');
+      setShowErrorModal(true);
+      return;
+    }
+
+    if (!logoUri) {
+      setErrorMessage('Hospital Icon is required');
+      setShowErrorModal(true);
+      return;
+    }
+
+    if (!hospitalPictureUri) {
+      setErrorMessage('Hospital Image is required');
+      setShowErrorModal(true);
+      return;
+    }
+
+    if (!licenseDocument) {
+      setErrorMessage('License Document is required');
+      setShowErrorModal(true);
       return;
     }
 
     const pwCheck = validatePassword(formData.password);
     if (!pwCheck.valid) {
-      Alert.alert('Validation Error', pwCheck.message);
+      setErrorMessage(pwCheck.message);
+      setShowErrorModal(true);
       return;
     }
 
     if (formData.password !== formData.confirmPassword) {
-      Alert.alert('Validation Error', 'Passwords do not match');
+      setErrorMessage('Passwords do not match');
+      setShowErrorModal(true);
       return;
     }
 
     if (!registrationData?.email || !registrationData?.otp) {
-      Alert.alert('Error', 'Registration session expired. Please start over.');
-      router.replace('/register/hospital/step1-email');
+      setErrorMessage('Registration session expired. Please start over.');
+      setShowErrorModal(true);
+      setTimeout(() => router.replace('/register/hospital/step1-email'), 2000);
       return;
     }
 
@@ -160,10 +217,10 @@ export default function HospitalDetailsScreen() {
       data.append('otp', registrationData.otp);
       data.append('name', formData.name);
       data.append('password', formData.password);
-      if (formData.phone_number) data.append('phone_number', formData.phone_number);
-      if (formData.address) data.append('address', formData.address);
-      if (formData.latitude) data.append('latitude', formData.latitude);
-      if (formData.longitude) data.append('longitude', formData.longitude);
+      data.append('phone_number', formData.phone_number);
+      data.append('address', formData.address);
+      data.append('latitude', formData.latitude);
+      data.append('longitude', formData.longitude);
       if (formData.license_number) data.append('license_number', formData.license_number);
 
       // Logo
@@ -220,11 +277,15 @@ export default function HospitalDetailsScreen() {
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
           if (attempt > 0) {
-            console.log(`🔄 Retry attempt ${attempt + 1}/${maxRetries + 1}...`);
+            if (__DEV__) {
+              console.log(`🔄 Retry attempt ${attempt + 1}/${maxRetries + 1}...`);
+            }
             await new Promise(resolve => setTimeout(resolve, 3000 * attempt));
           }
           
-          console.log(`📤 Attempting registration (attempt ${attempt + 1})...`);
+          if (__DEV__) {
+            console.log(`📤 Attempting registration (attempt ${attempt + 1})...`);
+          }
           
           // Use AbortController for timeout
           const controller = new AbortController();
@@ -233,10 +294,9 @@ export default function HospitalDetailsScreen() {
           try {
             const response = await fetch(url, {
               method: 'POST',
-              body: data, // FormData - don't set Content-Type, fetch handles it
+              body: data,
               headers: {
                 'Accept': 'application/json',
-                // Don't set Content-Type - let fetch handle it automatically for FormData
               },
               signal: controller.signal,
             });
@@ -250,7 +310,9 @@ export default function HospitalDetailsScreen() {
             if (!response.ok) {
               // Don't retry on validation errors (4xx)
               if (response.status >= 400 && response.status < 500) {
-                console.log('⚠️ Validation error - not retrying');
+                if (__DEV__) {
+                  console.log('⚠️ Validation error - not retrying');
+                }
                 throw {
                   response: {
                     status: response.status,
@@ -273,7 +335,9 @@ export default function HospitalDetailsScreen() {
             }
             
             // Success - break retry loop
-            console.log('✅ Registration request successful!');
+            if (__DEV__) {
+              console.log('✅ Registration request successful!');
+            }
             break;
           } catch (fetchError: any) {
             clearTimeout(timeoutId);
@@ -290,11 +354,15 @@ export default function HospitalDetailsScreen() {
           }
         } catch (error: any) {
           lastError = error;
-          console.error(`❌ Registration attempt ${attempt + 1} failed:`, error.message || error);
+          if (__DEV__) {
+            console.error(`❌ Registration attempt ${attempt + 1} failed:`, error.message || error);
+          }
           
           // Don't retry on validation errors (4xx) - these are real errors
           if (error.response && error.response.status >= 400 && error.response.status < 500) {
-            console.log('⚠️ Validation error - not retrying');
+            if (__DEV__) {
+              console.log('⚠️ Validation error - not retrying');
+            }
             throw error;
           }
           
@@ -310,15 +378,19 @@ export default function HospitalDetailsScreen() {
             error.message?.includes('SSL') ||
             error.message?.includes('certificate') ||
             error.message?.includes('timeout') ||
-            !error.response; // No response = network error
+            !error.response;
           
           if (attempt < maxRetries && isNetworkError) {
-            console.warn(`⚠️ Network error on attempt ${attempt + 1}, will retry in ${3 * (attempt + 1)}s...`);
+            if (__DEV__) {
+              console.warn(`⚠️ Network error on attempt ${attempt + 1}, will retry in ${3 * (attempt + 1)}s...`);
+            }
             continue;
           }
           
           // No more retries or non-retryable error
-          console.error('❌ Max retries reached or non-retryable error');
+          if (__DEV__) {
+            console.error('❌ Max retries reached or non-retryable error');
+          }
           throw error;
         }
       }
@@ -331,18 +403,19 @@ export default function HospitalDetailsScreen() {
         // Clear registration data
         await AsyncStorage.removeItem('hospitalRegistrationData');
         
-        Alert.alert(
-          'Success',
-          'Registration successful! Please login to continue.',
-          [
-            { text: 'OK', onPress: () => router.replace('/hospital/login') }
-          ]
-        );
+        setSuccessMessage('Registration successful! Please login to continue.');
+        setShowSuccessModal(true);
+        setTimeout(() => {
+          router.replace('/login');
+        }, 2000);
       } else {
-        Alert.alert('Error', responseData.message || 'Registration failed');
+        setErrorMessage(responseData.message || 'Registration failed');
+        setShowErrorModal(true);
       }
     } catch (error: any) {
-      console.error('Registration error:', error);
+      if (__DEV__) {
+        console.error('Registration error:', error);
+      }
       
       let message = error.response?.data?.message || error.message || 'Registration failed';
       if (error.response?.data?.errors) {
@@ -350,170 +423,280 @@ export default function HospitalDetailsScreen() {
         message = errors.join('\n');
       }
 
-      Alert.alert('Registration Error', message);
+      setErrorMessage(message);
+      setShowErrorModal(true);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <ArrowLeft size={24} color="#333" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Complete Registration</Text>
-          <View style={{ width: 40 }} />
-        </View>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
+      <ErrorModal
+        visible={showErrorModal}
+        title="Error"
+        message={errorMessage}
+        onClose={() => setShowErrorModal(false)}
+      />
+      <SuccessModal
+        visible={showSuccessModal}
+        title="Success"
+        message={successMessage}
+        onClose={() => setShowSuccessModal(false)}
+      />
+      
+      {/* Full-screen background */}
+      <Image
+        source={require('@/assets/images/icon.png')}
+        style={styles.fullBackgroundImage}
+        resizeMode="cover"
+      />
+      
+      {/* Overlay */}
+      <View style={styles.overlay} />
+      
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardView}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={true}
+            bounces={true}
+            nestedScrollEnabled={true}
+            scrollEventThrottle={16}
+            style={{ flex: 1 }}
+            directionalLockEnabled={false}
+          >
+            <View style={styles.card}>
+              {/* Back Button */}
+              <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                <ArrowLeft size={20} color="#64748B" />
+              </TouchableOpacity>
 
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-          {/* Logo */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Hospital Logo</Text>
-            <ImageCropPicker
-              onImageSelected={handleLogoSelected}
-              aspectRatio={[1, 1]}
-              circular={false}
-              width={400}
-              height={400}
-              showControls={true}
-              initialImage={logoUri}
-            />
-          </View>
+              {/* Header */}
+              <View style={styles.headerIconContainer}>
+                <View style={styles.iconCircle}>
+                  <Building2 size={24} color="#2563EB" />
+                </View>
+                <View style={styles.headerTitleContainer}>
+                  <Text style={styles.headerTitle}>AlverConnect</Text>
+                  <Text style={styles.headerTagline}>Complete Hospital Registration</Text>
+                </View>
+              </View>
 
-          {/* Hospital Image (Cover) */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Hospital Image (Cover)</Text>
-            <Text style={styles.sectionSubtitle}>This will show at the top of your hospital profile.</Text>
-            <ImageCropPicker
-              onImageSelected={handleHospitalPictureSelected}
-              aspectRatio={[16, 9]}
-              circular={false}
-              width={1200}
-              height={675}
-              showControls={true}
-              initialImage={hospitalPictureUri}
-            />
-          </View>
-
-          {/* Basic Information */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Basic Information</Text>
-            <InputField
-              label="Hospital Name *"
-              value={formData.name}
-              onChangeText={(text) => handleInputChange('name', text)}
-              placeholder="Enter hospital name"
-            />
-            <InputField
-              label="Password *"
-              value={formData.password}
-              onChangeText={(text) => handleInputChange('password', text)}
-              placeholder={PASSWORD_RULES_TEXT}
-              secureTextEntry
-            />
-            <InputField
-              label="Confirm Password *"
-              value={formData.confirmPassword}
-              onChangeText={(text) => handleInputChange('confirmPassword', text)}
-              placeholder="Re-enter password"
-              secureTextEntry
-            />
-            <InputField
-              label="Phone Number"
-              value={formData.phone_number}
-              onChangeText={(text) => handleInputChange('phone_number', text)}
-              placeholder="Enter phone number"
-              keyboardType="phone-pad"
-            />
-            <View style={styles.textAreaContainer}>
-              <Text style={styles.label}>Address</Text>
-              <TextInput
-                style={styles.textArea}
-                value={formData.address}
-                onChangeText={(text) => handleInputChange('address', text)}
-                placeholder="Enter hospital address"
-                multiline
-                numberOfLines={3}
-                textAlignVertical="top"
-              />
-            </View>
-          </View>
-
-          {/* Location */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Location</Text>
-            <LocationPickerMap
-              initialLatitude={formData.latitude ? parseFloat(formData.latitude) : undefined}
-              initialLongitude={formData.longitude ? parseFloat(formData.longitude) : undefined}
-              onLocationSelect={handleLocationSelect}
-              height={250}
-            />
-            {(formData.latitude || formData.longitude) && (
-              <View style={styles.locationInfo}>
-                <MapPin size={16} color={PrimaryColors.main} />
-                <Text style={styles.locationText}>
-                  {formData.latitude}, {formData.longitude}
+              {/* Required Fields Info */}
+              <View style={styles.infoBox}>
+                <Text style={styles.infoTitle}>Required Fields</Text>
+                <Text style={styles.infoText}>
+                  Hospital Name, Phone Number, Address, Location (Map Pin), Hospital Icon, Hospital Image, License Document
                 </Text>
               </View>
-            )}
-          </View>
 
-          {/* License Information */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>License Information</Text>
-            <InputField
-              label="License Number"
-              value={formData.license_number}
-              onChangeText={(text) => handleInputChange('license_number', text)}
-              placeholder="Enter license number"
-            />
-            <TouchableOpacity
-              style={styles.documentButton}
-              onPress={handlePickLicenseDocument}
-            >
-              <Text style={styles.documentButtonText}>
-                {licenseDocument ? 'License Document Selected' : 'Upload License Document (PDF/Image)'}
-              </Text>
-            </TouchableOpacity>
-          </View>
+              {/* Basic Information */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Basic Information</Text>
+                
+                <View style={styles.inputWrapper}>
+                  <Text style={styles.inputLabel}>Hospital Name *</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter hospital name"
+                    placeholderTextColor="#94A3B8"
+                    value={formData.name}
+                    onChangeText={(text) => handleInputChange('name', text)}
+                    editable={!loading}
+                  />
+                </View>
 
-          {/* Submit Button */}
-          <TouchableOpacity
-            style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-            onPress={handleSubmit}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.submitButtonText}>Complete Registration</Text>
-            )}
-          </TouchableOpacity>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
-  );
-}
+                <View style={styles.inputWrapper}>
+                  <Text style={styles.inputLabel}>Phone Number *</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter phone number"
+                    placeholderTextColor="#94A3B8"
+                    value={formData.phone_number}
+                    onChangeText={(text) => handleInputChange('phone_number', text)}
+                    keyboardType="phone-pad"
+                    editable={!loading}
+                  />
+                </View>
 
-function InputField({ label, value, onChangeText, placeholder, keyboardType, secureTextEntry }: any) {
-  return (
-    <View style={styles.inputContainer}>
-      <Text style={styles.label}>{label}</Text>
-      <TextInput
-        style={styles.input}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor="#94a3b8"
-        keyboardType={keyboardType}
-        secureTextEntry={secureTextEntry}
-      />
+                <View style={styles.inputWrapper}>
+                  <Text style={styles.inputLabel}>Address *</Text>
+                  <TextInput
+                    style={[styles.input, styles.textArea]}
+                    placeholder="Enter hospital address"
+                    placeholderTextColor="#94A3B8"
+                    value={formData.address}
+                    onChangeText={(text) => handleInputChange('address', text)}
+                    multiline
+                    numberOfLines={3}
+                    textAlignVertical="top"
+                    editable={!loading}
+                  />
+                </View>
+              </View>
+
+              {/* Location */}
+              <View style={styles.section} collapsable={false}>
+                <Text style={styles.sectionTitle}>Location (Map Pin) *</Text>
+                <Text style={styles.sectionHint}>Pin your hospital location on the map</Text>
+                <View style={{ marginBottom: 10 }}>
+                  <LocationPickerMap
+                    initialLatitude={formData.latitude ? parseFloat(formData.latitude) : undefined}
+                    initialLongitude={formData.longitude ? parseFloat(formData.longitude) : undefined}
+                    onLocationSelect={handleLocationSelect}
+                    height={250}
+                    requireConfirm={true}
+                    scrollEnabled={true}
+                  />
+                </View>
+                {(formData.latitude || formData.longitude) && (
+                  <View style={styles.locationInfo}>
+                    <MapPin size={16} color={PrimaryColors.main} />
+                    <Text style={styles.locationText}>
+                      {formData.latitude}, {formData.longitude}
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Documents Upload */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Documents Upload</Text>
+                
+                <View style={styles.uploadSection}>
+                  <Text style={styles.uploadLabel}>Hospital Icon *</Text>
+                  <ImageCropPicker
+                    onImageSelected={handleLogoSelected}
+                    aspectRatio={[1, 1]}
+                    circular={false}
+                    width={400}
+                    height={400}
+                    showControls={true}
+                    initialImage={logoUri}
+                  />
+                  {logoUri && (
+                    <View style={styles.uploadSuccess}>
+                      <CheckCircle size={16} color="#10B981" />
+                      <Text style={styles.uploadSuccessText}>Icon uploaded</Text>
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.uploadSection}>
+                  <Text style={styles.uploadLabel}>Hospital Image *</Text>
+                  <Text style={styles.uploadHint}>This will show at the top of your hospital profile</Text>
+                  <ImageCropPicker
+                    onImageSelected={handleHospitalPictureSelected}
+                    aspectRatio={[16, 9]}
+                    circular={false}
+                    width={1200}
+                    height={675}
+                    showControls={true}
+                    initialImage={hospitalPictureUri}
+                  />
+                  {hospitalPictureUri && (
+                    <View style={styles.uploadSuccess}>
+                      <CheckCircle size={16} color="#10B981" />
+                      <Text style={styles.uploadSuccessText}>Image uploaded</Text>
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.uploadSection}>
+                  <Text style={styles.uploadLabel}>License Document *</Text>
+                  <TouchableOpacity
+                    style={[styles.documentButton, licenseDocument && styles.documentButtonSuccess]}
+                    onPress={handlePickLicenseDocument}
+                    disabled={loading}
+                  >
+                    <Upload size={20} color={licenseDocument ? "#10B981" : PrimaryColors.main} />
+                    <Text style={[styles.documentButtonText, licenseDocument && styles.documentButtonTextSuccess]}>
+                      {licenseDocument ? licenseDocument.name : 'Upload License Document (PDF/Image)'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Password */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Password</Text>
+                <View style={styles.inputWrapper}>
+                  <Text style={styles.inputLabel}>Password *</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter password"
+                    placeholderTextColor="#94A3B8"
+                    value={formData.password}
+                    onChangeText={(text) => handleInputChange('password', text)}
+                    secureTextEntry
+                    editable={!loading}
+                    onFocus={() => setIsPasswordFocused(true)}
+                    onBlur={() => setIsPasswordFocused(false)}
+                  />
+                  {(isPasswordFocused || !!formData.password) && (
+                    <PasswordRulesInline password={formData.password} />
+                  )}
+                </View>
+                <View style={styles.inputWrapper}>
+                  <Text style={styles.inputLabel}>Confirm Password *</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Re-enter password"
+                    placeholderTextColor="#94A3B8"
+                    value={formData.confirmPassword}
+                    onChangeText={(text) => handleInputChange('confirmPassword', text)}
+                    secureTextEntry
+                    editable={!loading}
+                  />
+                </View>
+              </View>
+
+              {/* License Number (Optional) */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>License Information (Optional)</Text>
+                <View style={styles.inputWrapper}>
+                  <Text style={styles.inputLabel}>License Number</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter license number"
+                    placeholderTextColor="#94A3B8"
+                    value={formData.license_number}
+                    onChangeText={(text) => handleInputChange('license_number', text)}
+                    editable={!loading}
+                  />
+                </View>
+              </View>
+
+              {/* Submit Button */}
+              <TouchableOpacity
+                style={styles.submitButton}
+                onPress={handleSubmit}
+                disabled={loading}
+              >
+                <LinearGradient
+                  colors={['#2563EB', '#3B82F6']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.submitButtonGradient}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.submitButtonText}>Complete Registration</Text>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
     </View>
   );
 }
@@ -521,175 +704,239 @@ function InputField({ label, value, onChangeText, placeholder, keyboardType, sec
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#1e40af',
+  },
+  fullBackgroundImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    zIndex: 0,
+  },
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(30, 64, 175, 0.7)',
+    zIndex: 1,
+  },
+  safeArea: {
+    flex: 1,
+    zIndex: 2,
   },
   keyboardView: {
     flex: 1,
+    width: '100%',
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-    backgroundColor: '#fff',
+  scrollContent: {
+    flexGrow: 1,
+    padding: 24,
+    paddingBottom: 200,
+    paddingTop: 40,
+  },
+  card: {
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderRadius: 32,
+    padding: 28,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.25,
+    shadowRadius: 40,
+    elevation: 20,
+    width: '100%',
+    maxWidth: 500,
+    alignSelf: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.8)',
   },
   backButton: {
-    padding: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginBottom: 24,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: 'rgba(100, 116, 139, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(100, 116, 139, 0.15)',
+  },
+  headerIconContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+    gap: 12,
+  },
+  iconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitleContainer: {
+    alignItems: 'flex-start',
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1e293b',
+    color: '#1E3A8A',
+    letterSpacing: 0.5,
   },
-  scrollView: {
-    flex: 1,
+  headerTagline: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '500',
+    letterSpacing: 0.3,
   },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 32,
-  },
-  section: {
-    backgroundColor: '#fff',
+  infoBox: {
+    backgroundColor: '#EFF6FF',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 16,
+    marginBottom: 24,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#DBEAFE',
+  },
+  infoTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1E3A8A',
+    marginBottom: 8,
+  },
+  infoText: {
+    fontSize: 13,
+    color: '#475569',
+    lineHeight: 20,
+  },
+  section: {
+    marginBottom: 24,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1e293b',
+    color: '#1E293B',
     marginBottom: 16,
   },
-  sectionSubtitle: {
+  sectionHint: {
     fontSize: 13,
-    color: '#64748b',
-    marginTop: -10,
+    color: '#64748B',
     marginBottom: 12,
     lineHeight: 18,
   },
-  logoContainer: {
-    alignItems: 'center',
-  },
-  logoPreview: {
-    width: 100,
-    height: 100,
-    borderRadius: 12,
-    backgroundColor: PrimaryColors.lightest,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: PrimaryColors.main,
-  },
-  logoText: {
-    color: PrimaryColors.main,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  logoPlaceholder: {
-    width: 100,
-    height: 100,
-    borderRadius: 12,
-    backgroundColor: '#f1f5f9',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: '#e2e8f0',
-  },
-  logoButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    backgroundColor: PrimaryColors.lightest,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: PrimaryColors.main,
-  },
-  logoButtonText: {
-    marginLeft: 8,
-    fontSize: 14,
-    fontWeight: '600',
-    color: PrimaryColors.main,
-  },
-  inputContainer: {
+  inputWrapper: {
     marginBottom: 16,
   },
-  label: {
+  inputLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#475569',
+    color: '#334155',
     marginBottom: 8,
+    marginLeft: 4,
   },
   input: {
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    color: '#1e293b',
-    backgroundColor: '#fff',
-  },
-  textAreaContainer: {
-    marginBottom: 16,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 15,
+    color: '#1E293B',
+    fontWeight: '500',
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
   },
   textArea: {
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    color: '#1e293b',
-    backgroundColor: '#fff',
     minHeight: 80,
+    paddingTop: 14,
   },
   locationInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 12,
     padding: 12,
-    backgroundColor: PrimaryColors.lightest,
-    borderRadius: 8,
+    backgroundColor: '#EFF6FF',
+    borderRadius: 12,
+    gap: 8,
   },
   locationText: {
-    marginLeft: 8,
     fontSize: 14,
     color: PrimaryColors.main,
     fontWeight: '500',
   },
-  documentButton: {
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 8,
-    padding: 16,
-    backgroundColor: '#fff',
-    alignItems: 'center',
+  uploadSection: {
+    marginBottom: 24,
   },
-  documentButtonText: {
+  uploadLabel: {
     fontSize: 14,
-    color: PrimaryColors.main,
     fontWeight: '600',
+    color: '#334155',
+    marginBottom: 8,
   },
-  submitButton: {
-    backgroundColor: PrimaryColors.main,
-    paddingVertical: 16,
-    borderRadius: 12,
+  uploadHint: {
+    fontSize: 12,
+    color: '#64748B',
+    marginBottom: 12,
+  },
+  uploadSuccess: {
+    flexDirection: 'row',
     alignItems: 'center',
     marginTop: 8,
-    marginBottom: 32,
+    gap: 6,
   },
-  submitButtonDisabled: {
-    opacity: 0.6,
+  uploadSuccessText: {
+    fontSize: 13,
+    color: '#10B981',
+    fontWeight: '600',
+  },
+  documentButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: PrimaryColors.main,
+    backgroundColor: '#F8FAFC',
+    gap: 8,
+  },
+  documentButtonSuccess: {
+    borderColor: '#10B981',
+    backgroundColor: '#F0FDF4',
+  },
+  documentButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: PrimaryColors.main,
+  },
+  documentButtonTextSuccess: {
+    color: '#10B981',
+  },
+  submitButton: {
+    borderRadius: 16,
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 20,
+    overflow: 'hidden',
+  },
+  submitButtonGradient: {
+    paddingVertical: 18,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    borderRadius: 16,
   },
   submitButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
 });

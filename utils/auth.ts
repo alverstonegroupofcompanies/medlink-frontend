@@ -36,13 +36,28 @@ export const saveDoctorAuth = async (token: string, doctorInfo: any) => {
  */
 export const saveHospitalAuth = async (token: string, hospitalInfo: any) => {
   try {
+    // Save to both keys to ensure compatibility
     await AsyncStorage.multiSet([
       [STORAGE_KEYS.HOSPITAL_TOKEN, token],
       [STORAGE_KEYS.HOSPITAL_INFO, JSON.stringify(hospitalInfo)],
+      ['hospitalToken', token], // Also save with direct key for compatibility
+      ['hospitalInfo', JSON.stringify(hospitalInfo)],
     ]);
-    console.log('✅ Hospital auth data saved');
+    
+    // Verify it was saved
+    const savedToken = await AsyncStorage.getItem(STORAGE_KEYS.HOSPITAL_TOKEN);
+    if (savedToken !== token) {
+      throw new Error('Token verification failed after save');
+    }
+    
+    if (__DEV__) {
+      console.log('✅ Hospital auth data saved and verified');
+      console.log('✅ Token length:', token.length);
+    }
   } catch (error) {
-    console.error('❌ Error saving hospital auth:', error);
+    if (__DEV__) {
+      console.error('❌ Error saving hospital auth:', error);
+    }
     throw error;
   }
 };

@@ -19,11 +19,13 @@ import {
   CheckCircle,
   XCircle,
   Clock,
+  MessageCircle,
 } from 'lucide-react-native';
 import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors } from '@/constants/hospital-theme';
 import API from '../../../api';
 import { ScreenSafeArea } from '@/components/screen-safe-area';
 import { Card, Text, ActivityIndicator, Divider } from 'react-native-paper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function HospitalDisputeDetailScreen() {
   const { disputeId } = useLocalSearchParams<{ disputeId: string }>();
@@ -33,6 +35,11 @@ export default function HospitalDisputeDetailScreen() {
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
+  const insets = useSafeAreaInsets();
+  
+  // Calculate bottom position accounting for tab bar (approximately 75-90px)
+  const tabBarHeight = Platform.OS === 'ios' ? 90 : 75;
+  const inputBottomPosition = tabBarHeight + Math.max(insets.bottom - 12, 0);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -73,7 +80,9 @@ export default function HospitalDisputeDetailScreen() {
       return;
     }
 
-    if (dispute?.status === 'closed' || dispute?.status === 'resolved') {
+    // Allow messages for 'open' and 'under_review' statuses
+    // Block only for 'closed', 'resolved', and 'rejected'
+    if (dispute?.status === 'closed' || dispute?.status === 'resolved' || dispute?.status === 'rejected') {
       Alert.alert('Dispute Closed', 'This dispute has been closed. You cannot send new messages.');
       return;
     }
@@ -158,7 +167,9 @@ export default function HospitalDisputeDetailScreen() {
   }
 
   const statusColors = getStatusColor(dispute.status);
-  const isClosed = dispute.status === 'closed' || dispute.status === 'resolved';
+  // Dispute is closed if status is 'closed', 'resolved', or 'rejected'
+  // Allow messages for 'open' and 'under_review' statuses
+  const isClosed = dispute.status === 'closed' || dispute.status === 'resolved' || dispute.status === 'rejected';
 
   return (
     <ScreenSafeArea backgroundColor={PrimaryColors.dark} statusBarStyle="light-content" style={styles.container}>
@@ -181,10 +192,11 @@ export default function HospitalDisputeDetailScreen() {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         <ScrollView 
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, { paddingBottom: inputBottomPosition + 100 }]}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
           }
+          keyboardShouldPersistTaps="handled"
         >
           {/* Dispute Info Card */}
           <Card style={styles.infoCard} mode="elevated" elevation={2}>
@@ -243,7 +255,17 @@ export default function HospitalDisputeDetailScreen() {
 
           {/* Chat / Messages Section */}
           <View style={styles.messagesSection}>
-            <Text style={styles.messagesSectionTitle}>Chat</Text>
+            <View style={styles.messagesHeader}>
+              <View style={styles.chatTitleWrapper}>
+                <MessageCircle size={20} color={PrimaryColors.main} />
+                <Text style={styles.messagesSectionTitle}>Conversation</Text>
+              </View>
+              {messages.length > 0 && !isClosed && (
+                <View style={styles.replyHintBadge}>
+                  <Text style={styles.replyHint}>💬 Reply below</Text>
+                </View>
+              )}
+            </View>
             
             {messages.length === 0 ? (
               <Card style={styles.noMessagesCard}>
@@ -314,27 +336,31 @@ export default function HospitalDisputeDetailScreen() {
 
         {/* Message Input (only if not closed) */}
         {!isClosed && (
-          <View style={styles.inputContainer}>
-            <TextInput
-              style={styles.messageInput}
-              value={newMessage}
-              onChangeText={setNewMessage}
-              placeholder="Type your message..."
-              placeholderTextColor={NeutralColors.textLight}
-              multiline
-              maxLength={500}
-            />
-            <TouchableOpacity
-              style={[styles.sendButton, sending && styles.sendButtonDisabled]}
-              onPress={handleSendMessage}
-              disabled={sending || !newMessage.trim()}
-            >
-              {sending ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Send size={20} color="#fff" />
-              )}
-            </TouchableOpacity>
+          <View style={[styles.inputContainer, { bottom: inputBottomPosition }]}>
+            <View style={styles.inputWrapper}>
+              <MessageCircle size={18} color={PrimaryColors.main} style={styles.inputIcon} />
+              <TextInput
+                style={styles.messageInput}
+                value={newMessage}
+                onChangeText={setNewMessage}
+                placeholder="Type your reply here..."
+                placeholderTextColor={NeutralColors.textLight}
+                multiline
+                maxLength={500}
+              />
+              <TouchableOpacity
+                style={[styles.sendButton, sending && styles.sendButtonDisabled, !newMessage.trim() && styles.sendButtonDisabled]}
+                onPress={handleSendMessage}
+                disabled={sending || !newMessage.trim()}
+              >
+                {sending ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Send size={20} color="#fff" />
+                )}
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.inputHint}>Your reply will be visible to the support team</Text>
           </View>
         )}
       </KeyboardAvoidingView>
@@ -450,14 +476,41 @@ const styles = StyleSheet.create({
   messagesSection: {
     marginBottom: 16,
   },
+  messagesHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  chatTitleWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   messagesSectionTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '700',
     color: NeutralColors.textPrimary,
-    marginBottom: 12,
+  },
+  replyHintBadge: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: PrimaryColors.main,
+  },
+  replyHint: {
+    fontSize: 11,
+    color: PrimaryColors.main,
+    fontWeight: '700',
   },
   messagesList: {
-    maxHeight: 260,
+    maxHeight: 300,
+    marginBottom: 8,
   },
   noMessagesCard: {
     backgroundColor: '#fff',
@@ -470,19 +523,29 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   messageCard: {
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 12,
+    padding: 14,
+    borderRadius: 16,
+    marginBottom: 10,
   },
   adminMessage: {
     backgroundColor: '#EEF2FF',
-    borderLeftWidth: 3,
+    borderLeftWidth: 4,
     borderLeftColor: '#6366F1',
+    shadowColor: '#6366F1',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   userMessage: {
     backgroundColor: '#fff',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   messageHeader: {
     flexDirection: 'row',
@@ -533,37 +596,67 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     position: 'absolute',
-    bottom: 0,
     left: 0,
     right: 0,
-    flexDirection: 'row',
-    padding: 12,
     backgroundColor: '#fff',
-    borderTopWidth: 1,
+    borderTopWidth: 2,
     borderTopColor: '#E5E7EB',
-    gap: 8,
+    paddingTop: 12,
+    paddingBottom: 12,
+    paddingHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 10,
+    zIndex: 1000,
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 24,
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+    borderWidth: 1.5,
+    borderColor: PrimaryColors.main,
+  },
+  inputIcon: {
+    marginLeft: 8,
   },
   messageInput: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: NeutralColors.border,
-    borderRadius: 20,
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingVertical: 10,
-    fontSize: 14,
+    fontSize: 15,
     color: NeutralColors.textPrimary,
-    backgroundColor: '#F9FAFB',
     maxHeight: 100,
+    minHeight: 44,
   },
   sendButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: PrimaryColors.main,
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 4,
+    shadowColor: PrimaryColors.main,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   sendButtonDisabled: {
-    opacity: 0.5,
+    opacity: 0.4,
+    backgroundColor: NeutralColors.textLight,
+  },
+  inputHint: {
+    fontSize: 11,
+    color: NeutralColors.textSecondary,
+    textAlign: 'center',
+    marginTop: 6,
+    fontStyle: 'italic',
   },
 });

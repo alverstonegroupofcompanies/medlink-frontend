@@ -39,6 +39,7 @@ import { BASE_BACKEND_URL } from '@/config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isDoctorLoggedIn } from '@/utils/auth';
 import { ModernCard } from '@/components/modern-card';
+import { CollapsibleSection } from '@/components/CollapsibleSection';
 import { getFullImageUrl } from '@/utils/url-helper';
 
 const HOSPITAL_INFO_KEY = 'hospitalInfo';
@@ -371,75 +372,13 @@ export default function HospitalProfileScreen() {
             </View>
           </View>
 
-          {/* Options list */}
-          <View style={styles.optionsList}>
-            <TouchableOpacity style={styles.optionRow} onPress={() => scrollToSection('basic')} activeOpacity={0.7}>
-              <View style={styles.optionIconWrap}>
-                <Building2 size={20} color={PrimaryColors.main} />
-              </View>
-              <View style={styles.optionText}>
-                <Text style={styles.optionTitle}>Basic Information</Text>
-                <Text style={styles.optionSubtitle}>Name, email, phone, address</Text>
-              </View>
-              <ChevronRight size={20} color={NeutralColors.textTertiary} />
-            </TouchableOpacity>
-            {(hospital.license_number || hospital.license_status) && (
-              <TouchableOpacity style={styles.optionRow} onPress={() => scrollToSection('license')} activeOpacity={0.7}>
-                <View style={styles.optionIconWrap}>
-                  <Shield size={20} color={PrimaryColors.main} />
-                </View>
-                <View style={styles.optionText}>
-                  <Text style={styles.optionTitle}>License Information</Text>
-                  <Text style={styles.optionSubtitle}>License number and status</Text>
-                </View>
-                <ChevronRight size={20} color={NeutralColors.textTertiary} />
-              </TouchableOpacity>
-            )}
-            {hasDoctorAccess && (
-              <TouchableOpacity style={styles.optionRow} onPress={handleSwitchToDoctor} activeOpacity={0.7}>
-                <View style={styles.optionIconWrap}>
-                  <User size={20} color={PrimaryColors.main} />
-                </View>
-                <View style={styles.optionText}>
-                  <Text style={styles.optionTitle}>Switch Account</Text>
-                  <Text style={styles.optionSubtitle}>Switch to Doctor</Text>
-                </View>
-                <ChevronRight size={20} color={NeutralColors.textTertiary} />
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity style={styles.optionRow} onPress={() => scrollToSection('security')} activeOpacity={0.7}>
-              <View style={styles.optionIconWrap}>
-                <Lock size={20} color={PrimaryColors.main} />
-              </View>
-              <View style={styles.optionText}>
-                <Text style={styles.optionTitle}>Security</Text>
-                <Text style={styles.optionSubtitle}>Change password</Text>
-              </View>
-              <ChevronRight size={20} color={NeutralColors.textTertiary} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.optionRow} onPress={() => scrollToSection('support')} activeOpacity={0.7}>
-              <View style={styles.optionIconWrap}>
-                <Phone size={20} color={PrimaryColors.main} />
-              </View>
-              <View style={styles.optionText}>
-                <Text style={styles.optionTitle}>Support</Text>
-                <Text style={styles.optionSubtitle}>Email and phone</Text>
-              </View>
-              <ChevronRight size={20} color={NeutralColors.textTertiary} />
-            </TouchableOpacity>
-          </View>
-
-
           {/* Basic Information */}
-          <View onLayout={(e) => setSectionY((prev) => ({ ...prev, basic: e.nativeEvent.layout.y }))}>
-          <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionIconContainer}>
-                <Building2 size={20} color={PrimaryColors.main} />
-              </View>
-              <Text style={styles.sectionTitle}>Basic Information</Text>
-            </View>
-            
+          <CollapsibleSection
+            title="Basic Information"
+            subtitle="Name, email, phone, address"
+            icon={Building2}
+            iconColor={PrimaryColors.main}
+          >
             <View style={styles.detailRow}>
               <View style={styles.iconWrapper}>
                 <Building2 size={18} color={PrimaryColors.main} />
@@ -483,22 +422,16 @@ export default function HospitalProfileScreen() {
                 </View>
               </View>
             )}
-
-            {/* Coordinates intentionally hidden (show address only) */}
-          </ModernCard>
-          </View>
+          </CollapsibleSection>
 
           {/* License Information */}
           {(hospital.license_number || hospital.license_status) && (
-            <View onLayout={handleSectionLayout('license')}>
-            <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
-              <View style={styles.sectionHeader}>
-                <View style={styles.sectionIconContainer}>
-                  <Shield size={20} color={PrimaryColors.main} />
-                </View>
-                <Text style={styles.sectionTitle}>License Information</Text>
-              </View>
-              
+            <CollapsibleSection
+              title="License Information"
+              subtitle="License number and status"
+              icon={Shield}
+              iconColor={PrimaryColors.main}
+            >
               {hospital.license_number && (
                 <View style={styles.detailRow}>
                   <View style={styles.iconWrapper}>
@@ -529,21 +462,17 @@ export default function HospitalProfileScreen() {
                   <Text style={styles.documentButtonText}>View License Document</Text>
                 </TouchableOpacity>
               ) : null}
-            </ModernCard>
-            </View>
+            </CollapsibleSection>
           )}
 
           {/* Switch Account Section */}
           {hasDoctorAccess && (
-            <View onLayout={handleSectionLayout('switch')}>
-            <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
-              <View style={styles.sectionHeader}>
-                <View style={styles.sectionIconContainer}>
-                  <User size={20} color={PrimaryColors.main} />
-                </View>
-                <Text style={styles.sectionTitle}>Switch Account</Text>
-              </View>
-              
+            <CollapsibleSection
+              title="Switch Account"
+              subtitle="Switch to Doctor"
+              icon={User}
+              iconColor={PrimaryColors.main}
+            >
               <TouchableOpacity 
                 style={styles.switchButton}
                 onPress={handleSwitchToDoctor}
@@ -555,20 +484,16 @@ export default function HospitalProfileScreen() {
               <Text style={styles.switchHint}>
                 Access your doctor dashboard and view job opportunities.
               </Text>
-            </ModernCard>
-            </View>
+            </CollapsibleSection>
           )}
 
           {/* Security Section */}
-          <View onLayout={handleSectionLayout('security')}>
-          <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionIconContainer}>
-                <Lock size={20} color={PrimaryColors.main} />
-              </View>
-              <Text style={styles.sectionTitle}>Security</Text>
-            </View>
-            
+          <CollapsibleSection
+            title="Security"
+            subtitle="Change password"
+            icon={Lock}
+            iconColor={PrimaryColors.main}
+          >
             <TouchableOpacity 
               style={styles.actionButton}
               onPress={() => Alert.alert('Change Password', 'Password change feature coming soon.')}
@@ -577,19 +502,15 @@ export default function HospitalProfileScreen() {
               <Lock size={18} color={PrimaryColors.main} />
               <Text style={styles.actionButtonText}>Change Password</Text>
             </TouchableOpacity>
-          </ModernCard>
-          </View>
+          </CollapsibleSection>
 
-          {/* Support Section - blue only */}
-          <View onLayout={handleSectionLayout('support')}>
-          <ModernCard variant="elevated" padding="md" style={[styles.sectionCard, styles.supportCard]}>
-            <View style={styles.sectionHeader}>
-              <View style={[styles.sectionIconContainer, styles.supportIconContainer]}>
-                <Phone size={20} color={PrimaryColors.main} />
-              </View>
-              <Text style={styles.sectionTitle}>Support</Text>
-            </View>
-            
+          {/* Support Section */}
+          <CollapsibleSection
+            title="Support"
+            subtitle="Email and phone"
+            icon={Phone}
+            iconColor={PrimaryColors.main}
+          >
             <Text style={styles.supportDescription}>
               Need help? Contact our support team for assistance
             </Text>
@@ -613,8 +534,7 @@ export default function HospitalProfileScreen() {
                 <Text style={styles.supportValue}>+91 1800-123-4567</Text>
               </View>
             </View>
-          </ModernCard>
-          </View>
+          </CollapsibleSection>
         </ScrollView>
       </View>
     </ScreenSafeArea>

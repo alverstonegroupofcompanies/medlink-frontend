@@ -2,9 +2,10 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Link, router } from 'expo-router';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Alert, 
+  BackHandler,
   KeyboardAvoidingView, 
   Platform, 
   ScrollView, 
@@ -32,6 +33,8 @@ import {
   Building2,
   User
 } from 'lucide-react-native';
+import { ErrorModal } from '@/components/ErrorModal';
+import { SuccessModal } from '@/components/SuccessModal';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -39,16 +42,38 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [userType, setUserType] = useState<'doctor' | 'hospital'>('doctor');
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [errorType, setErrorType] = useState<string | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+
   const colorScheme = useColorScheme();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const isTablet = width >= 768;
 
+  // Handle back button press - close app instead of navigating
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      // Close the app when back button is pressed on login screen
+      BackHandler.exitApp();
+      return true; // Prevent default back behavior
+    });
+
+    return () => backHandler.remove();
+  }, []);
+
   // No auto-login - user must always login manually
 
   const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) {
-      Alert.alert('Error', 'Please fill in all fields');
+    const trimmedEmail = email.trim().toLowerCase();
+    const trimmedPassword = password.trim();
+
+    if (!trimmedEmail || !trimmedPassword) {
+      setErrorMessage('Please fill in both email and password.');
+      setErrorType(null);
+      setShowErrorModal(true);
       return;
     }
   
@@ -57,12 +82,16 @@ export default function LoginScreen() {
     try {
       const endpoint = userType === 'doctor' ? '/doctor/login' : '/hospital/login';
       const response = await API.post(endpoint, {
-        email: email.trim(),
-        password: password.trim(),
+        email: trimmedEmail,
+        password: trimmedPassword,
       });
   
       if (userType === 'doctor') {
         const { token, doctor } = response.data;
+        if (!token || !doctor) {
+          throw new Error('Invalid response from server. Missing token or doctor data.');
+        }
+
         await saveDoctorAuth(token, doctor);
         
         // Register for push notifications
@@ -70,16 +99,19 @@ export default function LoginScreen() {
           const { registerForPushNotifications } = require('@/utils/notifications');
           await registerForPushNotifications();
         } catch (error) {
-          console.warn('⚠️ Failed to register for push notifications:', error);
+          // Silently fail - don't block login
         }
 
-        Alert.alert('✅ Login Successful', 'Welcome back, doctor!');
-        setTimeout(() => {
-          router.replace('/(tabs)');
-        }, 1200);
+        setSuccessMessage('Welcome back, doctor!');
+        setShowSuccessModal(true);
       } else {
-        const { token, hospital } = response.data;
+        const { token, hospital } = response.data || {};
         const { saveHospitalAuth } = require('@/utils/auth');
+
+        if (!token || !hospital) {
+          throw new Error('Invalid response from server. Missing token or hospital data.');
+        }
+
         await saveHospitalAuth(token, hospital);
         
         // Register for push notifications
@@ -87,30 +119,57 @@ export default function LoginScreen() {
           const { registerForPushNotifications } = require('@/utils/notifications');
           await registerForPushNotifications('hospital');
         } catch (error) {
-          console.warn('⚠️ Failed to register for push notifications:', error);
+          // Silently fail - don't block login
         }
 
-        Alert.alert('✅ Login Successful', 'Welcome back!');
-        setTimeout(() => {
-          router.replace('/hospital/dashboard');
-        }, 1200);
+        setSuccessMessage(`Welcome back, ${hospital.name || 'hospital'}!`);
+        setShowSuccessModal(true);
       }
 
     } catch (error: any) {
-      console.log('Login error:', error.response?.data || error.message);
       let message = 'Login failed. Please try again.';
-      // Use error.message for network errors (includes dev hint: serve --host=0.0.0.0 when unreachable)
-      if (!error.response) {
+      let errorTypeValue: string | null = null;
+      
+      // Check if API interceptor already set a user-friendly message
+      if (error.userFriendlyMessage) {
+        message = error.userFriendlyMessage;
+      } else if (!error.response) {
+        // Network errors
         message = error.message || 'Cannot connect to server. Please check your internet connection.';
+      } else if (error.response?.data?.error_type) {
+        // Backend error with type
+        errorTypeValue = error.response.data.error_type;
+        message = error.response.data.message || message;
       } else if (error.response?.data?.message) {
+        // Backend error message
         message = error.response.data.message;
       } else if (error.response?.data?.errors) {
+        // Validation errors
         const errors = error.response.data.errors;
         message = Object.values(errors).flat().join('\n');
+      } else if (error.response?.status === 401) {
+        // Generic 401 - wrong password
+        message = 'Invalid email or password. Please check your credentials and try again.';
       }
-      Alert.alert('Login Error', message);
+
+      if (__DEV__) {
+        console.error('[Login] Error response:', error.response?.data || error.message || error);
+      }
+      
+      setErrorMessage(message);
+      setErrorType(errorTypeValue);
+      setShowErrorModal(true);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSuccessModalClose = () => {
+    setShowSuccessModal(false);
+    if (userType === 'doctor') {
+      router.replace('/(tabs)');
+    } else {
+      router.replace('/hospital/dashboard');
     }
   };
 
@@ -118,8 +177,32 @@ export default function LoginScreen() {
     router.push(`/forgot-password?type=${userType}`);
   };
 
+  const handleRegisterAction = () => {
+    setShowErrorModal(false);
+    router.push(
+      userType === 'doctor'
+        ? '/register/doctor/step1-email'
+        : '/register/hospital/step1-email'
+    );
+  };
+
   return (
     <View style={styles.container}>
+      <ErrorModal
+        visible={showErrorModal}
+        title="Login Error"
+        message={errorMessage}
+        onClose={() => setShowErrorModal(false)}
+        actionButtonText={errorType === 'account_not_found' ? 'Register' : undefined}
+        onAction={errorType === 'account_not_found' ? handleRegisterAction : undefined}
+      />
+      <SuccessModal
+        visible={showSuccessModal}
+        title="Login Successful"
+        message={successMessage}
+        onClose={handleSuccessModalClose}
+        buttonText={userType === 'doctor' ? 'Go to Dashboard' : 'Go to Hospital Dashboard'}
+      />
       {/* Full-screen background app icon */}
       <Image
         source={require('@/assets/images/icon.png')}

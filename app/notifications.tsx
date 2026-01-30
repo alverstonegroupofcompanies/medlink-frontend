@@ -53,14 +53,18 @@ export default function NotificationsScreen() {
       }
       setNotifications(response.data.notifications || []);
     } catch (error: any) {
-      console.error('Error loading notifications:', error);
-      // Only show alert if it's not a 404 (route not found - might be server config issue)
-      if (error.response?.status !== 404) {
-        Alert.alert('Error', 'Failed to load notifications');
-      } else {
-        // 404 means route doesn't exist - set empty array silently
-        setNotifications([]);
+      // Suppress 401 errors - API interceptor handles them
+      if (error.response?.status !== 401) {
+        if (__DEV__) {
+          console.error('Error loading notifications:', error);
+        }
+        // Only show alert if it's not a 404 (route not found - might be server config issue)
+        if (error.response?.status !== 404) {
+          Alert.alert('Error', 'Failed to load notifications');
+        }
       }
+      // Set empty array on any error
+      setNotifications([]);
     } finally {
       setLoading(false);
       setRefreshing(false);

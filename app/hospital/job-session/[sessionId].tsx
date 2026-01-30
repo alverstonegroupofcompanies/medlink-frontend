@@ -35,6 +35,8 @@ export default function HospitalJobSessionScreen() {
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [timeElapsed, setTimeElapsed] = useState(0);
+  const [sessionDisputes, setSessionDisputes] = useState<any[]>([]);
+  const [disputesLoading, setDisputesLoading] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Ensure status bar stays blue always
@@ -50,9 +52,28 @@ export default function HospitalJobSessionScreen() {
     }, [])
   );
 
+  const loadSessionDisputes = async () => {
+    try {
+      setDisputesLoading(true);
+      // Use backend filtering by job_session_id (ensures disputes are session-specific)
+      const response = await API.get(`/disputes?job_session_id=${sessionId}`);
+      setSessionDisputes(response.data?.disputes || []);
+    } catch (error: any) {
+      if (__DEV__) {
+        console.error(
+          '[HospitalJobSession] Failed to load disputes:',
+          error.response?.data || error.message || error
+        );
+      }
+    } finally {
+      setDisputesLoading(false);
+    }
+  };
+
   useFocusEffect(
     React.useCallback(() => {
       loadSession();
+      loadSessionDisputes();
       return () => {
         if (intervalRef.current) {
           clearInterval(intervalRef.current);
@@ -174,6 +195,26 @@ export default function HospitalJobSessionScreen() {
   })();
 
   const isLate = lateMinutes > 0;
+
+  const hasOpenDispute = sessionDisputes.some(
+    (d) => d.status !== 'closed' && d.status !== 'resolved'
+  );
+
+  const getDisputeStatusBadge = (status: string) => {
+    switch (status) {
+      case 'resolved':
+        return { bg: '#DCFCE7', text: '#15803D', border: '#86EFAC', label: 'Resolved' };
+      case 'closed':
+        return { bg: '#F3F4F6', text: '#6B7280', border: '#D1D5DB', label: 'Closed' };
+      case 'under_review':
+        return { bg: '#FEF3C7', text: '#D97706', border: '#FCD34D', label: 'Under Review' };
+      case 'rejected':
+        return { bg: '#FEE2E2', text: '#DC2626', border: '#FCA5A5', label: 'Rejected' };
+      case 'open':
+      default:
+        return { bg: '#FEF3C7', text: '#D97706', border: '#FCD34D', label: 'Open' };
+    }
+  };
 
   const handleCall = () => {
     if (doctor?.phone_number) {
@@ -533,6 +574,84 @@ export default function HospitalJobSessionScreen() {
                   </Text>
                 </View>
               ))}
+            </Card.Content>
+          </Card>
+        )}
+
+        {/* Disputes Section */}
+        {(disputesLoading || sessionDisputes.length > 0 || !hasOpenDispute) && (
+          <Card style={styles.card} mode="elevated" elevation={2}>
+            <Card.Content>
+              <Text style={styles.disputeSectionTitle}>Disputes</Text>
+              {disputesLoading ? (
+                <View style={{ paddingVertical: 8 }}>
+                  <ActivityIndicator size="small" color={PrimaryColors.main} />
+                </View>
+              ) : (
+                <>
+                  {sessionDisputes.length === 0 && (
+                    <Text style={styles.disputeEmptyText}>
+                      No disputes raised for this session.
+                    </Text>
+                  )}
+                  {sessionDisputes.map((dispute: any) => {
+                    const badge = getDisputeStatusBadge(dispute.status);
+                    return (
+                      <View key={dispute.id} style={styles.disputeItemRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.disputeItemTitle} numberOfLines={2}>
+                            {dispute.title}
+                          </Text>
+                          <Text style={styles.disputeItemMeta} numberOfLines={1}>
+                            Type:{' '}
+                            {dispute.dispute_type?.charAt(0).toUpperCase() +
+                              dispute.dispute_type?.slice(1)}{' '}
+                            •{' '}
+                            {new Date(dispute.created_at).toLocaleDateString('en-IN', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                            })}
+                          </Text>
+                        </View>
+                        <View
+                          style={[
+                            styles.disputeStatusBadge,
+                            { backgroundColor: badge.bg, borderColor: badge.border },
+                          ]}
+                        >
+                          <Text style={[styles.disputeStatusText, { color: badge.text }]}>
+                            {badge.label}
+                          </Text>
+                        </View>
+                        <Button
+                          mode="text"
+                          compact
+                          onPress={() =>
+                            router.push(`/hospital/dispute/detail/${dispute.id}`)
+                          }
+                          labelStyle={styles.disputeViewButtonLabel}
+                        >
+                          View
+                        </Button>
+                      </View>
+                    );
+                  })}
+                </>
+              )}
+
+              {/* Open Dispute CTA (only if no open dispute and payment not released) */}
+              {!isPaid && !hasOpenDispute && (
+                <Button
+                  mode="outlined"
+                  onPress={() => router.push(`/hospital/dispute/${session.id}`)}
+                  style={styles.disputeOpenButton}
+                  labelStyle={styles.disputeOpenButtonLabel}
+                  icon={() => <AlertCircle size={16} color="#DC2626" />}
+                >
+                  Open Dispute
+                </Button>
+              )}
             </Card.Content>
           </Card>
         )}
@@ -955,5 +1074,56 @@ const styles = StyleSheet.create({
   reviewDate: {
     fontSize: 12,
     color: '#94A3B8',
+  },
+  disputeSectionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: PrimaryColors.dark,
+    marginBottom: 8,
+  },
+  disputeEmptyText: {
+    fontSize: 13,
+    color: NeutralColors.textSecondary,
+    marginBottom: 8,
+  },
+  disputeItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 8,
+  },
+  disputeItemTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: NeutralColors.textPrimary,
+  },
+  disputeItemMeta: {
+    fontSize: 12,
+    color: NeutralColors.textSecondary,
+    marginTop: 2,
+  },
+  disputeStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  disputeStatusText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  disputeViewButtonLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: PrimaryColors.main,
+  },
+  disputeOpenButton: {
+    marginTop: 12,
+    borderColor: '#DC2626',
+  },
+  disputeOpenButtonLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#DC2626',
   },
 });

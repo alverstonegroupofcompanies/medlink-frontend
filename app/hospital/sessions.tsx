@@ -51,6 +51,43 @@ const SessionItem = React.memo(({ session, onRate, onPay, onReview, ratingSessio
   const isApproved = session.hospital_confirmed;
   const hasRating = session.ratings && session.ratings.length > 0;
 
+  // Calculate "late by" time if check-in is not done
+  const hasCheckedIn = !!(session.attendance?.check_in_time || session.check_in_time);
+  const scheduledCheckInDateTime = (() => {
+    if (!session?.session_date) return null;
+    const dt = new Date(session.session_date);
+    const startTime = requirement?.start_time;
+    if (startTime) {
+      const [hh, mm] = String(startTime).split(':');
+      const hours = parseInt(hh, 10);
+      const minutes = parseInt(mm, 10);
+      if (!Number.isNaN(hours) && !Number.isNaN(minutes)) {
+        dt.setHours(hours, minutes, 0, 0);
+      }
+    }
+    return dt;
+  })();
+
+  const lateMinutes = (() => {
+    if (hasCheckedIn) return 0; // Already checked in, not late
+    if (!scheduledCheckInDateTime) return 0; // No scheduled time
+    const now = new Date();
+    if (now <= scheduledCheckInDateTime) return 0; // Not yet time
+    return Math.max(0, Math.floor((now.getTime() - scheduledCheckInDateTime.getTime()) / (1000 * 60)));
+  })();
+
+  const formatLateTime = (minutes: number) => {
+    if (minutes < 60) {
+      return `${minutes} min${minutes !== 1 ? 's' : ''}`;
+    }
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    if (remainingMinutes === 0) {
+      return `${hours} hr${hours !== 1 ? 's' : ''}`;
+    }
+    return `${hours} hr${hours !== 1 ? 's' : ''} ${remainingMinutes} min${remainingMinutes !== 1 ? 's' : ''}`;
+  };
+
   const handlePressIn = () => {
     Animated.spring(scaleAnim, {
       toValue: 1.02,
@@ -170,9 +207,16 @@ const SessionItem = React.memo(({ session, onRate, onPay, onReview, ratingSessio
                 <Text style={styles.compactRatingValue}>{session.ratings[0]?.rating || 0}/5</Text>
               </View>
             )}
+            {lateMinutes > 0 && !hasCheckedIn && (
+              <View style={[styles.compactStatItem, { backgroundColor: '#FEE2E215', borderColor: StatusColors.error, borderWidth: 1, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 }]}>
+                <Clock size={10} color={StatusColors.error} />
+                <Text style={[styles.compactStatText, { color: StatusColors.error, fontWeight: '600' }]}>
+                  Late by {formatLateTime(lateMinutes)}
+                </Text>
+              </View>
+            )}
             {session.payment_amount && (
               <View style={styles.compactPaymentBadge}>
-                <DollarSign size={12} color={PrimaryColors.accent} />
                 <Text style={styles.compactPaymentBadgeText}>
                   ₹{typeof session.payment_amount === 'number' ? session.payment_amount.toFixed(0) : parseFloat(session.payment_amount || '0').toFixed(0)}
                 </Text>
@@ -184,12 +228,15 @@ const SessionItem = React.memo(({ session, onRate, onPay, onReview, ratingSessio
     </TouchableOpacity>
   );
 }, (prev, next) => {
+  const prevCheckIn = prev.session.attendance?.check_in_time || prev.session.check_in_time;
+  const nextCheckIn = next.session.attendance?.check_in_time || next.session.check_in_time;
   return (
     prev.session.id === next.session.id &&
     prev.session.status === next.session.status &&
     prev.session.hospital_confirmed === next.session.hospital_confirmed &&
     prev.ratingSessionId === next.ratingSessionId &&
-    prev.processingId === next.processingId
+    prev.processingId === next.processingId &&
+    prevCheckIn === nextCheckIn
   );
 });
 

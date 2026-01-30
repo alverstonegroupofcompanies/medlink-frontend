@@ -5,23 +5,29 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  StatusBar,
+  Image,
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, User, Camera, Upload } from 'lucide-react-native';
-import * as ImagePicker from 'expo-image-picker';
+import { ArrowLeft, User, MapPin } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '@/config/api';
 import { DoctorPrimaryColors as PrimaryColors } from '@/constants/doctor-theme';
 import { MultiDepartmentPicker } from '@/components/multi-department-picker';
 import { FileUploadButton } from '@/components/file-upload-button';
 import { ImageCropPicker } from '@/components/ImageCropPicker';
-import { validatePassword, PASSWORD_RULES_TEXT } from '@/utils/passwordValidation';
+import { LocationPickerMap } from '@/components/LocationPickerMap';
+import { QualificationsPicker } from '@/components/qualifications-picker';
+import { validatePassword } from '@/utils/passwordValidation';
+import { ErrorModal } from '@/components/ErrorModal';
+import { SuccessModal } from '@/components/SuccessModal';
+import { PasswordRulesInline } from '@/components/PasswordRulesInline';
 
 export default function DoctorDetailsScreen() {
   const [loading, setLoading] = useState(false);
@@ -30,7 +36,8 @@ export default function DoctorDetailsScreen() {
     password: '',
     confirmPassword: '',
     phone_number: '',
-    current_location: '',
+    current_location_latitude: '',
+    current_location_longitude: '',
     qualifications: '',
     experience: '',
     medical_council_reg_no: '',
@@ -50,6 +57,11 @@ export default function DoctorDetailsScreen() {
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [files, setFiles] = useState<Record<string, { uri: string; name: string; type: string }>>({});
   const [registrationData, setRegistrationData] = useState<any>(null);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [isPasswordFocused, setIsPasswordFocused] = useState(false);
 
   const workTypeOptions = ['Full Time', 'Part Time', 'Session'];
 
@@ -66,21 +78,33 @@ export default function DoctorDetailsScreen() {
         if (data.email && data.otp) {
           // Data is valid, continue
         } else {
-          Alert.alert('Error', 'Registration session expired. Please start over.');
-          router.replace('/register/doctor/step1-email');
+          setErrorMessage('Registration session expired. Please start over.');
+          setShowErrorModal(true);
+          setTimeout(() => router.replace('/register/doctor/step1-email'), 1500);
         }
       } else {
-        Alert.alert('Error', 'Registration session missing. Please start over.');
-        router.replace('/register/doctor/step1-email');
+        setErrorMessage('Registration session missing. Please start over.');
+        setShowErrorModal(true);
+        setTimeout(() => router.replace('/register/doctor/step1-email'), 1500);
       }
     } catch (e) {
-      console.error('Failed to load registration data', e);
+      if (__DEV__) {
+        console.error('Failed to load registration data', e);
+      }
       router.replace('/register/doctor/step1-email');
     }
   };
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleLocationSelect = (lat: number, lng: number) => {
+    setFormData(prev => ({
+      ...prev,
+      current_location_latitude: lat.toString(),
+      current_location_longitude: lng.toString(),
+    }));
   };
 
   const handleProfilePhotoSelected = (uri: string) => {
@@ -98,41 +122,48 @@ export default function DoctorDetailsScreen() {
   const handleSubmit = async () => {
     // Validation
     if (!formData.name || !formData.password) {
-      Alert.alert('Validation Error', 'Name and Password are required');
+      setErrorMessage('Name and Password are required');
+      setShowErrorModal(true);
       return;
     }
 
     const pwCheck = validatePassword(formData.password);
     if (!pwCheck.valid) {
-      Alert.alert('Validation Error', pwCheck.message);
+      setErrorMessage(pwCheck.message || 'Please enter a strong password');
+      setShowErrorModal(true);
       return;
     }
 
     if (formData.password !== formData.confirmPassword) {
-      Alert.alert('Validation Error', 'Passwords do not match');
+      setErrorMessage('Passwords do not match');
+      setShowErrorModal(true);
       return;
     }
 
     if (departmentIds.length === 0) {
-      Alert.alert('Validation Error', 'Please select at least one department');
+      setErrorMessage('Please select at least one department');
+      setShowErrorModal(true);
       return;
     }
 
     // Banking validation (required for payouts)
     if (!formData.bank_account_holder_name || !formData.bank_account_number || !formData.bank_ifsc_code) {
-      Alert.alert('Validation Error', 'Bank Account Holder Name, Account Number, and IFSC Code are required');
+      setErrorMessage('Bank Account Holder Name, Account Number, and IFSC Code are required');
+      setShowErrorModal(true);
       return;
     }
     const normalizedIfsc = formData.bank_ifsc_code.trim().toUpperCase();
     const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
     if (!ifscRegex.test(normalizedIfsc)) {
-      Alert.alert('Validation Error', 'Please enter a valid IFSC code (e.g., HDFC0001234)');
+      setErrorMessage('Please enter a valid IFSC code (e.g., HDFC0001234)');
+      setShowErrorModal(true);
       return;
     }
 
     if (!registrationData?.email || !registrationData?.otp) {
-      Alert.alert('Error', 'Registration session expired. Please start over.');
-      router.replace('/register/doctor/step1-email');
+      setErrorMessage('Registration session expired. Please start over.');
+      setShowErrorModal(true);
+      setTimeout(() => router.replace('/register/doctor/step1-email'), 1500);
       return;
     }
 
@@ -146,11 +177,21 @@ export default function DoctorDetailsScreen() {
       data.append('name', formData.name);
       data.append('password', formData.password);
       if (formData.phone_number) data.append('phone_number', formData.phone_number);
-      if (formData.current_location) data.append('current_location', formData.current_location);
+      // Send location as latitude,longitude format for nearest location features
+      if (formData.current_location_latitude && formData.current_location_longitude) {
+        const locationString = `${formData.current_location_latitude},${formData.current_location_longitude}`;
+        data.append('current_location', locationString);
+      }
 
       // Professional Details
       if (formData.qualifications) data.append('qualifications', formData.qualifications);
-      if (formData.experience) data.append('experience', formData.experience);
+      // Append "years" suffix to experience
+      if (formData.experience) {
+        const experienceValue = formData.experience.replace(/\D/g, ''); // Remove non-digits
+        if (experienceValue) {
+          data.append('experience', `${experienceValue} years`);
+        }
+      }
       if (formData.medical_council_reg_no) data.append('medical_council_reg_no', formData.medical_council_reg_no);
       if (formData.current_hospital) data.append('current_hospital', formData.current_hospital);
       if (formData.preferred_work_type) data.append('preferred_work_type', formData.preferred_work_type);
@@ -327,18 +368,19 @@ export default function DoctorDetailsScreen() {
         // Clear registration data
         await AsyncStorage.removeItem('doctorRegistrationData');
         
-        Alert.alert(
-          'Success',
-          'Registration successful! Please login to continue.',
-          [
-            { text: 'OK', onPress: () => router.replace('/login') }
-          ]
-        );
+        setSuccessMessage('Registration successful! Please login to continue.');
+        setShowSuccessModal(true);
+        setTimeout(() => {
+          router.replace('/login');
+        }, 2000);
       } else {
-        Alert.alert('Error', responseData.message || 'Registration failed');
+        setErrorMessage(responseData.message || 'Registration failed');
+        setShowErrorModal(true);
       }
     } catch (error: any) {
-      console.error('Registration error:', error);
+      if (__DEV__) {
+        console.error('Registration error:', error);
+      }
       
       let message = error.response?.data?.message || error.message || 'Registration failed';
       if (error.response?.data?.errors) {
@@ -346,131 +388,226 @@ export default function DoctorDetailsScreen() {
         message = errors.join('\n');
       }
 
-      Alert.alert('Registration Error', message);
+      setErrorMessage(message);
+      setShowErrorModal(true);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <ArrowLeft size={24} color="#333" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Complete Registration</Text>
-          <View style={{ width: 40 }} />
-        </View>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
+      <ErrorModal
+        visible={showErrorModal}
+        title="Error"
+        message={errorMessage}
+        onClose={() => setShowErrorModal(false)}
+      />
+      <SuccessModal
+        visible={showSuccessModal}
+        title="Success"
+        message={successMessage}
+        onClose={() => setShowSuccessModal(false)}
+      />
+      
+      {/* Full-screen background */}
+      <Image
+        source={require('@/assets/images/icon.png')}
+        style={styles.fullBackgroundImage}
+        resizeMode="cover"
+      />
+      
+      {/* Overlay */}
+      <View style={styles.overlay} />
+      
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardView}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={true}
+            bounces={true}
+            nestedScrollEnabled={true}
+            scrollEventThrottle={16}
+            style={{ flex: 1 }}
+            directionalLockEnabled={false}
+            scrollEnabled={true}
+            alwaysBounceVertical={false}
+          >
+            <View style={styles.card}>
+              {/* Back Button */}
+              <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                <ArrowLeft size={20} color="#64748B" />
+              </TouchableOpacity>
 
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-          {/* Profile Photo */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Profile Photo</Text>
-            <ImageCropPicker
-              onImageSelected={handleProfilePhotoSelected}
-              aspectRatio={[1, 1]}
-              circular={true}
-              width={400}
-              height={400}
-              showControls={true}
-              initialImage={profilePhoto}
-            />
-          </View>
-
-          {/* Basic Information */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Basic Information</Text>
-            <InputField
-              label="Full Name *"
-              value={formData.name}
-              onChangeText={(text) => handleInputChange('name', text)}
-              placeholder="Enter your full name"
-            />
-            <InputField
-              label="Password *"
-              value={formData.password}
-              onChangeText={(text) => handleInputChange('password', text)}
-              placeholder={PASSWORD_RULES_TEXT}
-              secureTextEntry
-            />
-            <InputField
-              label="Confirm Password *"
-              value={formData.confirmPassword}
-              onChangeText={(text) => handleInputChange('confirmPassword', text)}
-              placeholder="Re-enter password"
-              secureTextEntry
-            />
-            <InputField
-              label="Phone Number"
-              value={formData.phone_number}
-              onChangeText={(text) => handleInputChange('phone_number', text)}
-              placeholder="Enter phone number"
-              keyboardType="phone-pad"
-            />
-            <InputField
-              label="Current Location"
-              value={formData.current_location}
-              onChangeText={(text) => handleInputChange('current_location', text)}
-              placeholder="Enter current location"
-            />
-          </View>
-
-          {/* Professional Information */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Professional Information</Text>
-            
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Departments *</Text>
-              <MultiDepartmentPicker
-                selectedIds={departmentIds}
-                onValuesChange={setDepartmentIds}
-                placeholder="Select at least one department"
-                required
-              />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Preferred Work Type</Text>
-              <View style={styles.workTypeContainer}>
-                {workTypeOptions.map((type) => (
-                  <TouchableOpacity
-                    key={type}
-                    style={[
-                      styles.workTypeButton,
-                      formData.preferred_work_type === type && styles.workTypeButtonActive,
-                    ]}
-                    onPress={() => handleInputChange('preferred_work_type', type)}
-                  >
-                    <Text
-                      style={[
-                        styles.workTypeText,
-                        formData.preferred_work_type === type && styles.workTypeTextActive,
-                      ]}
-                    >
-                      {type}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+              {/* Header */}
+              <View style={styles.headerIconContainer}>
+                <View style={styles.iconCircle}>
+                  <User size={24} color="#2563EB" />
+                </View>
+                <View style={styles.headerTitleContainer}>
+                  <Text style={styles.headerTitle}>AlverConnect</Text>
+                  <Text style={styles.headerTagline}>Complete Doctor Registration</Text>
+                </View>
               </View>
-            </View>
 
-            <InputField
-              label="Qualifications"
-              value={formData.qualifications}
-              onChangeText={(text) => handleInputChange('qualifications', text)}
-              placeholder="e.g., MBBS, MD"
-            />
-            <InputField
-              label="Experience"
-              value={formData.experience}
-              onChangeText={(text) => handleInputChange('experience', text)}
-              placeholder="e.g., 5 years"
-            />
+              {/* Profile Photo */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Profile Photo</Text>
+                <ImageCropPicker
+                  onImageSelected={handleProfilePhotoSelected}
+                  aspectRatio={[1, 1]}
+                  circular={true}
+                  width={400}
+                  height={400}
+                  showControls={true}
+                  initialImage={profilePhoto}
+                />
+              </View>
+
+              {/* Basic Information */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Basic Information</Text>
+                <InputField
+                  label="Full Name *"
+                  value={formData.name}
+                  onChangeText={(text) => handleInputChange('name', text)}
+                  placeholder="Enter your full name"
+                  editable={!loading}
+                />
+                <InputField
+                  label="Password *"
+                  value={formData.password}
+                  onChangeText={(text) => handleInputChange('password', text)}
+                  placeholder="Enter password"
+                  secureTextEntry
+                  editable={!loading}
+                  onFocus={() => setIsPasswordFocused(true)}
+                  onBlur={() => setIsPasswordFocused(false)}
+                />
+                {(isPasswordFocused || !!formData.password) && (
+                  <PasswordRulesInline password={formData.password} />
+                )}
+                <InputField
+                  label="Confirm Password *"
+                  value={formData.confirmPassword}
+                  onChangeText={(text) => handleInputChange('confirmPassword', text)}
+                  placeholder="Re-enter password"
+                  secureTextEntry
+                  editable={!loading}
+                />
+                <InputField
+                  label="Phone Number"
+                  value={formData.phone_number}
+                  onChangeText={(text) => handleInputChange('phone_number', text)}
+                  placeholder="Enter phone number"
+                  keyboardType="phone-pad"
+                  editable={!loading}
+                />
+              </View>
+
+              {/* Current Location (Map Pin) */}
+              <View style={styles.section} collapsable={false}>
+                <Text style={styles.sectionTitle}>Current Location (Map Pin) *</Text>
+                <Text style={styles.sectionHint}>Pin your current location for nearest location features</Text>
+                <View 
+                  style={{ marginBottom: 10 }}
+                  onStartShouldSetResponder={() => false}
+                  onMoveShouldSetResponder={() => false}
+                >
+                  <LocationPickerMap
+                    initialLatitude={formData.current_location_latitude ? parseFloat(formData.current_location_latitude) : undefined}
+                    initialLongitude={formData.current_location_longitude ? parseFloat(formData.current_location_longitude) : undefined}
+                    onLocationSelect={handleLocationSelect}
+                    height={250}
+                    requireConfirm={true}
+                    scrollEnabled={true}
+                  />
+                </View>
+                {(formData.current_location_latitude || formData.current_location_longitude) && (
+                  <View style={styles.locationInfo}>
+                    <MapPin size={16} color={PrimaryColors.main} />
+                    <Text style={styles.locationText}>
+                      {formData.current_location_latitude}, {formData.current_location_longitude}
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Professional Information */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Professional Information</Text>
+                
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>Departments *</Text>
+                  <MultiDepartmentPicker
+                    selectedIds={departmentIds}
+                    onValuesChange={setDepartmentIds}
+                    placeholder="Select at least one department"
+                    required
+                  />
+                </View>
+
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>Preferred Work Type</Text>
+                  <View style={styles.workTypeContainer}>
+                    {workTypeOptions.map((type) => (
+                      <TouchableOpacity
+                        key={type}
+                        style={[
+                          styles.workTypeButton,
+                          formData.preferred_work_type === type && styles.workTypeButtonActive,
+                        ]}
+                        onPress={() => handleInputChange('preferred_work_type', type)}
+                        disabled={loading}
+                      >
+                        <Text
+                          style={[
+                            styles.workTypeText,
+                            formData.preferred_work_type === type && styles.workTypeTextActive,
+                          ]}
+                        >
+                          {type}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>Qualifications</Text>
+                  <QualificationsPicker
+                    value={formData.qualifications}
+                    onValueChange={(value) => handleInputChange('qualifications', value)}
+                    placeholder="Select qualification (e.g., MBBS, MD)"
+                  />
+                </View>
+
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>Years of Experience</Text>
+                  <View style={styles.experienceContainer}>
+                    <TextInput
+                      style={styles.experienceInput}
+                      placeholder="Enter number"
+                      placeholderTextColor="#94A3B8"
+                      value={formData.experience ? formData.experience.replace(/\D/g, '') : ''}
+                      onChangeText={(text) => {
+                        const numericValue = text.replace(/\D/g, '');
+                        handleInputChange('experience', numericValue);
+                      }}
+                      keyboardType="number-pad"
+                      editable={!loading}
+                    />
+                    <View style={styles.experienceSuffix}>
+                      <Text style={styles.experienceSuffixText}>years</Text>
+                    </View>
+                  </View>
+                </View>
             <InputField
               label="Medical Council Reg No"
               value={formData.medical_council_reg_no}
@@ -577,37 +714,60 @@ export default function DoctorDetailsScreen() {
             />
           </View>
 
-          {/* Submit Button */}
-          <TouchableOpacity
-            style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-            onPress={handleSubmit}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.submitButtonText}>Complete Registration</Text>
-            )}
-          </TouchableOpacity>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+              {/* Submit Button */}
+              <TouchableOpacity
+                style={styles.submitButton}
+                onPress={handleSubmit}
+                disabled={loading}
+              >
+                <LinearGradient
+                  colors={['#2563EB', '#3B82F6']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.submitButtonGradient}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.submitButtonText}>Complete Registration</Text>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </View>
   );
 }
 
-function InputField({ label, value, onChangeText, placeholder, keyboardType, secureTextEntry, autoCapitalize }: any) {
+function InputField({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  keyboardType,
+  secureTextEntry,
+  autoCapitalize,
+  editable,
+  onFocus,
+  onBlur,
+}: any) {
   return (
-    <View style={styles.inputContainer}>
-      <Text style={styles.label}>{label}</Text>
+    <View style={styles.inputWrapper}>
+      <Text style={styles.inputLabel}>{label}</Text>
       <TextInput
         style={styles.input}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor="#94a3b8"
+        placeholderTextColor="#94A3B8"
         keyboardType={keyboardType}
         secureTextEntry={secureTextEntry}
         autoCapitalize={autoCapitalize}
+        editable={editable}
+        onFocus={onFocus}
+        onBlur={onBlur}
       />
     </View>
   );
@@ -616,56 +776,112 @@ function InputField({ label, value, onChangeText, placeholder, keyboardType, sec
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#1e40af',
+  },
+  fullBackgroundImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    zIndex: 0,
+  },
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(30, 64, 175, 0.7)',
+    zIndex: 1,
+  },
+  safeArea: {
+    flex: 1,
+    zIndex: 2,
   },
   keyboardView: {
     flex: 1,
+    width: '100%',
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-    backgroundColor: '#fff',
+  scrollContent: {
+    flexGrow: 1,
+    padding: 24,
+    paddingBottom: 200,
+    paddingTop: 40,
+  },
+  card: {
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderRadius: 32,
+    padding: 28,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.25,
+    shadowRadius: 40,
+    elevation: 20,
+    width: '100%',
+    maxWidth: 500,
+    alignSelf: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.8)',
   },
   backButton: {
-    padding: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginBottom: 24,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: 'rgba(100, 116, 139, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(100, 116, 139, 0.15)',
+  },
+  headerIconContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+    gap: 12,
+  },
+  iconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitleContainer: {
+    alignItems: 'flex-start',
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1e293b',
+    color: '#1E3A8A',
+    letterSpacing: 0.5,
   },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 32,
+  headerTagline: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '500',
+    letterSpacing: 0.3,
   },
   section: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    marginBottom: 24,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1e293b',
+    color: '#1E293B',
     marginBottom: 16,
   },
   sectionHint: {
-    fontSize: 12,
-    color: '#64748b',
-    marginTop: -10,
+    fontSize: 13,
+    color: '#64748B',
     marginBottom: 12,
-    lineHeight: 16,
+    lineHeight: 18,
   },
   row: {
     flexDirection: 'row',
@@ -720,23 +936,79 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: PrimaryColors.main,
   },
+  inputWrapper: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#334155',
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  input: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 15,
+    color: '#1E293B',
+    fontWeight: '500',
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
+  },
   inputContainer: {
     marginBottom: 16,
   },
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#475569',
+    color: '#334155',
     marginBottom: 8,
+    marginLeft: 4,
   },
-  input: {
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 8,
+  locationInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
     padding: 12,
-    fontSize: 16,
-    color: '#1e293b',
-    backgroundColor: '#fff',
+    backgroundColor: '#EFF6FF',
+    borderRadius: 12,
+    gap: 8,
+  },
+  locationText: {
+    fontSize: 14,
+    color: PrimaryColors.main,
+    fontWeight: '500',
+  },
+  experienceContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
+  },
+  experienceInput: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 15,
+    color: '#1E293B',
+    fontWeight: '500',
+  },
+  experienceSuffix: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: '#EFF6FF',
+    borderLeftWidth: 2,
+    borderLeftColor: '#E2E8F0',
+  },
+  experienceSuffixText: {
+    fontSize: 15,
+    color: PrimaryColors.main,
+    fontWeight: '600',
   },
   workTypeContainer: {
     flexDirection: 'row',
@@ -778,20 +1050,40 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     minHeight: 100,
   },
+  textAreaContainer: {
+    marginBottom: 16,
+  },
+  textArea: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 15,
+    color: '#1E293B',
+    fontWeight: '500',
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
+    minHeight: 100,
+  },
   submitButton: {
-    backgroundColor: PrimaryColors.main,
-    paddingVertical: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     alignItems: 'center',
     marginTop: 8,
-    marginBottom: 32,
+    marginBottom: 20,
+    overflow: 'hidden',
   },
-  submitButtonDisabled: {
-    opacity: 0.6,
+  submitButtonGradient: {
+    paddingVertical: 18,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    borderRadius: 16,
   },
   submitButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
 });

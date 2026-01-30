@@ -18,6 +18,7 @@ import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { API_BASE_URL } from '../../config/api';
+import { ErrorModal } from '@/components/ErrorModal';
 
 export default function AdminLogin() {
   const router = useRouter();
@@ -25,6 +26,9 @@ export default function AdminLogin() {
   const [password, setPassword] = useState('Admin@123');
   const [loading, setLoading] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [errorType, setErrorType] = useState<string | null>(null);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isTablet = width >= 900;
@@ -67,10 +71,21 @@ export default function AdminLogin() {
         router.replace('/admin/dashboard');
       }
     } catch (error: any) {
-      const msg = !error.response
-        ? (error.message || 'Cannot connect to server. Check that the backend is running.')
-        : (error.response?.data?.message || 'Invalid email or password');
-      Alert.alert('Login Failed', msg);
+      let message = 'Login failed. Please try again.';
+      let errorTypeValue: string | null = null;
+      
+      if (!error.response) {
+        message = error.message || 'Cannot connect to server. Please check your internet connection.';
+      } else if (error.response?.data?.error_type) {
+        errorTypeValue = error.response.data.error_type;
+        message = error.response.data.message || message;
+      } else if (error.response?.data?.message) {
+        message = error.response.data.message;
+      }
+      
+      setErrorMessage(message);
+      setErrorType(errorTypeValue);
+      setShowErrorModal(true);
     } finally {
       setLoading(false);
     }
@@ -99,6 +114,12 @@ export default function AdminLogin() {
 
   return (
     <SafeAreaView style={safeAreaStyle} edges={['top', 'right', 'left']}>
+      <ErrorModal
+        visible={showErrorModal}
+        title="Login Error"
+        message={errorMessage}
+        onClose={() => setShowErrorModal(false)}
+      />
       <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

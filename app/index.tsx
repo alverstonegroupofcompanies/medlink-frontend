@@ -23,8 +23,8 @@ export default function Index() {
 
   const checkLoginStatus = async () => {
     try {
-      // Small delay to ensure storage operations are complete
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Increased delay to ensure storage operations are complete (especially after login)
+      await new Promise(resolve => setTimeout(resolve, 300));
       
       if (__DEV__) {
         console.log('🔍 Checking login status...');

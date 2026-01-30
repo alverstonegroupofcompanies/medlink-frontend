@@ -1,4 +1,4 @@
-import { Tabs, router, useFocusEffect } from 'expo-router';
+import { Tabs, router, useFocusEffect, useSegments } from 'expo-router';
 import * as React from 'react';
 import { useEffect } from 'react';
 import { Platform, View } from 'react-native';
@@ -6,23 +6,38 @@ import { Home, Calendar, Bell, MapPin, User, CreditCard } from 'lucide-react-nat
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { isHospitalLoggedIn } from '@/utils/auth';
 
 const HOSPITAL_TOKEN_KEY = 'hospitalToken';
 
 export default function HospitalTabLayout() {
   const insets = useSafeAreaInsets();
+  const segments = useSegments();
   
   // Check authentication when tabs are focused
   useFocusEffect(
     React.useCallback(() => {
       const checkAuth = async () => {
         try {
-          const token = await AsyncStorage.getItem(HOSPITAL_TOKEN_KEY);
-          if (!token) {
+          // Skip auth check if we're on the combined login or root pages
+          const currentPath = segments.join('/');
+          if (currentPath === '' || currentPath.includes('login')) {
             if (__DEV__) {
-              console.log('⚠️ Hospital not authenticated, redirecting to login...');
+              console.log('⏭️ Skipping hospital auth check on login/root page');
+            }
+            return;
+          }
+
+          // Use shared helper to determine if hospital is logged in
+          const loggedIn = await isHospitalLoggedIn();
+
+          if (!loggedIn) {
+            if (__DEV__) {
+              console.log('⚠️ Hospital not authenticated, redirecting to combined login...');
             }
             router.replace('/login');
+          } else if (__DEV__) {
+            console.log('✅ Hospital authenticated');
           }
         } catch (error) {
           if (__DEV__) {
@@ -31,8 +46,14 @@ export default function HospitalTabLayout() {
           router.replace('/login');
         }
       };
-      checkAuth();
-    }, [])
+      
+      // Small delay to allow navigation to complete
+      const timeoutId = setTimeout(() => {
+        checkAuth();
+      }, 300);
+      
+      return () => clearTimeout(timeoutId);
+    }, [segments])
   );
 
   return (
@@ -129,6 +150,26 @@ export default function HospitalTabLayout() {
               }}
             >
               <CreditCard size={24} color={color} fill={focused ? color : 'transparent'} />
+            </View>
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="disputes"
+        options={{
+          title: 'Disputes',
+          tabBarIcon: ({ color, focused }) => (
+            <View
+              style={{
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                backgroundColor: focused ? 'rgba(37, 99, 235, 0.1)' : 'transparent',
+              }}
+            >
+              <MaterialIcons name="gavel" size={24} color={color} />
             </View>
           ),
         }}

@@ -16,13 +16,20 @@ export default function PaymentHistoryScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'held' | 'released'>('all');
+  const [walletBalance, setWalletBalance] = useState<number>(0);
   const safeBottomPadding = useSafeBottomPadding();
   const insets = useSafeAreaInsets();
 
   const loadPayments = async () => {
     try {
-      const response = await API.get('/hospital/payments');
-      const paymentsData = response.data.payments || [];
+      const [paymentsResponse, walletResponse] = await Promise.all([
+        API.get('/hospital/payments'),
+        API.get('/hospital/wallet/balance').catch(() => ({ data: { wallet: { balance: 0 } } })) // Fallback if route doesn't exist
+      ]);
+      const paymentsData = paymentsResponse.data.payments || [];
+      const wallet = walletResponse.data?.wallet || { balance: 0 };
+      const balance = typeof wallet.balance === 'number' ? wallet.balance : 0;
+      setWalletBalance(balance);
       
       // Debug: Log payment data structure to understand what we're receiving
       if (__DEV__) {
@@ -53,9 +60,10 @@ export default function PaymentHistoryScreen() {
         }
       }
       
-      // Group payments to ensure one transaction per payment
-      // Group by: job_session_id + doctor_id + amount (same payment = same transaction)
-      const groupedPayments = new Map<string, any>();
+      // CRITICAL: Deduplicate by payment_id to ensure each payment appears only once
+      // The backend now deduplicates by payment_id, but we add an extra layer here for safety
+      // Group by payment_id (primary key) to ensure uniqueness
+      const groupedPayments = new Map<number, any>();
       const statusPriority: { [key: string]: number } = {
         'paid': 4,
         'released': 3,
@@ -67,25 +75,25 @@ export default function PaymentHistoryScreen() {
       };
       
       paymentsData.forEach((payment: any) => {
-        // Create unique key: job_session_id + doctor_id + amount
-        // Same session + same doctor + same amount = same payment
-        const sessionId = payment.job_session?.id || payment.job_session_id;
-        const doctorId = payment.doctor_id || payment.doctor?.id || payment.job_session?.doctor_id;
-        const amount = payment.amount?.toFixed(2) || '0.00';
+        // Use payment.id as the unique key (primary key)
+        // Each payment should appear only once regardless of status changes
+        const paymentId = payment.id;
         
-        // Group key: session + doctor + amount
-        const groupKey = sessionId && doctorId
-          ? `session_${sessionId}_doctor_${doctorId}_amount_${amount}`
-          : payment.id
-          ? `payment_${payment.id}`
-          : `fallback_${doctorId}_${amount}_${payment.created_at}`;
+        if (!paymentId) {
+          // Edge case: payment without id, skip it
+          if (__DEV__) {
+            console.warn('⚠️ Payment without id found, skipping:', payment);
+          }
+          return;
+        }
         
-        if (!groupedPayments.has(groupKey)) {
-          // First payment for this group
-          groupedPayments.set(groupKey, payment);
+        if (!groupedPayments.has(paymentId)) {
+          // First time seeing this payment_id, add it
+          groupedPayments.set(paymentId, payment);
         } else {
-          // Merge with existing - keep the one with highest status priority
-          const existing = groupedPayments.get(groupKey);
+          // Payment with this id already exists - this shouldn't happen if backend is working correctly
+          // But handle it by keeping the one with higher priority status or more recent date
+          const existing = groupedPayments.get(paymentId);
           const existingStatus = (existing.status || existing.payment_status || '').toLowerCase();
           const newStatus = (payment.status || payment.payment_status || '').toLowerCase();
           
@@ -94,37 +102,33 @@ export default function PaymentHistoryScreen() {
           
           // Keep the payment with higher priority status
           if (newPriority > existingPriority) {
-            groupedPayments.set(groupKey, payment);
+            groupedPayments.set(paymentId, payment);
           } else if (newPriority === existingPriority) {
             // If same priority, keep the one with more recent date
-            const existingDate = existing.released_at || existing.paid_at || existing.created_at;
-            const newDate = payment.released_at || payment.paid_at || payment.created_at;
+            const existingDate = existing.released_at || existing.paid_at || existing.updated_at || existing.created_at;
+            const newDate = payment.released_at || payment.paid_at || payment.updated_at || payment.created_at;
             if (newDate > existingDate) {
-              groupedPayments.set(groupKey, payment);
+              groupedPayments.set(paymentId, payment);
             }
           }
+          // If existing has higher priority, keep it (do nothing)
         }
       });
       
-      // Convert map to array, filter to show only released/paid transactions, and sort by created_at (newest first)
+      // Convert map to array - show all payments (held, pending, released) for hospitals
       const uniquePayments = Array.from(groupedPayments.values())
-        .filter((payment: any) => {
-          // Only show released or paid transactions (hide held/pending/processing)
-          const status = (payment.status || payment.payment_status || '').toLowerCase();
-          return status === 'released' || status === 'paid';
-        })
         .sort((a, b) => {
-          const dateA = new Date(a.created_at || 0).getTime();
-          const dateB = new Date(b.created_at || 0).getTime();
+          const dateA = new Date(a.released_at || a.created_at || 0).getTime();
+          const dateB = new Date(b.released_at || b.created_at || 0).getTime();
           return dateB - dateA;
         });
       
       if (__DEV__) {
-        console.log(`📊 Grouped ${paymentsData.length} payments into ${uniquePayments.length} released transactions`);
+        console.log(`📊 Deduplicated ${paymentsData.length} payments into ${uniquePayments.length} unique payments (by payment_id)`);
         uniquePayments.forEach((p, idx) => {
           if (idx < 5) {
             const dept = p.job_requirement?.department || p.job_session?.job_requirement?.department || 'N/A';
-            console.log(`Transaction ${idx + 1}: ID=${p.id}, Status=${p.status || p.payment_status}, Amount=${p.amount}, Dept=${dept}, Session=${p.job_session?.id}`);
+            console.log(`Payment ${idx + 1}: ID=${p.id}, Status=${p.status || p.payment_status}, Amount=${p.amount}, Dept=${dept}, Session=${p.job_session?.id}`);
           }
         });
       }
@@ -218,8 +222,6 @@ export default function PaymentHistoryScreen() {
     held: payments.filter(p => p.status === 'held' || p.status === 'in_escrow' || p.status === 'pending').length,
     released: payments.filter(p => p.status === 'released' || p.status === 'paid').length,
     totalAmount: payments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0),
-    heldAmount: payments.filter(p => p.status === 'held' || p.status === 'in_escrow' || p.status === 'pending')
-      .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0),
   };
 
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
@@ -451,9 +453,7 @@ export default function PaymentHistoryScreen() {
     );
   };
 
-  const releasedAmount = payments
-    .filter(p => p.status === 'released' || p.status === 'paid')
-    .reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+  // Hospitals don't see released payments - they're only visible to admin
 
   return (
     <ScreenSafeArea style={styles.container} backgroundColor="#2563EB" statusBarStyle="light-content">
@@ -521,33 +521,18 @@ export default function PaymentHistoryScreen() {
 
                     <View style={styles.paymentSummaryDivider} />
 
-                    {/* Held */}
+                    {/* Wallet Balance */}
                     <View style={styles.paymentSummaryCol}>
-                      <Text style={styles.paymentSummaryLabel}>Held</Text>
+                      <Text style={styles.paymentSummaryLabel}>Wallet</Text>
                       <Text
                         style={styles.paymentSummaryAmount}
                         numberOfLines={1}
                         adjustsFontSizeToFit
                         minimumFontScale={0.7}
                       >
-                        ₹{stats.heldAmount.toFixed(2)}
+                        ₹{(walletBalance ?? 0).toFixed(2)}
                       </Text>
-                      <Text style={styles.paymentSummaryHint}>In escrow</Text>
-                    </View>
-
-                    <View style={styles.paymentSummaryDivider} />
-
-                    {/* Released */}
-                    <View style={styles.paymentSummaryCol}>
-                      <Text style={styles.paymentSummaryLabel}>Released</Text>
-                      <Text
-                        style={styles.paymentSummaryAmount}
-                        numberOfLines={1}
-                        adjustsFontSizeToFit
-                        minimumFontScale={0.7}
-                      >
-                        ₹{releasedAmount.toFixed(2)}
-                      </Text>
+                      <Text style={styles.paymentSummaryHint}>Available balance</Text>
                     </View>
                   </View>
                 </LinearGradient>

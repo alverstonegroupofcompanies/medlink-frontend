@@ -237,6 +237,14 @@ export function setupErrorHandlers() {
       return; // Already logged in api.js with full context
     }
     
+    // Skip logging 401/session expired errors - API interceptor handles them silently
+    if (message.includes('session has expired') ||
+        message.includes('Your session has expired') ||
+        message.includes('Unauthenticated') ||
+        message.includes('Error loading') && (message.includes('session has expired') || message.includes('Unauthenticated'))) {
+      return; // API interceptor handles these and redirects to login
+    }
+    
     logConsoleError(message, 'console');
   };
   

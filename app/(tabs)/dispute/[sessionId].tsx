@@ -22,6 +22,7 @@ import { ModernColors } from '@/constants/modern-theme';
 import API from '../../api';
 import { API_BASE_URL } from '@/config/api';
 import { ScreenSafeArea } from '@/components/screen-safe-area';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Card, Text, Button, ActivityIndicator, Menu, Divider } from 'react-native-paper';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
@@ -81,7 +82,9 @@ export default function DoctorDisputeFormScreen() {
         }
       }
     } catch (error: any) {
-      console.error('Error loading session:', error);
+      if (__DEV__) {
+        console.error('Error loading session:', error);
+      }
       Alert.alert('Error', 'Failed to load session details');
     }
   };
@@ -182,42 +185,11 @@ export default function DoctorDisputeFormScreen() {
 
     setLoading(true);
     try {
-      // Test backend connectivity and verify URL construction
+      // Log the full URL that will be used (for debugging only, no blocking)
       if (__DEV__) {
-        try {
-          const testResponse = await API.get('/test', { timeout: 5000 });
-          console.log('✅ Backend is reachable:', testResponse.data);
-          
-          // Log the full URL that will be used
-          const fullUrl = `${API_BASE_URL}/disputes`;
-          console.log('🔗 Full dispute URL:', fullUrl);
-          console.log('📋 Request will be sent to:', fullUrl);
-          
-          // Test if we can reach the disputes endpoint (without submitting)
-          try {
-            const disputesTest = await API.get('/disputes', { timeout: 5000 });
-            console.log('✅ Disputes endpoint is accessible');
-          } catch (disputesTestError: any) {
-            if (disputesTestError.response?.status === 401) {
-              console.log('✅ Disputes endpoint exists (requires auth - expected)');
-            } else {
-              console.warn('⚠️ Disputes endpoint test:', disputesTestError.message);
-            }
-          }
-        } catch (testError: any) {
-          console.error('❌ Backend connectivity test failed:', {
-            message: testError.message,
-            code: testError.code,
-            url: testError.config?.url,
-            baseURL: testError.config?.baseURL,
-          });
-          Alert.alert(
-            'Connection Error',
-            'Cannot reach backend server. Please ensure:\n\n1. Backend is running: php artisan serve --host=0.0.0.0 --port=8000\n2. Phone and PC are on same WiFi\n3. IP address in .env is correct'
-          );
-          setLoading(false);
-          return;
-        }
+        const fullUrl = `${API_BASE_URL}/disputes`;
+        console.log('🔗 Full dispute URL:', fullUrl);
+        console.log('📋 Request will be sent to:', fullUrl);
       }
 
       const formData = new FormData();
@@ -325,33 +297,113 @@ export default function DoctorDisputeFormScreen() {
         console.log('📎 No evidence files to upload');
       }
       
-      console.log('⏳ Calling API.post() now...');
-      console.log('   (Watch for "API INTERCEPTOR: Sending Dispute Request" log)');
-      console.log('═══════════════════════════════════════');
+      // Get doctor token for authentication
+      const doctorToken = await AsyncStorage.getItem('doctorToken');
+      if (!doctorToken) {
+        Alert.alert('Authentication Error', 'Please log in again to submit a dispute.');
+        setLoading(false);
+        router.replace('/login');
+        return;
+      }
 
       // Retry logic for network errors (similar to registration forms)
-      const maxRetries = 2;
+      // Use fetch API directly like registration - more reliable for FormData
+      const maxRetries = 3;
       let lastError: any = null;
-      let response: any = null;
+      let responseData: any = null;
+      const url = `${API_BASE_URL}/disputes`;
 
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
-          // Use API (axios) for FormData - same as hospital; api.js sets base URL, auth, and Content-Type for FormData
-          response = await API.post('/disputes', formData, {
-            timeout: 120000, // 2 minutes for file uploads
-            maxContentLength: Infinity,
-            maxBodyLength: Infinity,
-          });
-          
-          // Success - break out of retry loop
-          break;
+          if (attempt > 0) {
+            if (__DEV__) {
+              console.log(`🔄 Retry attempt ${attempt + 1}/${maxRetries + 1}...`);
+            }
+            await new Promise(resolve => setTimeout(resolve, 3000 * attempt));
+          }
+
+          if (__DEV__) {
+            console.log(`📤 Attempting dispute submission (attempt ${attempt + 1})...`);
+          }
+
+          // Use AbortController for timeout
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 minutes
+
+          try {
+            const response = await fetch(url, {
+              method: 'POST',
+              body: formData, // FormData - don't set Content-Type, fetch handles it
+              headers: {
+                'Accept': 'application/json',
+                'Authorization': `Bearer ${doctorToken}`,
+                // Don't set Content-Type - let fetch handle it automatically for FormData
+              },
+              signal: controller.signal,
+            });
+
+            clearTimeout(timeoutId);
+
+            // Parse response
+            responseData = await response.json();
+
+            // Check if response is ok
+            if (!response.ok) {
+              // Don't retry on validation errors (4xx) - these are real errors
+              if (response.status >= 400 && response.status < 500) {
+                if (__DEV__) {
+                  console.log('⚠️ Validation error - not retrying');
+                }
+                throw {
+                  response: {
+                    status: response.status,
+                    data: responseData,
+                  },
+                  message: responseData?.message || 'Validation failed',
+                };
+              }
+
+              // Retry on server errors (5xx)
+              if (response.status >= 500) {
+                throw {
+                  response: {
+                    status: response.status,
+                    data: responseData,
+                  },
+                  message: responseData?.message || 'Server error',
+                };
+              }
+            }
+
+            // Success - break out of retry loop
+            if (__DEV__) {
+              console.log('✅ Dispute submission successful!');
+            }
+            break;
+          } catch (fetchError: any) {
+            clearTimeout(timeoutId);
+            
+            // Handle AbortError (timeout)
+            if (fetchError.name === 'AbortError') {
+              throw {
+                code: 'ETIMEDOUT',
+                message: 'Request timeout',
+              };
+            }
+            
+            throw fetchError;
+          }
         } catch (error: any) {
           lastError = error;
-          console.error(`❌ Dispute submission attempt ${attempt + 1} failed:`, error.message || error);
+          if (__DEV__) {
+            console.error(`❌ Dispute submission attempt ${attempt + 1} failed:`, error.message || error);
+          }
           
           // Don't retry on validation errors (4xx) - these are real errors
           if (error.response && error.response.status >= 400 && error.response.status < 500) {
-            console.log('⚠️ Validation error - not retrying');
+            if (__DEV__) {
+              console.log('⚠️ Validation error - not retrying');
+            }
             throw error;
           }
           
@@ -370,43 +422,48 @@ export default function DoctorDisputeFormScreen() {
             !error.response; // No response = network error
           
           if (attempt < maxRetries && isNetworkError) {
-            const delaySeconds = 2 * (attempt + 1);
-            console.warn(`⚠️ Network error on attempt ${attempt + 1}, will retry in ${delaySeconds}s...`);
+            const delaySeconds = 3 * (attempt + 1);
+            if (__DEV__) {
+              console.warn(`⚠️ Network error on attempt ${attempt + 1}, will retry in ${delaySeconds}s...`);
+            }
             await new Promise(resolve => setTimeout(resolve, delaySeconds * 1000));
             continue;
           }
           
           // No more retries or non-retryable error
-          console.error('❌ Max retries reached or non-retryable error');
+          if (__DEV__) {
+            console.error('❌ Max retries reached or non-retryable error');
+          }
           throw error;
         }
       }
       
-      if (!response) {
+      if (!responseData) {
         throw lastError || new Error('Dispute submission failed after all retries');
       }
-      
-      console.log('═══════════════════════════════════════');
-      console.log('✅ REQUEST SENT AND RESPONSE RECEIVED');
-      console.log('═══════════════════════════════════════');
-      console.log('📥 Response Status:', response.status);
-      console.log('📥 Full Response Data:', JSON.stringify(response.data, null, 2));
-      console.log('📥 Response Structure:', {
-        hasData: !!response.data,
-        hasDispute: !!response.data?.dispute,
-        disputeId: response.data?.dispute?.id,
-        message: response.data?.message,
-        fullKeys: response.data ? Object.keys(response.data) : [],
-      });
-      console.log('═══════════════════════════════════════');
+
+      if (__DEV__) {
+        console.log('═══════════════════════════════════════');
+        console.log('✅ REQUEST SENT AND RESPONSE RECEIVED');
+        console.log('═══════════════════════════════════════');
+        console.log('📥 Full Response Data:', JSON.stringify(responseData, null, 2));
+        console.log('📥 Response Structure:', {
+          hasData: !!responseData,
+          hasDispute: !!responseData?.dispute,
+          disputeId: responseData?.dispute?.id,
+          message: responseData?.message,
+          fullKeys: responseData ? Object.keys(responseData) : [],
+        });
+        console.log('═══════════════════════════════════════');
+      }
 
       // Handle different response structures
-      const disputeId = response.data?.dispute?.id || response.data?.id || response.data?.dispute_id;
-      const successMessage = response.data?.message || 'Dispute created successfully!';
+      const disputeId = responseData?.dispute?.id || responseData?.id || responseData?.dispute_id;
+      const successMessage = responseData?.message || 'Dispute created successfully!';
       
-      if (!disputeId) {
+      if (!disputeId && __DEV__) {
         console.warn('⚠️ No dispute ID in response, but request succeeded');
-        console.warn('Response data:', response.data);
+        console.warn('Response data:', responseData);
       }
 
       Alert.alert(
@@ -422,48 +479,58 @@ export default function DoctorDisputeFormScreen() {
         ]
       );
     } catch (error: any) {
-      // Enhanced error logging for debugging
-      console.error('═══════════════════════════════════════');
-      console.error('❌ DISPUTE SUBMISSION FAILED');
-      console.error('═══════════════════════════════════════');
-      console.error('Error Message:', error.message);
-      console.error('Error Code:', error.code);
-      
-      if (error.config) {
-        console.error('Request Config:', {
-          url: error.config.url,
-          method: error.config.method,
-          baseURL: error.config.baseURL,
-          fullURL: `${error.config.baseURL}${error.config.url}`,
-          hasFormData: error.config.data instanceof FormData,
-          timeout: error.config.timeout,
-        });
-        console.error('✅ Request WAS sent (reached network layer)');
-      } else {
-        console.error('⚠️ No request config found - request may not have been sent');
+      // Enhanced error logging for debugging (dev mode only)
+      if (__DEV__) {
+        console.error('═══════════════════════════════════════');
+        console.error('❌ DISPUTE SUBMISSION FAILED');
+        console.error('═══════════════════════════════════════');
+        console.error('Error Message:', error.message);
+        console.error('Error Code:', error.code);
+        
+        if (error.config) {
+          console.error('Request Config:', {
+            url: error.config.url,
+            method: error.config.method,
+            baseURL: error.config.baseURL,
+            fullURL: `${error.config.baseURL}${error.config.url}`,
+            hasFormData: error.config.data instanceof FormData,
+            timeout: error.config.timeout,
+          });
+          console.error('✅ Request WAS sent (reached network layer)');
+        } else {
+          console.error('⚠️ No request config found - request may not have been sent');
+        }
+        
+        if (error.response) {
+          console.error('✅ Request reached server!');
+          console.error('Response Status:', error.response.status);
+          console.error('Response Data:', error.response.data);
+        } else {
+          console.error('❌ Request did NOT reach server');
+          console.error('This is a network/connection error');
+          console.error('Request Details:');
+          if (error.config) {
+            const fullUrl = error.config.baseURL ? `${error.config.baseURL}${error.config.url}` : 'Unknown';
+            console.error('   Attempted URL:', fullUrl);
+            console.error('   Base URL:', error.config.baseURL || 'Not set');
+            console.error('   Endpoint:', error.config.url || 'Not set');
+          }
+          console.error('Possible causes:');
+          console.error('  1. Backend server is not running');
+          console.error('  2. Wrong IP address in .env (check EXPO_PUBLIC_BACKEND_URL)');
+          console.error('  3. Firewall blocking connection');
+          console.error('  4. Phone and PC not on same WiFi');
+          console.error('  5. Backend URL not accessible from device');
+        }
+        console.error('═══════════════════════════════════════');
       }
-      
-      if (error.response) {
-        console.error('✅ Request reached server!');
-        console.error('Response Status:', error.response.status);
-        console.error('Response Data:', error.response.data);
-      } else {
-        console.error('❌ Request did NOT reach server');
-        console.error('This is a network/connection error');
-        console.error('Possible causes:');
-        console.error('  1. Backend server is not running');
-        console.error('  2. Wrong IP address in .env');
-        console.error('  3. Firewall blocking connection');
-        console.error('  4. Phone and PC not on same WiFi');
-      }
-      console.error('═══════════════════════════════════════');
 
       // Use user-friendly message from API interceptor (already set by api.js)
       const errorMessage = error.userFriendlyMessage || error.message || 'Failed to create dispute. Please try again.';
       
-      // Handle different error types
+      // Handle different error types with improved messages
       if (error.response?.status === 422 && error.response?.data?.errors) {
-        // Validation errors
+        // Validation errors - show detailed field-specific errors
         const validationErrors = error.response.data.errors;
         const errorMessages = Object.entries(validationErrors)
           .map(([field, messages]: [string, any]) => {
@@ -471,28 +538,42 @@ export default function DoctorDisputeFormScreen() {
             const messageArray = Array.isArray(messages) ? messages : [messages];
             return `${fieldLabel}: ${messageArray.join(', ')}`;
           })
-          .join('\n');
+          .join('\n\n');
         
-        Alert.alert('Validation Error', errorMessages);
+        Alert.alert('Validation Error', `Please fix the following errors:\n\n${errorMessages}`);
       } else if (error.response?.status === 400) {
         // Bad request (e.g., dispute already exists)
-        const serverMessage = error.response.data?.message || errorMessage;
+        const serverMessage = error.response.data?.message || 'Invalid request. Please check your input and try again.';
         Alert.alert('Error', serverMessage);
       } else if (error.response?.status === 401) {
-        // Unauthorized
-        Alert.alert('Authentication Error', 'Please log in again and try.');
+        // Unauthorized - token issue
+        Alert.alert(
+          'Authentication Error', 
+          'Your session has expired or you are not logged in. Please log in again and try.',
+          [
+            { text: 'OK', onPress: () => router.replace('/login') }
+          ]
+        );
       } else if (error.response?.status === 403) {
-        // Forbidden
-        Alert.alert('Permission Denied', 'You do not have permission to create a dispute for this session.');
+        // Forbidden - not authorized for this session
+        const serverMessage = error.response.data?.message || 'You do not have permission to create a dispute for this session. Please ensure you are logged in as the correct user.';
+        Alert.alert('Permission Denied', serverMessage);
       } else if (error.response?.status === 404) {
         // Not found
-        Alert.alert('Not Found', 'The session or resource was not found.');
+        Alert.alert('Not Found', 'The session or resource was not found. Please verify the session ID and try again.');
       } else if (error.response?.status >= 500) {
         // Server error
-        const serverMessage = error.response.data?.message || 'Server error. Please try again later.';
+        const serverMessage = error.response.data?.message || 'Server error occurred. Please try again later or contact support if the problem persists.';
         Alert.alert('Server Error', serverMessage);
+      } else if (!error.response) {
+        // Network errors
+        Alert.alert(
+          'Connection Error', 
+          'Unable to connect to the server. Please check your internet connection and try again.',
+          [{ text: 'OK' }]
+        );
       } else {
-        // Network errors or other issues
+        // Other errors
         Alert.alert('Error Creating Dispute', errorMessage);
       }
     } finally {

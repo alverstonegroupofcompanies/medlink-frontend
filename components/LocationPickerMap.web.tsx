@@ -9,13 +9,15 @@ interface LocationPickerMapProps {
   initialLongitude?: number | string;
   onLocationSelect: (lat: number, lng: number) => void;
   height?: number;
+  requireConfirm?: boolean;
 }
 
 export function LocationPickerMap({ 
   initialLatitude, 
   initialLongitude, 
   onLocationSelect, 
-  height = 300 
+  height = 300,
+  requireConfirm = false,
 }: LocationPickerMapProps) {
   const [selectedLocation, setSelectedLocation] = useState<{ latitude: number; longitude: number } | null>(() => {
     const lat = typeof initialLatitude === 'number' ? initialLatitude : parseFloat(initialLatitude as string);
@@ -42,7 +44,9 @@ export function LocationPickerMap({
         longitude: location.coords.longitude,
       };
       setSelectedLocation(newLocation);
-      onLocationSelect(newLocation.latitude, newLocation.longitude);
+      if (!requireConfirm) {
+        onLocationSelect(newLocation.latitude, newLocation.longitude);
+      }
     } catch (error) {
       console.error('Error getting location:', error);
     } finally {
@@ -81,7 +85,7 @@ export function LocationPickerMap({
             </>
           )}
         </TouchableOpacity>
-        {selectedLocation && (
+        {requireConfirm && selectedLocation && (
           <TouchableOpacity
             style={[styles.fallbackButton, styles.confirmButton]}
             onPress={handleLocationSelect}

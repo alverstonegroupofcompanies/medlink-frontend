@@ -53,6 +53,7 @@ import { getDoctorInfo, saveDoctorAuth, getProfilePhotoUrl } from '@/utils/auth'
 import { ModernCard } from '@/components/modern-card';
 import { ScreenSafeArea, useSafeBottomPadding } from '@/components/screen-safe-area';
 import { BankingDetailsForm } from '@/components/BankingDetailsForm';
+import { CollapsibleSection } from '@/components/CollapsibleSection';
 
 const { width } = Dimensions.get('window');
 const IS_TABLET = width >= 768;
@@ -779,62 +780,15 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          {/* Options list: scroll to Contact, Banking, Professional, Documents */}
-          <View style={styles.optionsList}>
-            <TouchableOpacity style={styles.optionRow} onPress={() => scrollToSection('contact')} activeOpacity={0.7}>
-              <View style={styles.optionIconWrap}>
-                <User size={20} color={ModernColors.primary.main} />
-              </View>
-              <View style={styles.optionText}>
-                <Text style={styles.optionTitle}>Contact Information</Text>
-                <Text style={styles.optionSubtitle}>Email, phone, location</Text>
-              </View>
-              <ChevronRight size={20} color={ModernColors.text.tertiary} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.optionRow} onPress={() => { scrollToSection('banking'); setShowBankingForm(true); }} activeOpacity={0.7}>
-              <View style={styles.optionIconWrap}>
-                <Landmark size={20} color={ModernColors.primary.main} />
-              </View>
-              <View style={styles.optionText}>
-                <Text style={styles.optionTitle}>Banking Details</Text>
-                <Text style={styles.optionSubtitle}>Bank account, UPI</Text>
-              </View>
-              <ChevronRight size={20} color={ModernColors.text.tertiary} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.optionRow} onPress={() => scrollToSection('professional')} activeOpacity={0.7}>
-              <View style={styles.optionIconWrap}>
-                <Briefcase size={20} color={ModernColors.primary.main} />
-              </View>
-              <View style={styles.optionText}>
-                <Text style={styles.optionTitle}>Professional Details</Text>
-                <Text style={styles.optionSubtitle}>Qualifications, experience</Text>
-              </View>
-              <ChevronRight size={20} color={ModernColors.text.tertiary} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.optionRow} onPress={() => scrollToSection('documents')} activeOpacity={0.7}>
-              <View style={styles.optionIconWrap}>
-                <FileText size={20} color={ModernColors.primary.main} />
-              </View>
-              <View style={styles.optionText}>
-                <Text style={styles.optionTitle}>Documents</Text>
-                <Text style={styles.optionSubtitle}>Degree, ID, registration</Text>
-              </View>
-              <ChevronRight size={20} color={ModernColors.text.tertiary} />
-            </TouchableOpacity>
-          </View>
-
           {!isEditing ? (
             /* View Mode */
             <>
               {/* Contact Information */}
-              <View onLayout={handleSectionLayout('contact')}>
-                <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
-                <View style={styles.sectionHeader}>
-                  <View style={styles.sectionIconContainer}>
-                    <User size={20} color={ModernColors.primary.main} />
-                  </View>
-                  <Text style={styles.sectionTitle}>Contact Information</Text>
-                </View>
+              <CollapsibleSection
+                title="Contact Information"
+                subtitle="Email, phone, location"
+                icon={User}
+              >
                 <View style={styles.detailRow}>
                   <View style={styles.iconWrapper}>
                     <Mail size={18} color={ModernColors.primary.main} />
@@ -862,18 +816,15 @@ export default function ProfileScreen() {
                     <Text style={styles.detailValue}>{doctor?.current_location || 'Not provided'}</Text>
                   </View>
                 </View>
-              </ModernCard>
-              </View>
+              </CollapsibleSection>
 
               {/* Banking Details */}
-              <View onLayout={handleSectionLayout('banking')}>
-              <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
-                <View style={styles.sectionHeader}>
-                  <View style={styles.sectionIconContainer}>
-                    <Landmark size={20} color={ModernColors.primary.main} />
-                  </View>
-                  <Text style={styles.sectionTitle}>Banking Details</Text>
-                </View>
+              <CollapsibleSection
+                title="Banking Details"
+                subtitle="Bank account, UPI"
+                icon={Landmark}
+                onPress={() => setShowBankingForm(true)}
+              >
                 {bankingDetails?.has_banking_details ? (
                   <>
                     <View style={styles.detailRow}>
@@ -942,25 +893,19 @@ export default function ProfileScreen() {
                     </TouchableOpacity>
                   </View>
                 )}
-              </ModernCard>
-              </View>
+              </CollapsibleSection>
 
               {/* Professional Details */}
-              <View onLayout={handleSectionLayout('professional')}>
-              <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
-                <View style={styles.sectionHeader}>
-                  <View style={styles.sectionIconContainer}>
-                    <Briefcase size={20} color={ModernColors.primary.main} />
-                  </View>
-                  <Text style={styles.sectionTitle}>Professional Details</Text>
-                </View>
-
+              <CollapsibleSection
+                title="Professional Details"
+                subtitle="Qualifications, experience"
+                icon={Briefcase}
+              >
                 {/* Departments Section */}
                 <View style={styles.detailRow}>
                   <Briefcase size={18} color={ModernColors.text.secondary} />
                   <Text style={styles.detailLabel}>Departments</Text>
                   <View style={{ flex: 1, alignItems: 'flex-end', gap: 4 }}>
-                    {/* Selected Departments - All departments shown equally, no primary concept */}
                     {doctor?.departments && Array.isArray(doctor.departments) && doctor.departments.length > 0 ? (
                       doctor.departments.map((dept: any) => (
                         <Text key={dept.id || dept.name} style={styles.detailValue}>
@@ -1016,18 +961,14 @@ export default function ProfileScreen() {
                     <Text style={styles.detailValue}>{doctor.professional_achievements}</Text>
                   </View>
                 )}
-              </ModernCard>
-              </View>
+              </CollapsibleSection>
 
               {/* Documents */}
-              <View onLayout={handleSectionLayout('documents')}>
-              <ModernCard variant="elevated" padding="md" style={styles.sectionCard}>
-                <View style={styles.sectionHeader}>
-                  <View style={styles.sectionIconContainer}>
-                    <FileText size={20} color={ModernColors.primary.main} />
-                  </View>
-                  <Text style={styles.sectionTitle}>Documents</Text>
-                </View>
+              <CollapsibleSection
+                title="Documents"
+                subtitle="Degree, ID, registration"
+                icon={FileText}
+              >
                 <View style={styles.documentList}>
                   {doctor?.degree_certificate ? (
                     <View style={styles.documentItem}>
@@ -1066,8 +1007,7 @@ export default function ProfileScreen() {
                     </View>
                   )}
                 </View>
-              </ModernCard>
-              </View>
+              </CollapsibleSection>
             </>
           ) : (
             /* Edit Mode */

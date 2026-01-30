@@ -58,11 +58,11 @@ export default function MoreScreen() {
           'You need to login as a hospital to access the hospital portal.',
           [
             { text: 'Cancel', style: 'cancel' },
-            { 
-              text: 'Go to Login', 
-              onPress: () => router.push('/hospital/login')
-            }
-          ]
+            {
+              text: 'Go to Login',
+              onPress: () => router.push('/login'),
+            },
+          ],
         );
       }
     } catch (error) {

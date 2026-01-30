@@ -175,10 +175,28 @@ export const getUserFriendlyError = (error: any): string => {
     // Check if it's a login endpoint (different message)
     const endpoint = error.config?.url || '';
     if (endpoint.includes('/login') || endpoint.includes('/register')) {
+      // Check for specific error types from backend
+      if (data?.error_type === 'password_mismatch') {
+        return data?.message || 'Credentials mismatch. Please check your password.';
+      }
+      if (data?.error_type === 'account_not_found') {
+        return data?.message || 'Account doesn\'t exist. Please register.';
+      }
       return data?.message || 'Invalid email or password. Please try again.';
     }
     // For other endpoints, it's likely token expired
     return 'Your session has expired. Please log in again.';
+  }
+
+  // Not Found (404) - could be account not found for login
+  if (status === 404) {
+    const endpoint = error.config?.url || '';
+    if (endpoint.includes('/login')) {
+      if (data?.error_type === 'account_not_found') {
+        return data?.message || 'Account doesn\'t exist. Please register.';
+      }
+    }
+    return 'The requested information could not be found.';
   }
 
   // Forbidden (403)

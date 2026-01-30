@@ -5,30 +5,37 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  StatusBar,
+  Image,
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, Mail } from 'lucide-react-native';
+import { ArrowLeft, Mail, User } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import API from '../../api';
 import { DoctorPrimaryColors as PrimaryColors } from '@/constants/doctor-theme';
+import { ErrorModal } from '@/components/ErrorModal';
 
 export default function DoctorEmailScreen() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const handleSendOtp = async () => {
     if (!email.trim()) {
-      Alert.alert('Error', 'Please enter your email address');
+      setErrorMessage('Please enter your email address');
+      setShowErrorModal(true);
       return;
     }
 
-    if (!email.includes('@')) {
-      Alert.alert('Error', 'Please enter a valid email address');
+    if (!email.includes('@') || !email.includes('.')) {
+      setErrorMessage('Please enter a valid email address');
+      setShowErrorModal(true);
       return;
     }
 
@@ -54,181 +61,319 @@ export default function DoctorEmailScreen() {
           params: { email: email.trim(), otp: response.data.otp || '' },
         });
       } else {
-        Alert.alert('Error', response.data.message || 'Failed to send OTP');
+        setErrorMessage(response.data.message || 'Failed to send verification code');
+        setShowErrorModal(true);
       }
     } catch (error: any) {
-      console.error('Send OTP error:', error);
-      Alert.alert(
-        'Error',
-        error.response?.data?.message || 'Failed to send OTP. Please try again.'
+      if (__DEV__) {
+        console.error('Send OTP error:', error);
+      }
+      setErrorMessage(
+        error.response?.data?.message || 'Failed to send verification code. Please try again.'
       );
+      setShowErrorModal(true);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
-      >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          {/* Header */}
-          <View style={styles.header}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-              <ArrowLeft size={24} color="#333" />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Doctor Registration</Text>
-            <View style={{ width: 40 }} />
-          </View>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
+      <ErrorModal
+        visible={showErrorModal}
+        title="Error"
+        message={errorMessage}
+        onClose={() => setShowErrorModal(false)}
+      />
+      
+      {/* Full-screen background */}
+      <Image
+        source={require('@/assets/images/icon.png')}
+        style={styles.fullBackgroundImage}
+        resizeMode="cover"
+      />
+      
+      {/* Overlay */}
+      <View style={styles.overlay} />
+      
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardView}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+          >
+            <View style={styles.card}>
+              {/* Back Button */}
+              <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                <ArrowLeft size={20} color="#64748B" />
+              </TouchableOpacity>
 
-          {/* Content */}
-          <View style={styles.content}>
-            <View style={styles.iconContainer}>
-              <Mail size={64} color={PrimaryColors.main} />
+              {/* Header Icon */}
+              <View style={styles.headerIconContainer}>
+                <View style={styles.iconCircle}>
+                  <User size={24} color="#2563EB" />
+                </View>
+                <View style={styles.headerTitleContainer}>
+                  <Text style={styles.headerTitle}>AlverConnect</Text>
+                  <Text style={styles.headerTagline}>Doctor Registration</Text>
+                </View>
+              </View>
+
+              {/* Welcome Text */}
+              <View style={styles.welcomeContainer}>
+                <Text style={styles.welcomeHeading}>Verify Your Email</Text>
+                <Text style={styles.welcomeSubheading}>
+                  We'll send a verification code to confirm your email address
+                </Text>
+              </View>
+
+              {/* Input */}
+              <View style={styles.formContainer}>
+                <Text style={styles.inputLabel}>Email Address</Text>
+                <View style={styles.inputWrapper}>
+                  <Mail size={20} color="#64748B" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter your email address"
+                    placeholderTextColor="#94A3B8"
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    editable={!loading}
+                  />
+                </View>
+              </View>
+
+              {/* Send Code Button */}
+              <TouchableOpacity
+                style={styles.sendButton}
+                onPress={handleSendOtp}
+                disabled={loading}
+              >
+                <LinearGradient
+                  colors={['#2563EB', '#3B82F6']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.sendButtonGradient}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.sendButtonText}>Send Verification Code</Text>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
+
+              {/* Login Link */}
+              <View style={styles.loginPrompt}>
+                <Text style={styles.loginPromptText}>Already have an account? </Text>
+                <TouchableOpacity onPress={() => router.push('/login')}>
+                  <Text style={styles.loginLink}>Login</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-
-            <Text style={styles.title}>Enter Your Email</Text>
-            <Text style={styles.subtitle}>
-              We'll send you a verification code to confirm your email address
-            </Text>
-
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Email Address *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="your.email@example.com"
-                placeholderTextColor="#94a3b8"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!loading}
-              />
-            </View>
-
-            <TouchableOpacity
-              style={[styles.button, loading && styles.buttonDisabled]}
-              onPress={handleSendOtp}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.buttonText}>Send Verification Code</Text>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.loginLink}
-              onPress={() => router.push('/login')}
-            >
-              <Text style={styles.loginLinkText}>
-                Already have an account? <Text style={styles.loginLinkBold}>Login</Text>
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#1e40af',
+  },
+  fullBackgroundImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    zIndex: 0,
+  },
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(30, 64, 175, 0.7)',
+    zIndex: 1,
+  },
+  safeArea: {
+    flex: 1,
+    zIndex: 2,
   },
   keyboardView: {
     flex: 1,
+    width: '100%',
   },
   scrollContent: {
     flexGrow: 1,
+    justifyContent: 'center',
+    padding: 24,
+    paddingBottom: 40,
+    paddingTop: 40,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+  card: {
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderRadius: 32,
+    padding: 28,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.25,
+    shadowRadius: 40,
+    elevation: 20,
+    width: '100%',
+    maxWidth: 420,
+    alignSelf: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.8)',
   },
   backButton: {
-    padding: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginBottom: 24,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: 'rgba(100, 116, 139, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(100, 116, 139, 0.15)',
+  },
+  headerIconContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    gap: 12,
+  },
+  iconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitleContainer: {
+    alignItems: 'flex-start',
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1e293b',
+    color: '#1E3A8A',
+    letterSpacing: 0.5,
   },
-  content: {
-    flex: 1,
-    padding: 24,
-    justifyContent: 'center',
+  headerTagline: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '500',
+    letterSpacing: 0.3,
   },
-  iconContainer: {
+  welcomeContainer: {
+    marginBottom: 20,
     alignItems: 'center',
-    marginBottom: 32,
   },
-  title: {
+  welcomeHeading: {
     fontSize: 28,
-    fontWeight: '700',
-    color: '#1e293b',
+    fontWeight: '800',
+    color: '#1E293B',
+    marginBottom: 8,
     textAlign: 'center',
-    marginBottom: 12,
+    letterSpacing: -0.5,
+    lineHeight: 34,
   },
-  subtitle: {
+  welcomeSubheading: {
     fontSize: 16,
-    color: '#64748b',
+    color: '#64748B',
     textAlign: 'center',
-    marginBottom: 32,
     lineHeight: 24,
   },
-  inputContainer: {
-    marginBottom: 24,
+  formContainer: {
+    marginBottom: 28,
   },
-  label: {
+  inputLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#475569',
+    color: '#334155',
     marginBottom: 8,
+    marginLeft: 4,
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  inputIcon: {
+    marginRight: 12,
   },
   input: {
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: '#1e293b',
-    backgroundColor: '#fff',
+    flex: 1,
+    fontSize: 15,
+    color: '#1E293B',
+    paddingVertical: 14,
+    fontWeight: '500',
   },
-  button: {
-    backgroundColor: PrimaryColors.main,
-    paddingVertical: 16,
-    borderRadius: 12,
+  sendButton: {
+    borderRadius: 16,
     alignItems: 'center',
-    marginBottom: 24,
+    marginTop: 4,
+    marginBottom: 20,
+    overflow: 'hidden',
   },
-  buttonDisabled: {
-    opacity: 0.6,
+  sendButtonGradient: {
+    paddingVertical: 18,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    borderRadius: 16,
   },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+  sendButtonText: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  loginPrompt: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 16,
+  },
+  loginPromptText: {
+    fontSize: 15,
+    color: '#64748B',
   },
   loginLink: {
-    alignItems: 'center',
-  },
-  loginLinkText: {
-    fontSize: 14,
-    color: '#64748b',
-  },
-  loginLinkBold: {
-    color: PrimaryColors.main,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#2563EB',
   },
 });

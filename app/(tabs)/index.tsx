@@ -123,11 +123,15 @@ export default function DoctorHome() {
     if (!silent && !hasLoaded.current) setLoadingRequirements(true);
     try {
       const response = await API.get('/doctor/job-requirements');
-      console.log('Job requirements response:', response.data);
+      if (__DEV__) {
+        console.log('Job requirements response:', response.data);
+      }
       setJobRequirements(response.data.requirements || []);
     } catch (error: any) {
-      console.error("Error loading job requirements:", error);
-      console.error("Error details:", error.response?.data || error.message);
+      // Suppress 401 errors - API interceptor handles them
+      if (error.response?.status !== 401 && __DEV__) {
+        console.error("Error loading job requirements:", error);
+      }
       setJobRequirements([]);
     } finally {
       if (!silent) setLoadingRequirements(false);
@@ -145,8 +149,9 @@ export default function DoctorHome() {
         app.status === 'selected' && app.job_session?.status === 'active'
       ).length;
       setActiveJobsCount(active);
-    } catch (error) {
-      if (__DEV__) {
+    } catch (error: any) {
+      // Suppress 401 errors - API interceptor handles them
+      if (error.response?.status !== 401 && __DEV__) {
         console.error("Error loading applications:", error);
       }
     } finally {
@@ -171,8 +176,9 @@ export default function DoctorHome() {
       const unreadCount = response.data.notifications?.filter((n: any) => !n.read_at).length || 0;
       setNotificationCount(unreadCount);
     } catch (error: any) {
+      // Suppress 401 errors - API interceptor handles them
       // Silently handle 404 and other errors - don't show to user
-      if (__DEV__) {
+      if (error.response?.status !== 401 && __DEV__) {
         if (error.response?.status === 404) {
           console.warn("Notifications endpoint not found - route may need to be registered");
         } else {
@@ -189,7 +195,10 @@ export default function DoctorHome() {
       const response = await API.get('/disputes');
       setDisputes(response.data.disputes || []);
     } catch (error: any) {
-      if (__DEV__) console.error('Error loading disputes:', error);
+      // Suppress 401 errors - API interceptor handles them
+      if (error.response?.status !== 401 && __DEV__) {
+        console.error('Error loading disputes:', error);
+      }
       setDisputes([]);
     }
   };
@@ -208,18 +217,21 @@ export default function DoctorHome() {
     if (!silent && !hasLoaded.current) setLoadingSessions(true);
     try {
       const response = await API.get('/doctor/sessions');
-      console.log('📋 Job Sessions Response:', response.data);
-      console.log('📋 First Session Sample:', response.data.sessions?.[0]);
-      if (response.data.sessions?.[0]) {
-        console.log('  🏥 Hospital:', response.data.sessions[0].job_requirement?.hospital);
-        console.log('  🏢 Department:', response.data.sessions[0].job_requirement?.department);
-        console.log('  📅 Session Date:', response.data.sessions[0].session_date);
-        console.log('  ✅ Check-in Time:', response.data.sessions[0].check_in_time);
-        console.log('  📊 Status:', response.data.sessions[0].status);
+      if (__DEV__) {
+        console.log('📋 Job Sessions Response:', response.data);
+        console.log('📋 First Session Sample:', response.data.sessions?.[0]);
+        if (response.data.sessions?.[0]) {
+          console.log('  🏥 Hospital:', response.data.sessions[0].job_requirement?.hospital);
+          console.log('  🏢 Department:', response.data.sessions[0].job_requirement?.department);
+          console.log('  📅 Session Date:', response.data.sessions[0].session_date);
+          console.log('  ✅ Check-in Time:', response.data.sessions[0].check_in_time);
+          console.log('  📊 Status:', response.data.sessions[0].status);
+        }
       }
       setJobSessions(response.data.sessions || []);
-    } catch (error) {
-      if (__DEV__) {
+    } catch (error: any) {
+      // Suppress 401 errors - API interceptor handles them
+      if (error.response?.status !== 401 && __DEV__) {
         console.error("Error loading job sessions:", error);
       }
       setJobSessions([]);
@@ -442,31 +454,42 @@ export default function DoctorHome() {
       loadNotifications();
     }, 30000);
 
-    // Listen for global refresh events from _layout.tsx (for applications/sessions, not jobs)
+    // Listen for global refresh events from _layout.tsx (for applications/sessions, jobs, etc.)
     const refreshSubscription = DeviceEventEmitter.addListener('REFRESH_DOCTOR_DATA', () => {
-        console.log('🔄 [Dashboard] Received global refresh event');
-        loadMyApplications();
+        console.log('🔄 [Dashboard] Received global refresh event - refreshing all data');
+        // Refresh all data immediately without showing loading indicators
+        loadMyApplications(true); // silent refresh
         loadNotifications();
-        loadJobRequirements();
-        loadJobSessions();
+        loadJobRequirements(true); // silent refresh
+        loadJobSessions(true); // silent refresh
         loadDisputes();
+        loadWalletSummary();
     });
 
     // Listen for application status updates to change status immediately without refresh
     const applicationStatusSubscription = DeviceEventEmitter.addListener('APPLICATION_STATUS_UPDATED', (updateData: any) => {
         console.log('🔄 [Dashboard] Application status updated:', updateData);
-        if (updateData && updateData.applicationId) {
+        // Handle both applicationId and job_application_id from event data
+        const applicationId = updateData.applicationId || updateData.data?.job_application_id;
+        const requirementId = updateData.requirementId || updateData.data?.job_requirement_id;
+        const status = updateData.status;
+        
+        if (updateData && (applicationId || requirementId) && status) {
             // Update application status immediately
             setMyApplications((prev: any[]) => {
+                let found = false;
                 const updated = prev.map((app: any) => {
-                    if (app.id === updateData.applicationId || app.job_requirement_id === updateData.requirementId) {
+                    // Match by application ID or requirement ID
+                    if (app.id === applicationId || 
+                        (requirementId && app.job_requirement_id === requirementId)) {
+                        found = true;
                         const updatedApp = {
                             ...app,
-                            status: updateData.status,
+                            status: status,
                         };
                         
                         // If approved and session ID is provided, add job_session
-                        if (updateData.status === 'selected' && updateData.data?.job_session_id) {
+                        if (status === 'selected' && updateData.data?.job_session_id) {
                             updatedApp.job_session = {
                                 id: updateData.data.job_session_id,
                                 status: 'scheduled',
@@ -479,30 +502,57 @@ export default function DoctorHome() {
                     return app;
                 });
                 
-                // If application not found in list, it might be a new approval - reload to get full data
-                const found = updated.some((app: any) => 
-                    app.id === updateData.applicationId || 
-                    (app.job_requirement_id === updateData.requirementId && app.status === updateData.status)
-                );
-                
+                // If application not found in list, reload to get the updated data
                 if (!found) {
-                    console.log('ℹ️ [Dashboard] Application not in current list, will reload');
-                    // Reload applications to get the new one
-                    setTimeout(() => loadMyApplications(true), 500);
-                }
-                
-                // Update active jobs count if status changed to selected
-                if (updateData.status === 'selected') {
-                    const active = updated.filter((app: any) => 
-                        app.status === 'selected' && app.job_session?.status === 'active'
-                    ).length;
-                    setActiveJobsCount(active);
+                    console.log('ℹ️ [Dashboard] Application not in current list, reloading immediately...');
+                    // Reload applications immediately to get the updated one (no delay)
+                    loadMyApplications(true); // silent refresh
+                    loadJobSessions(true); // silent refresh
+                } else {
+                    // Update active jobs count if status changed to selected
+                    if (status === 'selected') {
+                        const active = updated.filter((app: any) => 
+                            app.status === 'selected' && app.job_session?.status === 'active'
+                        ).length;
+                        setActiveJobsCount(active);
+                    }
                 }
                 
                 return updated;
             });
             
+            // Also trigger immediate UI refresh for applications section
             console.log('✅ [Dashboard] Application status updated in UI');
+        } else {
+            console.warn('⚠️ [Dashboard] Invalid application update data:', updateData);
+            // Even if data is invalid, try to refresh to get latest state
+            loadMyApplications(true);
+        }
+    });
+
+    // Listen for job session created events
+    const jobSessionCreatedSubscription = DeviceEventEmitter.addListener('JOB_SESSION_CREATED', (eventData: any) => {
+        console.log('🆕 [Dashboard] Job session created event received:', eventData);
+        if (eventData && (eventData.jobSession || eventData.data)) {
+            const jobSession = eventData.jobSession || eventData.data;
+            // Reload job sessions to show the new one
+            loadJobSessions();
+            // Also reload applications to update status
+            loadMyApplications();
+            // Show notification
+            console.log('✅ [Dashboard] Job session added to list');
+        }
+    });
+
+    // Listen for payment held events
+    const paymentHeldSubscription = DeviceEventEmitter.addListener('PAYMENT_HELD', (eventData: any) => {
+        console.log('💰 [Dashboard] Payment held event received:', eventData);
+        if (eventData && eventData.paymentId) {
+            // Reload wallet data to show pending payment
+            loadWalletSummary();
+            // Reload job sessions to show updated payment status
+            loadJobSessions();
+            console.log('✅ [Dashboard] Wallet and sessions updated');
         }
     });
 
@@ -515,7 +565,9 @@ export default function DoctorHome() {
                 d.department_id || d.id || d.department?.id || d.department?.department_id
             ).filter(Boolean) || [];
             const jobDepartmentId = jobRequirement.department_id || jobRequirement.department?.id;
-            const jobDepartmentName = jobRequirement.department || jobRequirement.department?.name;
+            const jobDepartmentName = typeof jobRequirement.department === 'string' 
+                ? jobRequirement.department 
+                : (jobRequirement.department?.name || jobRequirement.department?.department);
             
             // More lenient filtering: show job if:
             // 1. Doctor has no departments set (show all)
@@ -544,6 +596,10 @@ export default function DoctorHome() {
                             is_expired: jobRequirement.is_expired || false,
                             // Ensure is_active is set (default to true for new jobs)
                             is_active: jobRequirement.is_active !== undefined ? jobRequirement.is_active : true,
+                            // Ensure department is a string if it's an object
+                            department: typeof jobRequirement.department === 'string' 
+                                ? jobRequirement.department 
+                                : (jobRequirement.department?.name || jobRequirement.department?.department || 'Unknown'),
                         };
                         // Add new job to the beginning of the list
                         const updated = [newJob, ...prev];
@@ -552,9 +608,23 @@ export default function DoctorHome() {
                     } else {
                         console.log('ℹ️ [Dashboard] Job already exists in list, updating:', jobRequirement.id);
                         // Update existing job with latest data
-                        return prev.map(req => req.id === jobRequirement.id ? { ...req, ...jobRequirement } : req);
+                        return prev.map(req => {
+                            if (req.id === jobRequirement.id) {
+                                return {
+                                    ...req,
+                                    ...jobRequirement,
+                                    hospital: jobRequirement.hospital || req.hospital,
+                                };
+                            }
+                            return req;
+                        });
                     }
                 });
+                
+                // Also trigger a refresh to ensure all data is synced
+                setTimeout(() => {
+                    loadJobRequirements();
+                }, 500);
             } else {
                 console.log('ℹ️ [Dashboard] Job does not match doctor departments, skipping:', {
                     jobId: jobRequirement.id,
@@ -584,6 +654,8 @@ export default function DoctorHome() {
       if (refreshSubscription) refreshSubscription.remove();
       applicationStatusSubscription.remove();
       newJobSubscription.remove();
+      if (jobSessionCreatedSubscription) jobSessionCreatedSubscription.remove();
+      if (paymentHeldSubscription) paymentHeldSubscription.remove();
       clearInterval(notificationInterval);
       stopTracking(); 
     };
@@ -2543,7 +2615,7 @@ const styles = StyleSheet.create({
     top: 0,
     right: 0,
     bottom: 0,
-    width: '40%',
+    width: '44%',
     borderRadius: 0,
     borderTopRightRadius: 12,
     borderBottomRightRadius: 12,
@@ -2566,7 +2638,7 @@ const styles = StyleSheet.create({
     flex: 1,
     position: 'relative',
     zIndex: 1,
-    paddingRight: '42%', // Space for 40% image + 2% margin
+    paddingRight: '46%', // Space for 44% image + small margin
     paddingVertical: 2,
   },
   newOpportunityContentWrapperFull: {
@@ -3178,7 +3250,7 @@ const styles = StyleSheet.create({
     top: 0,
     right: 0,
     bottom: 0,
-    width: '40%',
+    width: '44%',
     borderRadius: 0,
     borderTopRightRadius: 12,
     borderBottomRightRadius: 12,
@@ -3201,7 +3273,7 @@ const styles = StyleSheet.create({
     flex: 1,
     position: 'relative',
     zIndex: 1,
-    paddingRight: '42%', // Space for 40% image + 2% margin
+    paddingRight: '46%', // Space for 44% image + small margin
   },
   taskHeader: {
     flexDirection: 'row',
@@ -3557,7 +3629,7 @@ const styles = StyleSheet.create({
     top: 0,
     right: 0,
     bottom: 0,
-    width: '40%',
+    width: '44%',
     borderRadius: 0,
     borderTopRightRadius: 12,
     borderBottomRightRadius: 12,
@@ -3593,7 +3665,7 @@ const styles = StyleSheet.create({
     flex: 1,
     position: 'relative',
     zIndex: 1,
-    paddingRight: '42%', // Space for 40% image + 2% margin
+    paddingRight: '46%', // Space for 44% image + small margin
   },
   applicationContentWrapperFull: {
     flex: 1,

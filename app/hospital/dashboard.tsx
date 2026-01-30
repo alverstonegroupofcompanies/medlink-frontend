@@ -378,9 +378,6 @@ const SessionItem = React.memo(({ session }: { session: any }) => {
     const doctor = session.doctor;
     const requirement = session.job_requirement;
 
-    // ALL job session cards have colored backgrounds, so ALL text should be white
-    const hasColoredBackground = true; // SessionItem is always rendered with colored background
-
     const formatTime = (time: string) => {
         if (!time) return '';
         try {
@@ -392,6 +389,43 @@ const SessionItem = React.memo(({ session }: { session: any }) => {
         } catch {
             return time;
         }
+    };
+
+    // Calculate "late by" time if check-in is not done
+    const hasCheckedIn = !!(session.attendance?.check_in_time || session.check_in_time);
+    const scheduledCheckInDateTime = (() => {
+        if (!session?.session_date) return null;
+        const dt = new Date(session.session_date);
+        const startTime = requirement?.start_time;
+        if (startTime) {
+            const [hh, mm] = String(startTime).split(':');
+            const hours = parseInt(hh, 10);
+            const minutes = parseInt(mm, 10);
+            if (!Number.isNaN(hours) && !Number.isNaN(minutes)) {
+                dt.setHours(hours, minutes, 0, 0);
+            }
+        }
+        return dt;
+    })();
+
+    const lateMinutes = (() => {
+        if (hasCheckedIn) return 0; // Already checked in, not late
+        if (!scheduledCheckInDateTime) return 0; // No scheduled time
+        const now = new Date();
+        if (now <= scheduledCheckInDateTime) return 0; // Not yet time
+        return Math.max(0, Math.floor((now.getTime() - scheduledCheckInDateTime.getTime()) / (1000 * 60)));
+    })();
+
+    const formatLateTime = (minutes: number) => {
+        if (minutes < 60) {
+            return `${minutes} min${minutes !== 1 ? 's' : ''}`;
+        }
+        const hours = Math.floor(minutes / 60);
+        const remainingMinutes = minutes % 60;
+        if (remainingMinutes === 0) {
+            return `${hours} hr${hours !== 1 ? 's' : ''}`;
+        }
+        return `${hours} hr${hours !== 1 ? 's' : ''} ${remainingMinutes} min${remainingMinutes !== 1 ? 's' : ''}`;
     };
 
     const handlePressIn = () => {
@@ -446,6 +480,7 @@ const SessionItem = React.memo(({ session }: { session: any }) => {
                 style={[
                     styles.requirementCard,
                     styles.sessionCardHorizontal,
+                    // Subtle status-based outline only (no solid colored background)
                     session.status === 'completed' && session.hospital_confirmed ? styles.sessionCardGreen :
                     session.status === 'completed' && !session.hospital_confirmed ? styles.sessionCardOrange :
                     session.status === 'in_progress' ? styles.sessionCardBlue :
@@ -463,40 +498,40 @@ const SessionItem = React.memo(({ session }: { session: any }) => {
                                 <Avatar.Image
                                     size={36}
                                     source={{ uri: getFullImageUrl(doctor.profile_photo || doctor.profile_photo_url) }}
-                                    style={{ backgroundColor: 'rgba(255, 255, 255, 0.2)' }}
+                                    style={{ backgroundColor: '#E5E7EB' }}
                                 />
                             ) : (
                                 <Avatar.Text
                                     size={36}
                                     label={doctor?.name?.charAt(0)?.toUpperCase() || 'D'}
-                                    style={{ backgroundColor: 'rgba(255, 255, 255, 0.2)' }}
-                                    labelStyle={{ color: '#FFFFFF', fontWeight: '700', fontSize: 16 }}
+                                    style={{ backgroundColor: '#E5E7EB' }}
+                                    labelStyle={{ color: NeutralColors.textPrimary, fontWeight: '700', fontSize: 16 }}
                                 />
                             )}
                         </View>
-                        <View style={[styles.deptBadge, { backgroundColor: 'rgba(255, 255, 255, 0.25)' }]}>
-                            <Building2 size={12} color="#FFFFFF" />
-                            <Text style={[styles.deptText, { color: '#FFFFFF' }]} numberOfLines={1}>
+                        <View style={styles.deptBadge}>
+                            <Building2 size={12} color={PrimaryColors.main} />
+                            <Text style={styles.deptText} numberOfLines={1}>
                                 {requirement?.department || 'Dept'}
                             </Text>
                         </View>
-                        <View style={[styles.statusBadge, { backgroundColor: 'rgba(255, 255, 255, 0.25)', borderColor: '#FFFFFF' }]}>
-                            <StatusIcon size={10} color="#FFFFFF" />
-                            <Text style={[styles.statusText, { color: '#FFFFFF' }]} numberOfLines={1}>
+                        <View style={[styles.statusBadge, { borderColor: status.color }]}>
+                            <StatusIcon size={10} color={status.color} />
+                            <Text style={[styles.statusText, { color: status.color }]} numberOfLines={1}>
                                 {status.text}
                             </Text>
                         </View>
                     </View>
                 </View>
-                <Text style={[styles.sessionCardDoctorName, { color: '#FFFFFF', marginTop: 6, marginBottom: 8 }]} numberOfLines={1}>
+                <Text style={[styles.sessionCardDoctorName, { marginTop: 6, marginBottom: 8 }]} numberOfLines={1}>
                     Dr. {doctor?.name || 'Doctor'}
                     {doctor?.average_rating > 0 ? ` • ★${parseFloat(doctor.average_rating).toFixed(1)}` : ''}
                 </Text>
 
                 {/* Date & Time - one row (like Posted Requirements compactDateRow) */}
                 <View style={[styles.compactDateRow, { marginBottom: 8 }]}>
-                    <Calendar size={13} color="rgba(255, 255, 255, 0.95)" />
-                    <Text style={[styles.compactDateText, { color: 'rgba(255, 255, 255, 0.95)' }]} numberOfLines={1}>
+                    <Calendar size={13} color={NeutralColors.textSecondary} />
+                    <Text style={styles.compactDateText} numberOfLines={1}>
                         {formatISTDateOnly(session.session_date)}
                         {requirement?.start_time && requirement?.end_time
                             ? ` • ${formatTime(requirement.start_time)} – ${formatTime(requirement.end_time)}`
@@ -505,36 +540,43 @@ const SessionItem = React.memo(({ session }: { session: any }) => {
                 </View>
 
                 {/* Status + Payment - compact bar (like Posted Requirements compactStatusBar) */}
-                <View style={[styles.compactStatusBar, { borderTopColor: 'rgba(255, 255, 255, 0.3)' }]}>
+                <View style={styles.compactStatusBar}>
                     <View style={styles.compactStatusStats}>
                         {session.status === 'completed' && !session.hospital_confirmed && (
                             <View style={styles.compactStatItem}>
-                                <View style={[styles.compactStatDot, { backgroundColor: '#FFFFFF' }]} />
-                                <Text style={[styles.compactStatText, { color: '#FFFFFF' }]}>Review</Text>
+                                <View style={[styles.compactStatDot, { backgroundColor: StatusColors.warning }]} />
+                                <Text style={styles.compactStatText}>Review</Text>
                             </View>
                         )}
                         {session.status === 'completed' && session.hospital_confirmed && (
                             <View style={styles.compactStatItem}>
-                                <View style={[styles.compactStatDot, { backgroundColor: '#FFFFFF' }]} />
-                                <Text style={[styles.compactStatText, { color: '#FFFFFF' }]}>Approved</Text>
+                                <View style={[styles.compactStatDot, { backgroundColor: StatusColors.success }]} />
+                                <Text style={styles.compactStatText}>Approved</Text>
                             </View>
                         )}
                         {session.status === 'in_progress' && (
                             <View style={styles.compactStatItem}>
-                                <View style={[styles.compactStatDot, { backgroundColor: '#FFFFFF' }]} />
-                                <Text style={[styles.compactStatText, { color: '#FFFFFF' }]}>In Progress</Text>
+                                <View style={[styles.compactStatDot, { backgroundColor: PrimaryColors.main }]} />
+                                <Text style={styles.compactStatText}>In Progress</Text>
                             </View>
                         )}
                         {(session.status === 'scheduled' || !session.status) && (
                             <View style={styles.compactStatItem}>
-                                <View style={[styles.compactStatDot, { backgroundColor: '#FFFFFF' }]} />
-                                <Text style={[styles.compactStatText, { color: '#FFFFFF' }]}>Scheduled</Text>
+                                <View style={[styles.compactStatDot, { backgroundColor: NeutralColors.textTertiary }]} />
+                                <Text style={styles.compactStatText}>Scheduled</Text>
+                            </View>
+                        )}
+                        {lateMinutes > 0 && !hasCheckedIn && (
+                            <View style={[styles.compactStatItem, { backgroundColor: '#FEE2E215', borderColor: StatusColors.error, borderWidth: 1, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 }]}>
+                                <Clock size={10} color={StatusColors.error} />
+                                <Text style={[styles.compactStatText, { color: StatusColors.error, fontWeight: '600' }]}>
+                                    Late by {formatLateTime(lateMinutes)}
+                                </Text>
                             </View>
                         )}
                         {session.payment_amount ? (
-                            <View style={[styles.compactPaymentBadge, { backgroundColor: 'rgba(255, 255, 255, 0.25)' }]}>
-                                <DollarSign size={12} color="#FFFFFF" />
-                                <Text style={[styles.compactPaymentBadgeText, { color: '#FFFFFF' }]}>
+                            <View style={styles.compactPaymentBadge}>
+                                <Text style={styles.compactPaymentBadgeText}>
                                     ₹{parseFloat(session.payment_amount || 0).toFixed(0)}
                                 </Text>
                             </View>
@@ -545,11 +587,14 @@ const SessionItem = React.memo(({ session }: { session: any }) => {
         </TouchableOpacity>
     );
 }, (prev, next) => {
+    const prevCheckIn = prev.session.attendance?.check_in_time || prev.session.check_in_time;
+    const nextCheckIn = next.session.attendance?.check_in_time || next.session.check_in_time;
     return (
         prev.session.id === next.session.id &&
         prev.session.status === next.session.status &&
         prev.session.updated_at === next.session.updated_at &&
-        prev.session.hospital_confirmed === next.session.hospital_confirmed
+        prev.session.hospital_confirmed === next.session.hospital_confirmed &&
+        prevCheckIn === nextCheckIn
     );
 });
 
@@ -584,6 +629,7 @@ export default function HospitalDashboard() {
   const [selectedDoctor, setSelectedDoctor] = useState<any>(null);
   const [showDoctorModal, setShowDoctorModal] = useState(false);
   const [showAllDoctors, setShowAllDoctors] = useState(false); // For expandable card
+  const [disputes, setDisputes] = useState<any[]>([]);
 
   const loadSessions = async (silent = false) => {
       try {
@@ -643,7 +689,7 @@ export default function HospitalDashboard() {
           hasLoadedSessions.current = true;
       } catch (error: any) {
           if (error.response?.status === 401) {
-            router.replace('/login');
+            router.replace('/hospital/login');
           }
       } finally {
           // Only turn off loading if we turned it on
@@ -651,6 +697,20 @@ export default function HospitalDashboard() {
           // Force false if we are done with initial load
           if (!hasLoadedSessions.current) setLoadingSessions(false); 
       }
+  };
+
+  const loadDisputes = async () => {
+    try {
+      const response = await API.get('/disputes');
+      setDisputes(response.data.disputes || []);
+    } catch (error: any) {
+      if (error.response?.status !== 401) {
+        if (__DEV__) {
+          console.error('Error loading disputes:', error);
+        }
+      }
+      setDisputes([]);
+    }
   };
 
   const [requirements, setRequirements] = useState<any[]>([]);
@@ -731,20 +791,38 @@ export default function HospitalDashboard() {
     // Check authentication first
     const checkAuth = async () => {
       try {
-        const token = await AsyncStorage.getItem(HOSPITAL_TOKEN_KEY);
+        // Retry logic to handle race conditions (token might not be saved yet)
+        let token = null;
+        for (let i = 0; i < 3; i++) {
+          token = await AsyncStorage.getItem(HOSPITAL_TOKEN_KEY);
+          if (token) break;
+          // Wait 100ms before retrying
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        
         if (!token) {
-          // console.log('⚠️ Hospital not authenticated, redirecting to login...');
-          router.replace('/login');
+          if (__DEV__) {
+            console.log('⚠️ Hospital not authenticated, redirecting to hospital login...');
+          }
+          router.replace('/hospital/login');
           return;
         }
+        
+        if (__DEV__) {
+          console.log('✅ Hospital token found, loading dashboard...');
+        }
+        
         // If authenticated, load data
         loadHospital();
         loadSessions(); // Load sessions initially
         loadRequirements();
         loadDoctorsByDepartment();
+        loadDisputes();
         // loadNotifications(); // Temporarily disabled to prevent crash
       } catch (error) {
-        console.error('Error checking auth:', error);
+        if (__DEV__) {
+          console.error('Error checking auth:', error);
+        }
         router.replace('/hospital/login');
       }
     };
@@ -917,7 +995,7 @@ export default function HospitalDashboard() {
     } catch (error: any) {
       console.error('Error loading requirements:', error);
       if (error.response?.status === 401) {
-        router.replace('/login');
+        router.replace('/hospital/login');
       }
     }
   };
@@ -974,7 +1052,10 @@ export default function HospitalDashboard() {
       notificationCountRef.current = newCount;
 
     } catch (error: any) {
-      console.error('Error loading notifications:', error);
+      // Suppress 401 errors - API interceptor handles them
+      if (error.response?.status !== 401 && __DEV__) {
+        console.error('Error loading notifications:', error);
+      }
     }
   };
   
@@ -1492,15 +1573,36 @@ export default function HospitalDashboard() {
           <TouchableOpacity 
             style={[styles.statCard, styles.statCard4]} 
             activeOpacity={0.7}
+            onPress={() => router.push('/hospital/disputes' as any)}
           >
             <View style={[styles.statIcon, styles.statIcon4]}>
-              <Clock size={20} color="#F59E0B" />
+              <FileText size={20} color="#DC2626" />
             </View>
             <View style={styles.statTextContainer}>
-              <Text style={styles.statValue} numberOfLines={1}>
-                {sessions.filter((s: any) => s.status === 'completed' && !s.hospital_confirmed).length}
-              </Text>
-              <Text style={styles.statLabel} numberOfLines={1}>Review</Text>
+              {(() => {
+                const openDisputes = disputes.filter((d: any) => ['open', 'under_review'].includes(d.status || ''));
+                const closedDisputes = disputes.filter((d: any) => ['closed', 'resolved', 'rejected'].includes(d.status || ''));
+                const recentClosed = closedDisputes.filter((d: any) => {
+                  const closedDate = new Date(d.resolved_at || d.updated_at || d.created_at);
+                  const daysSinceClosed = (Date.now() - closedDate.getTime()) / (1000 * 60 * 60 * 24);
+                  return daysSinceClosed <= 7; // Recent = within 7 days
+                });
+                const totalDisputes = disputes.length;
+                
+                let countColor = '#1F2937'; // Black for closed
+                if (openDisputes.length > 0) {
+                  countColor = '#DC2626'; // Red for open
+                } else if (recentClosed.length > 0) {
+                  countColor = '#16A34A'; // Green for recent closed
+                }
+                
+                return (
+                  <Text style={[styles.statValue, { color: countColor }]} numberOfLines={1}>
+                    {totalDisputes}
+                  </Text>
+                );
+              })()}
+              <Text style={styles.statLabel} numberOfLines={1}>Disputes</Text>
             </View>
           </TouchableOpacity>
           
@@ -2422,19 +2524,15 @@ const styles = StyleSheet.create({
     borderColor: '#059669',
   },
   sessionCardBlue: {
-    backgroundColor: '#3B82F6',
     borderColor: '#2563EB',
   },
   sessionCardGreen: {
-    backgroundColor: '#6366F1',
-    borderColor: '#4F46E5',
+    borderColor: '#16A34A',
   },
   sessionCardOrange: {
-    backgroundColor: '#F59E0B',
     borderColor: '#D97706',
   },
   sessionCardPurple: {
-    backgroundColor: '#8B5CF6',
     borderColor: '#7C3AED',
   },
   sessionCardHorizontal: {

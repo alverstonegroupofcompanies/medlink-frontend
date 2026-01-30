@@ -44,26 +44,22 @@ export function ImageCropPicker({
 
   const openPicker = async (source: 'camera' | 'gallery') => {
     try {
-      setIsProcessing(true);
-
-      // Request permissions
+      // Request permissions first (don't show processing yet)
       if (source === 'camera') {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== 'granted') {
           Alert.alert('Permission Required', 'Camera permission is required to take photos.');
-          setIsProcessing(false);
           return;
         }
       } else {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
           Alert.alert('Permission Required', 'Media library permission is required to select photos.');
-          setIsProcessing(false);
           return;
         }
       }
 
-      // Launch image picker
+      // Launch image picker (camera/gallery will open here)
       let result;
       if (source === 'camera') {
         result = await ImagePicker.launchCameraAsync({
@@ -81,38 +77,44 @@ export function ImageCropPicker({
         });
       }
 
+      // Only show processing when we're actually processing the image
       if (!result.canceled && result.assets[0]) {
-        let imageUri = result.assets[0].uri;
+        setIsProcessing(true);
         
-        // If circular, we need to crop to square first
-        if (circular && aspectRatio[0] !== aspectRatio[1]) {
-          // Crop to square
-          const manipResult = await ImageManipulator.manipulateAsync(
-            imageUri,
-            [{ resize: { width: Math.min(width, height), height: Math.min(width, height) } }],
-            { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
-          );
-          imageUri = manipResult.uri;
-        } else if (result.assets[0].width && result.assets[0].height) {
-          // Resize if needed
-          const manipResult = await ImageManipulator.manipulateAsync(
-            imageUri,
-            [{ resize: { width, height } }],
-            { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
-          );
-          imageUri = manipResult.uri;
-        }
+        try {
+          let imageUri = result.assets[0].uri;
+          
+          // If circular, we need to crop to square first
+          if (circular && aspectRatio[0] !== aspectRatio[1]) {
+            // Crop to square
+            const manipResult = await ImageManipulator.manipulateAsync(
+              imageUri,
+              [{ resize: { width: Math.min(width, height), height: Math.min(width, height) } }],
+              { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+            );
+            imageUri = manipResult.uri;
+          } else if (result.assets[0].width && result.assets[0].height) {
+            // Resize if needed
+            const manipResult = await ImageManipulator.manipulateAsync(
+              imageUri,
+              [{ resize: { width, height } }],
+              { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+            );
+            imageUri = manipResult.uri;
+          }
 
-        setImageUri(imageUri);
-        setShowPreview(true);
-        onImageSelected(imageUri);
+          setImageUri(imageUri);
+          setShowPreview(true);
+          onImageSelected(imageUri);
+        } finally {
+          setIsProcessing(false);
+        }
       }
     } catch (error: any) {
+      setIsProcessing(false);
       if (error.message !== 'User cancelled image picker' && !error.message?.includes('cancel')) {
         Alert.alert('Error', `Failed to ${source === 'camera' ? 'take' : 'pick'} image: ${error.message || 'Unknown error'}`);
       }
-    } finally {
-      setIsProcessing(false);
     }
   };
 

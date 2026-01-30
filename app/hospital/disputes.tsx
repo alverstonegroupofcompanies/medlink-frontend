@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -12,12 +12,12 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, AlertCircle } from 'lucide-react-native';
-import { ModernColors } from '@/constants/modern-theme';
+import { ArrowLeft, AlertCircle, MessageCircle, Calendar, FileText } from 'lucide-react-native';
+import { HospitalPrimaryColors as PrimaryColors, HospitalNeutralColors as NeutralColors } from '@/constants/hospital-theme';
 import { ScreenSafeArea, useSafeBottomPadding } from '@/components/screen-safe-area';
 import API from '../api';
 
-export default function DoctorDisputesListScreen() {
+export default function HospitalDisputesListScreen() {
   const { sessionId } = useLocalSearchParams<{ sessionId?: string }>();
   const [disputes, setDisputes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -27,7 +27,7 @@ export default function DoctorDisputesListScreen() {
   useFocusEffect(
     React.useCallback(() => {
       if (Platform.OS === 'android') {
-        StatusBar.setBackgroundColor(ModernColors.primary.main, true);
+        StatusBar.setBackgroundColor(PrimaryColors.main, true);
         StatusBar.setTranslucent(false);
         StatusBar.setBarStyle('light-content', true);
       }
@@ -39,7 +39,7 @@ export default function DoctorDisputesListScreen() {
 
   const loadDisputes = async () => {
     try {
-      // Filter by session if sessionId is provided (ensures disputes are session-specific)
+      // Filter by session if sessionId is provided
       const url = sessionId ? `/disputes?job_session_id=${sessionId}` : '/disputes';
       const response = await API.get(url);
       setDisputes(response.data.disputes || []);
@@ -89,9 +89,18 @@ export default function DoctorDisputesListScreen() {
     }
   };
 
+  const getDisputeTypeIcon = (type: string) => {
+    switch (type) {
+      case 'payment': return '💳';
+      case 'attendance': return '📅';
+      case 'quality': return '⭐';
+      default: return '📋';
+    }
+  };
+
   return (
-    <ScreenSafeArea backgroundColor={ModernColors.primary.main} statusBarStyle="light-content" style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={ModernColors.primary.main} translucent={false} />
+    <ScreenSafeArea backgroundColor={PrimaryColors.main} statusBarStyle="light-content" style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={PrimaryColors.main} translucent={false} />
 
       {/* Header */}
       <View style={styles.headerContainer}>
@@ -99,14 +108,14 @@ export default function DoctorDisputesListScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <ArrowLeft size={24} color="#FFFFFF" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Disputes</Text>
+          <Text style={styles.headerTitle}>My Disputes</Text>
           <View style={{ width: 40 }} />
         </View>
       </View>
 
       {loading ? (
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={ModernColors.primary.main} />
+          <ActivityIndicator size="large" color={PrimaryColors.main} />
         </View>
       ) : (
         <ScrollView
@@ -116,7 +125,7 @@ export default function DoctorDisputesListScreen() {
         >
           {disputes.length === 0 ? (
             <View style={styles.empty}>
-              <AlertCircle size={64} color={ModernColors.neutral.gray400} />
+              <AlertCircle size={64} color={NeutralColors.textLight} />
               <Text style={styles.emptyTitle}>No Disputes</Text>
               <Text style={styles.emptyText}>
                 You haven't raised any disputes yet.{'\n'}
@@ -127,15 +136,13 @@ export default function DoctorDisputesListScreen() {
             disputes.map((d: any) => {
               const statusStyle = getStatusStyle(d.status);
               const messageCount = d.messages?.length || 0;
-              const disputeTypeIcon = d.dispute_type === 'payment' ? '💳' : 
-                                     d.dispute_type === 'attendance' ? '📅' : 
-                                     d.dispute_type === 'quality' ? '⭐' : '📋';
+              const disputeTypeIcon = getDisputeTypeIcon(d.dispute_type);
               
               return (
                 <TouchableOpacity
                   key={d.id}
                   style={styles.card}
-                  onPress={() => router.push(`/(tabs)/dispute/detail/${d.id}`)}
+                  onPress={() => router.push(`/hospital/dispute/detail/${d.id}`)}
                   activeOpacity={0.7}
                 >
                   <View style={styles.cardHeader}>
@@ -145,28 +152,39 @@ export default function DoctorDisputesListScreen() {
                     </View>
                     <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
                       <Text style={[styles.statusText, { color: statusStyle.text }]}>
-                        {getStatusLabel(d.status)}
+                        {statusStyle.icon} {getStatusLabel(d.status)}
                       </Text>
                     </View>
                   </View>
                   
                   <View style={styles.cardBody}>
-                    <Text style={styles.cardType}>
-                      📋 Type: {d.dispute_type ? d.dispute_type.charAt(0).toUpperCase() + d.dispute_type.slice(1) : 'Other'}
-                    </Text>
-                    <Text style={styles.cardDate}>
-                      📅 Created: {d.created_at
-                        ? new Date(d.created_at).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric',
-                          })
-                        : 'N/A'}
-                    </Text>
-                    {messageCount > 0 && (
-                      <Text style={styles.msgCount}>
-                        💬 {messageCount} message{messageCount !== 1 ? 's' : ''}
+                    <View style={styles.cardRow}>
+                      <FileText size={14} color={NeutralColors.textSecondary} />
+                      <Text style={styles.cardType}>
+                        {d.dispute_type ? d.dispute_type.charAt(0).toUpperCase() + d.dispute_type.slice(1) : 'Other'}
                       </Text>
+                    </View>
+                    
+                    <View style={styles.cardRow}>
+                      <Calendar size={14} color={NeutralColors.textSecondary} />
+                      <Text style={styles.cardDate}>
+                        {d.created_at
+                          ? new Date(d.created_at).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                            })
+                          : 'N/A'}
+                      </Text>
+                    </View>
+                    
+                    {messageCount > 0 && (
+                      <View style={styles.cardRow}>
+                        <MessageCircle size={14} color={PrimaryColors.main} />
+                        <Text style={styles.msgCount}>
+                          {messageCount} message{messageCount !== 1 ? 's' : ''}
+                        </Text>
+                      </View>
                     )}
                   </View>
                   
@@ -192,7 +210,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerContainer: {
-    backgroundColor: ModernColors.primary.main,
+    backgroundColor: PrimaryColors.main,
     paddingTop: Platform.OS === 'ios' ? 50 : 20,
     paddingBottom: 16,
     paddingHorizontal: 16,
@@ -233,12 +251,12 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: ModernColors.text.primary,
+    color: NeutralColors.textPrimary,
     marginTop: 20,
   },
   emptyText: {
     fontSize: 14,
-    color: ModernColors.text.secondary,
+    color: NeutralColors.textSecondary,
     marginTop: 8,
     textAlign: 'center',
     lineHeight: 20,
@@ -276,12 +294,8 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     fontWeight: '600',
-    color: ModernColors.text.primary,
+    color: NeutralColors.textPrimary,
     lineHeight: 22,
-  },
-  cardBody: {
-    gap: 6,
-    marginTop: 4,
   },
   statusBadge: {
     paddingHorizontal: 12,
@@ -296,18 +310,27 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
+  cardBody: {
+    gap: 8,
+    marginTop: 4,
+  },
+  cardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   cardType: {
     fontSize: 13,
-    color: ModernColors.text.secondary,
+    color: NeutralColors.textSecondary,
     fontWeight: '500',
   },
   cardDate: {
     fontSize: 13,
-    color: ModernColors.text.secondary,
+    color: NeutralColors.textSecondary,
   },
   msgCount: {
     fontSize: 13,
-    color: ModernColors.primary.main,
+    color: PrimaryColors.main,
     fontWeight: '600',
   },
   sessionInfo: {
@@ -318,7 +341,7 @@ const styles = StyleSheet.create({
   },
   sessionText: {
     fontSize: 12,
-    color: ModernColors.neutral.gray400,
+    color: NeutralColors.textLight,
     fontStyle: 'italic',
   },
 });
